@@ -1,12 +1,16 @@
 # locma/server/app.py
 from __future__ import annotations
 
+import glob
+import os
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from locma.data.cards_db import catalog
 from locma.harness.replay_store import get_replay, list_headers, write_replay
-from locma.harness.replay_stream import build_replay
+from locma.harness.replay_stream import build_replay, build_replay_from_log_row
+from locma.harness.trace import read_game_log
 from locma.policies.registry import make_policy
 
 POLICIES = ["random", "scripted", "greedy"]
@@ -16,6 +20,11 @@ class RunRequest(BaseModel):
     policy_a: str
     policy_b: str
     seed: int = 0
+
+
+class ImportRequest(BaseModel):
+    path: str
+    row: int = 0
 
 
 def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
@@ -51,6 +60,33 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
             return get_replay(replay_dir, rid)
         except FileNotFoundError as e:
             raise HTTPException(status_code=404, detail="replay not found") from e
+
+    @app.get("/api/game-logs")
+    def list_game_logs() -> list[dict]:
+        out = []
+        for p in sorted(glob.glob(os.path.join(gamelog_dir, "*.jsonl"))):
+            try:
+                rows = len(read_game_log(p))
+            except OSError:
+                continue
+            out.append({"path": os.path.basename(p), "rows": rows})
+        return out
+
+    @app.post("/api/replays/import")
+    def import_replay(req: ImportRequest) -> dict:
+        full = os.path.join(gamelog_dir, os.path.basename(req.path))
+        try:
+            rows = read_game_log(full)
+            row = rows[req.row]
+        except (OSError, IndexError) as e:
+            raise HTTPException(status_code=400, detail="bad game-log or row") from e
+        source = f"game-log:{os.path.basename(req.path)}#{req.row}"
+        try:
+            rep = build_replay_from_log_row(row, source=source, make_policy=make_policy)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        write_replay(replay_dir, rep)
+        return rep["header"]
 
     # later tasks register replay / game-log / art / static routes on `app`
     app.state.replay_dir = replay_dir

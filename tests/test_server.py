@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
+from locma.harness.replay_stream import build_replay
+from locma.policies.registry import make_policy
 from locma.server.app import create_app
 
 
@@ -49,3 +53,25 @@ def test_run_unknown_policy_returns_400(tmp_path):
     c = _client(tmp_path)
     r = c.post("/api/replays", json={"policy_a": "nonexistent", "policy_b": "random", "seed": 0})
     assert r.status_code == 400
+
+
+def _write_log(tmp_path):
+    rep = build_replay(make_policy("greedy"), make_policy("random"), seed=2, created_at="t")
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    row = {
+        "policy_a": "greedy", "policy_b": "random", "seed": 2,
+        "a_seat": 0, "hash": rep["header"]["hash"],
+    }
+    (logs_dir / "g.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    return "g.jsonl"
+
+
+def test_game_logs_and_import(tmp_path):
+    name = _write_log(tmp_path)
+    c = _client(tmp_path)
+    logs = c.get("/api/game-logs").json()
+    assert logs == [{"path": name, "rows": 1}]
+    r = c.post("/api/replays/import", json={"path": name, "row": 0})
+    assert r.status_code == 200
+    assert r.json()["source"] == f"game-log:{name}#0"
