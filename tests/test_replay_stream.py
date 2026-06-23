@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 from locma.policies.registry import make_policy
 
 
 def test_make_policy_known():
-    p = make_policy("greedy")
-    assert p.name == "greedy"
+    for spec in ("random", "scripted", "greedy"):
+        assert make_policy(spec).name == spec
 
 
 def test_make_policy_unknown():
-    import pytest
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"unknown policy 'nope'"):
         make_policy("nope")
