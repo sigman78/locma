@@ -58,7 +58,9 @@ def make_battle_view(gs: GameState) -> BattleView:
     )
 
 
-def run_game(policy0, policy1, seed: int, cards=None, max_turns: int = 200) -> GameResult:
+def run_game(
+    policy0, policy1, seed: int, cards=None, max_turns: int = 200, on_step=None
+) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
     Determinism guarantee: the same seed + same policies always produce the
@@ -89,9 +91,12 @@ def run_game(policy0, policy1, seed: int, cards=None, max_turns: int = 200) -> G
     draftmod.start_draft(gs, cards)
     pols = (policy0, policy1)
     while gs.phase == Phase.DRAFT:
+        seat = gs.current
         view = make_draft_view(gs)
         pick = pols[gs.current].draft_action(view, [0, 1, 2])
         draftmod.apply_draft_pick(gs, pick)
+        if on_step is not None:
+            on_step(seat, pick, gs)
 
     # --- Battle phase ---
     battlemod.start_battle(gs)
@@ -101,13 +106,15 @@ def run_game(policy0, policy1, seed: int, cards=None, max_turns: int = 200) -> G
         turn_owner = gs.current
         # Inner loop: keep taking actions until the turn changes or game ends
         while gs.current == turn_owner and gs.phase == Phase.BATTLE:
+            seat = gs.current
             legal = battlemod.battle_legal(gs)
             view = make_battle_view(gs)
             action = pols[gs.current].battle_action(view, legal)
             battlemod.apply_battle(gs, action)
+            if on_step is not None:
+                on_step(seat, action, gs)
             per_turn += 1
             if per_turn > 100:
-                # Safety: force end-of-turn to prevent policy from looping forever
                 battlemod.end_turn(gs)
                 break
         safety += 1
