@@ -13,6 +13,7 @@ def _fake_download_factory(calls):
         with open(path, "wb") as f:
             f.write(b"PNG")
         return True
+
     return fake
 
 
@@ -58,32 +59,34 @@ def test_never_raises_on_download_failure(tmp_path, monkeypatch):
 def test_skip_existing(tmp_path, monkeypatch):
     (tmp_path / "001.png").write_bytes(b"old")
     ids = []
+
     def fake(url, path):
         ids.append(os.path.basename(path))
         with open(path, "wb") as f:
             f.write(b"PNG")
         return True
-    import os
+
     monkeypatch.setattr(fetch, "_download", fake)
     monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0)
     n = fetch.fetch_art(dest=str(tmp_path))
-    assert "001.png" not in ids       # skipped
-    assert n == 159                   # 160 - 1 already present
+    assert "001.png" not in ids  # skipped
+    assert n == 159  # 160 - 1 already present
 
 
 def test_force_redownloads(tmp_path, monkeypatch):
     (tmp_path / "001.png").write_bytes(b"old")
     ids = []
+
     def fake(url, path):
         ids.append(os.path.basename(path))
         with open(path, "wb") as f:
             f.write(b"PNG")
         return True
-    import os
+
     monkeypatch.setattr(fetch, "_download", fake)
     monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0)
     n = fetch.fetch_art(dest=str(tmp_path), force=True)
-    assert "001.png" in ids           # re-downloaded
+    assert "001.png" in ids  # re-downloaded
     assert n == 160
 
 
@@ -91,9 +94,14 @@ def test_download_sends_user_agent(monkeypatch, tmp_path):
     captured = {}
 
     class FakeResp:
-        def read(self): return b"PNG"
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
+        def read(self):
+            return b"PNG"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
 
     def fake_urlopen(req, timeout=0):
         captured["ua"] = req.get_header("User-agent")

@@ -283,8 +283,9 @@ def fetch_art_cmd(
     force: bool = typer.Option(False, "--force", help="re-download even if cached"),
 ):
     """Download card portrait art into the local (gitignored) cache. Opt-in."""
-    from locma.data.fetch import fetch_art  # noqa: PLC0415 — lazy import
     from importlib import resources  # noqa: PLC0415
+
+    from locma.data.fetch import fetch_art  # noqa: PLC0415 — lazy import
 
     n = fetch_art(force=force)
     cache_dir = resources.files("locma.data").joinpath("assets")
