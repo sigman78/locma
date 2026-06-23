@@ -101,7 +101,6 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
     if os.path.isdir(dist):
         app.mount("/", StaticFiles(directory=dist, html=True), name="spa")
 
-    # later tasks register replay / game-log / art / static routes on `app`
     app.state.replay_dir = replay_dir
     app.state.asset_dir = asset_dir
     app.state.gamelog_dir = gamelog_dir

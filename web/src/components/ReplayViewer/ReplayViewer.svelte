@@ -37,7 +37,7 @@
 
 <div class="viewer">
   <header>
-    <strong>{replay.header.policy_a}</strong> vs <strong>{replay.header.policy_b}</strong>
+    <strong>{nameA}</strong> vs <strong>{nameB}</strong>
     · seed {replay.header.seed} · winner P{replay.header.winner} · {replay.header.turns} turns
     <span class="tabs">
       <button class:on={tab === 'draft'} on:click={() => (tab = 'draft')}>Draft</button>
