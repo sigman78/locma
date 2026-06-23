@@ -180,3 +180,58 @@ def apply_battle(gs: GameState, action: Action) -> None:
     elif isinstance(action, Attack):
         _resolve_attack(gs, action.attacker_id, action.target_id)  # Task 9
     check_winner(gs)
+
+
+# ---------------------------------------------------------------------------
+# Task 9: combat resolution with B/C/D/G/L/W keywords
+# ---------------------------------------------------------------------------
+
+def _clear_ward(unit) -> None:
+    i = ABILITY_ORDER.index("W")
+    unit.abilities = unit.abilities[:i] + "-" + unit.abilities[i + 1:]
+
+
+def _deal_to_unit(unit, amount: int, lethal: bool) -> int:
+    """Returns damage actually applied to defense (0 if warded)."""
+    if amount <= 0:
+        return 0
+    if unit.has("W"):
+        _clear_ward(unit)
+        return 0
+    if lethal:
+        unit.defense = 0
+        return amount
+    unit.defense -= amount
+    return amount
+
+
+def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
+    p = gs.players[gs.current]; opp = gs.players[gs.opponent(gs.current)]
+    atk = _find_on_board(p, attacker_id)
+    if atk is None:
+        return
+    atk.has_attacked = True; atk.can_attack = False
+    if target_id == -1:
+        dmg = atk.attack
+        opp.health -= dmg
+        if atk.has("D") and dmg > 0:
+            p.health += dmg
+        check_winner(gs); return
+    dfn = _find_on_board(opp, target_id)
+    if dfn is None:
+        return
+    warded = dfn.has("W")
+    def_before = dfn.defense
+    applied = _deal_to_unit(dfn, atk.attack, atk.has("L"))  # consumes ward if present
+    if atk.has("D") and applied > 0:
+        p.health += applied
+    if atk.has("B") and not warded:
+        overflow = atk.attack - max(0, def_before)
+        if overflow > 0:
+            opp.health -= overflow
+    _deal_to_unit(atk, dfn.attack, dfn.has("L"))
+    if dfn.defense <= 0 and dfn in opp.board:
+        opp.board.remove(dfn)
+    if atk.defense <= 0 and atk in p.board:
+        p.board.remove(atk)
+    check_winner(gs)
