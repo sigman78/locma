@@ -59,7 +59,7 @@ def make_battle_view(gs: GameState) -> BattleView:
 
 
 def run_game(
-    policy0, policy1, seed: int, cards=None, max_turns: int = 200, on_step=None
+    policy0, policy1, seed: int, cards=None, max_turns: int = 200, on_step=None, on_snapshot=None
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
@@ -100,6 +100,8 @@ def run_game(
 
     # --- Battle phase ---
     battlemod.start_battle(gs)
+    if on_snapshot is not None:
+        on_snapshot(gs)
     safety = 0
     while gs.phase == Phase.BATTLE and gs.turn <= max_turns:
         per_turn = 0
