@@ -1,3 +1,4 @@
+from locma.core.actions import Action
 from locma.harness.trace import (
     canonical_json,
     read_game_log,
@@ -15,6 +16,7 @@ def test_record_game_returns_trace():
     assert len(trace) > 0
     seat, action = trace[0]
     assert seat in (0, 1)
+    assert isinstance(action, (int, *Action.__args__))
 
 
 def test_hash_is_deterministic():
@@ -38,6 +40,7 @@ def test_serialize_trace_encodes_draft_and_battle():
     ser = serialize_trace(trace)
     tags = {entry[1]["t"] for entry in ser}
     assert "draft" in tags
+    assert tags & {"summon", "attack", "use", "pass"}
 
 
 def test_game_log_roundtrip(tmp_path):
