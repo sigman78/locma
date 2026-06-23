@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from locma.core.engine import run_game
+from locma.harness.replay_stream import StreamRecorder
+from locma.policies.random_policy import RandomPolicy
 from locma.policies.registry import make_policy
 
 
@@ -13,11 +16,6 @@ def test_make_policy_known():
 def test_make_policy_unknown():
     with pytest.raises(ValueError, match=r"unknown policy 'nope'"):
         make_policy("nope")
-
-
-from locma.core.engine import run_game
-from locma.harness.replay_stream import StreamRecorder
-from locma.policies.random_policy import RandomPolicy
 
 
 def _record(seed=1):
@@ -44,11 +42,13 @@ def test_recorder_captures_opening_and_steps():
     assert rec.opening is not None
     assert len(rec.opening["players"]) == 2
     assert rec.steps, "expected at least one battle step"
-    state = rec.steps[0]["state"]
-    p0 = state["players"][0]
-    # both hands fully visible
-    assert "hand" in p0 and "board" in p0
-    for c in p0["hand"]:
-        assert set(c) == {"iid", "card_id", "atk", "def", "abilities"}
-    for c in p0["board"]:
+    # both opening hands are full info with the exact card key set
+    for p in rec.opening["players"]:
+        assert p["hand"], "opening hand should be non-empty"
+        for c in p["hand"]:
+            assert set(c) == {"iid", "card_id", "atk", "def", "abilities"}
+    # board creatures collected across all steps carry can_attack/has_attacked
+    creatures = [c for s in rec.steps for pl in s["state"]["players"] for c in pl["board"]]
+    assert creatures, "expected at least one creature on a board during the game"
+    for c in creatures:
         assert {"can_attack", "has_attacked"} <= set(c)
