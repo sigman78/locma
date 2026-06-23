@@ -270,6 +270,26 @@ def train(
     console.print(f"saved {saved}")
 
 
+@app.command()
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    replay_dir: str = "replays",
+    asset_dir: str = "locma/data/assets",
+    gamelog_dir: str = ".",
+):
+    """Run the local replay-viewer web server (requires the [server] extra)."""
+    try:
+        import uvicorn  # noqa: PLC0415 — optional [server] dep
+
+        from locma.server.app import create_app  # noqa: PLC0415
+    except ImportError as e:
+        raise typer.BadParameter("serve requires the [server] extra: uv sync --extra server") from e
+    app_ = create_app(replay_dir=replay_dir, asset_dir=asset_dir, gamelog_dir=gamelog_dir)
+    console.print(f"serving on http://{host}:{port}")
+    uvicorn.run(app_, host=host, port=port)
+
+
 @app.command("fetch-cards")
 def fetch_cards_cmd():
     from locma.data.fetch import fetch_cards  # noqa: PLC0415 — lazy import
