@@ -77,3 +77,14 @@ def test_sprt_rejects_zero_max_games():
     assert (
         runner.invoke(app, ["sprt", "greedy", "--vs", "random", "--max-games", "0"]).exit_code != 0
     )
+
+
+def test_train_help_lists_command():
+    # --help does not import the ML stack, so this is safe without the [ml] extra.
+    # (rich styles the help text, so assert on exit code, not exact option strings.)
+    assert runner.invoke(app, ["train", "--help"]).exit_code == 0
+
+
+def test_train_rejects_zero_steps():
+    # The guard fires before any ML import, so this passes with or without [ml].
+    assert runner.invoke(app, ["train", "--steps", "0"]).exit_code != 0

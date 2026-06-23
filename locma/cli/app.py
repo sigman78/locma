@@ -142,7 +142,7 @@ def tournament(
             pairs.append((x, y, 0.0))
     osk = openskill_from_results(pairs)
 
-    t = Table(title="Ratings")
+    t = Table(title="Ratings", box=None)
     t.add_column("policy")
     t.add_column("openskill", justify="right")
     t.add_column("elo", justify="right")
@@ -159,7 +159,7 @@ def tournament(
     console.print(t)
 
     if matrix:
-        m = Table(title="Pair-score matrix (row win rate vs column)")
+        m = Table(title="Pair-score matrix (row win rate vs column)", box=None)
         m.add_column("")
         for n in names:
             m.add_column(n, justify="right")
@@ -249,6 +249,25 @@ def replay(
             console.print(f"game {i}: ok ({h})")
     if assert_hash and mismatches:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def train(
+    steps: int = 50_000,
+    out: str = "model.zip",
+    opponent: str = "random",
+    seed: int = 0,
+):
+    """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
+    if steps < 1:
+        raise typer.BadParameter("steps must be >= 1")
+    try:
+        from locma.envs.training import train_agent  # noqa: PLC0415 — optional [ml] dep
+
+        saved = train_agent(make_policy(opponent), steps=steps, out=out, seed=seed)
+    except ImportError as e:
+        raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
+    console.print(f"saved {saved}")
 
 
 @app.command("fetch-cards")

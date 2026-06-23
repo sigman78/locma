@@ -39,5 +39,16 @@ Re-simulates each logged game from its seed and recomputes the content hash.
 
 Example: `uv run locma replay run.jsonl --assert-hash`
 
+## train
+`locma train [--steps N] [--out FILE] [--opponent P] [--seed S]`
+Train a MaskablePPO agent on the battle env against a fixed opponent policy,
+then save the model. **Requires the `[ml]` extra** (`uv sync --extra ml`); without
+it the command exits with a clear error.
+- `--steps` total training timesteps (default 50000).
+- `--out` output path for the saved model (default `model.zip`).
+- `--opponent` opponent policy: random | scripted | greedy (default random).
+
+Example: `uv run locma train --steps 50000 --opponent random --out model.zip`
+
 ## fetch-cards / fetch-art
 Refresh the vendored card list / best-effort art download.
