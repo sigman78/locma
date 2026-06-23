@@ -43,3 +43,9 @@ def test_run_list_get_replay(tmp_path):
     assert full["battle"]["opening"] is not None
 
     assert c.get("/api/replays/r_missing").status_code == 404
+
+
+def test_run_unknown_policy_returns_400(tmp_path):
+    c = _client(tmp_path)
+    r = c.post("/api/replays", json={"policy_a": "nonexistent", "policy_b": "random", "seed": 0})
+    assert r.status_code == 400
