@@ -112,3 +112,13 @@ def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) 
         "battle": {"opening": rec.opening, "steps": rec.steps},
         "result": {"winner": result.winner, "turns": result.turns},
     }
+
+
+def build_replay_from_log_row(row: dict, *, source: str, make_policy) -> dict:
+    p_a = make_policy(row["policy_a"])
+    p_b = make_policy(row["policy_b"])
+    rep = build_replay(p_a, p_b, row["seed"], a_seat=row["a_seat"], source=source)
+    got = rep["header"]["hash"]
+    if got != row.get("hash"):
+        raise ValueError(f"hash mismatch: stored={row.get('hash')} got={got}")
+    return rep

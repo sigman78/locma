@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from locma.core.engine import run_game
-from locma.harness.replay_stream import StreamRecorder, build_replay
+from locma.harness.replay_stream import StreamRecorder, build_replay, build_replay_from_log_row
 from locma.policies.random_policy import RandomPolicy
 from locma.policies.registry import make_policy
 
@@ -73,3 +73,20 @@ def test_build_replay_winner_matches_run_game():
     rep = build_replay(RandomPolicy("a"), RandomPolicy("b"), seed=9, created_at="t")
     gr = run_game(RandomPolicy("a"), RandomPolicy("b"), seed=9)
     assert rep["result"]["winner"] == gr.winner and rep["result"]["turns"] == gr.turns
+
+
+def test_build_replay_from_log_row_roundtrip():
+    rep = build_replay(make_policy("greedy"), make_policy("random"), seed=4, created_at="t")
+    row = {
+        "policy_a": "greedy", "policy_b": "random", "seed": 4,
+        "a_seat": 0, "hash": rep["header"]["hash"],
+    }
+    out = build_replay_from_log_row(row, source="game-log:x.jsonl#0", make_policy=make_policy)
+    assert out["header"]["hash"] == row["hash"]
+    assert out["header"]["source"] == "game-log:x.jsonl#0"
+
+
+def test_build_replay_from_log_row_hash_mismatch():
+    row = {"policy_a": "greedy", "policy_b": "random", "seed": 4, "a_seat": 0, "hash": "sha256:bad"}
+    with pytest.raises(ValueError):
+        build_replay_from_log_row(row, source="s", make_policy=make_policy)
