@@ -25,3 +25,21 @@ def test_policies_endpoint(tmp_path):
     r = _client(tmp_path).get("/api/policies")
     assert r.status_code == 200
     assert r.json() == ["random", "scripted", "greedy"]
+
+
+def test_run_list_get_replay(tmp_path):
+    c = _client(tmp_path)
+    r = c.post("/api/replays", json={"policy_a": "random", "policy_b": "random", "seed": 1})
+    assert r.status_code == 200
+    header = r.json()
+    rid = header["replay_id"]
+    assert header["policy_a"] == "random"
+
+    idx = c.get("/api/replays").json()
+    assert any(h["replay_id"] == rid for h in idx)
+
+    full = c.get(f"/api/replays/{rid}").json()
+    assert full["header"]["replay_id"] == rid
+    assert full["battle"]["opening"] is not None
+
+    assert c.get("/api/replays/r_missing").status_code == 404
