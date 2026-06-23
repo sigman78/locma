@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from locma.core.engine import run_game
-from locma.harness.logging import write_records
+from locma.harness.records import write_records
 
 
 @dataclass

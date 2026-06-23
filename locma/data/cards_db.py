@@ -66,7 +66,8 @@ def load_cards() -> list[Card]:
     """
     text = resources.files("locma.data").joinpath("cardlist.txt").read_text(encoding="utf-8")
     cards = parse_cardlist(text)
-    assert len(cards) == 160, f"expected 160 cards, got {len(cards)}"
+    if len(cards) != 160:
+        raise ValueError(f"expected 160 cards, got {len(cards)}")
     return cards
 
 

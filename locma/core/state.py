@@ -26,10 +26,10 @@ class GameState:
     phase: Phase = Phase.DRAFT
     turn: int = 0
     current: int = 0
-    players: tuple = None
+    players: tuple | None = None
     draft_pool: list = field(default_factory=list)
     draft_round: int = 0
-    picks: tuple = None
+    picks: tuple | None = None
     winner: int | None = None
 
     @classmethod

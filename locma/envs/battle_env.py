@@ -94,10 +94,13 @@ class BattleEnv(gym.Env):
         """
         super().reset(seed=seed)
 
-        ep_seed = self.base_seed + self._ep
+        if seed is not None:
+            eff = seed
+        else:
+            eff = self.base_seed + self._ep
         self._ep += 1
 
-        self.gs = GameState.new(random.Random(ep_seed))
+        self.gs = GameState.new(random.Random(eff))
         draftmod.start_draft(self.gs, self._cards)
 
         # Opponent drafts for both seats in v1 (battle-only training target)

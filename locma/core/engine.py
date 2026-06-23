@@ -62,7 +62,9 @@ def run_game(policy0, policy1, seed: int, cards=None, max_turns: int = 200) -> G
 
     Determinism guarantee: the same seed + same policies always produce the
     same (winner, turns).  The game's RNG is seeded exclusively via
-    random.Random(seed); policy RNGs are independent and not touched here.
+    random.Random(seed); policy RNGs are reset to the same seed so that in a
+    mirrored pair run_game(A,B,s) and run_game(B,A,s) policy A sees identical
+    randomness regardless of seat (clean mirror control).
 
     Turn-change detection: the battle inner loop tracks `turn_owner = gs.current`
     before any action is applied.  After each apply_battle call we check
@@ -76,6 +78,10 @@ def run_game(policy0, policy1, seed: int, cards=None, max_turns: int = 200) -> G
         health (tiebreak → player 0).
     """
     cards = cards or load_cards()
+    # Reset policies so each game's randomness is a deterministic function of
+    # the game seed only — independent of how many prior games were played.
+    policy0.reset(seed)
+    policy1.reset(seed)
     gs = GameState.new(random.Random(seed))
 
     # --- Draft phase ---

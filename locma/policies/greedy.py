@@ -1,6 +1,5 @@
 from __future__ import annotations
 from locma.core.actions import Summon, Attack, Use, Pass
-from locma.core.cards import ABILITY_ORDER
 
 
 def _kw_count(abilities: str) -> int:

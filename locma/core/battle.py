@@ -119,6 +119,12 @@ def _apply_item(gs, item, target_id):
         opp.health += item.card.enemy_hp
     else:  # BLUE_ITEM
         if target_id == -1:
+            # Blue items targeting face reuse card.defense as face damage (it is
+            # always negative in the real card data).  Adding both item.card.defense
+            # (via opp.health += below) and item.card.enemy_hp is correct: only
+            # card 155 "Scroll of Firebolt" has both fields non-zero, and its
+            # intended total effect is the union of the two (face damage + enemy
+            # health modifier), not a double-count.
             opp.health += item.card.defense  # blue items carry negative defense as damage
         else:
             tgt = _find_on_board(opp, target_id)
