@@ -17,10 +17,11 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      # Core + dev only (ruff, pytest). The ML extra (torch/sb3) is heavy and
-      # its two tests skip automatically via importorskip when not installed.
+      # dev (ruff, pytest, httpx) + server (fastapi, uvicorn) so the replay
+      # server tests run. The ML extra (torch/sb3) is heavy and its two tests
+      # skip automatically via importorskip when not installed.
       - name: Sync dependencies
-        run: uv sync --extra dev
+        run: uv sync --extra dev --extra server
 
       - name: Lint
         run: uv run ruff check .
