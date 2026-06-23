@@ -9,5 +9,5 @@ class ScriptedPolicy:
         for a in legal:
             if not isinstance(a, Pass):
                 return a
-        return legal[0]
+        return Pass()
     def reset(self, seed=None): pass
