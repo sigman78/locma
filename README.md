@@ -14,13 +14,17 @@ in the domain of TcG like games.
 - [Experiment methodology](docs/experiments.md) — noise floor, SPRT, ratings, replay
 - [Architecture](docs/architecture.md) — engine, trace hook, game-log format
 
-## Quickstart
+## Install
 
 ```bash
 uv sync                      # core install
 uv sync --extra ml           # + Gym env & SB3 training
+```
+
+## Quickstart
+
+```bash
 uv run locma play greedy random --games 50 --seed 0
 uv run locma tournament random scripted greedy --games 30 --matrix
 uv run pytest
 ```
-
