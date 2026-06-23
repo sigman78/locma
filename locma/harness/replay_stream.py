@@ -1,7 +1,12 @@
 # locma/harness/replay_stream.py
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
+
 from locma.core.actions import action_to_dict
+from locma.core.engine import run_game
+from locma.harness.trace import trace_hash
 
 
 def _card_dict(inst) -> dict:
@@ -71,3 +76,39 @@ class StreamRecorder:
 
     def on_snapshot(self, gs) -> None:
         self.opening = snapshot(gs)
+
+
+def _engine_version() -> str:
+    try:
+        return version("locma")
+    except PackageNotFoundError:
+        return "0+unknown"
+
+
+def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) -> dict:
+    p0, p1 = (p_a, p_b) if a_seat == 0 else (p_b, p_a)
+    rec = StreamRecorder()
+    result = run_game(p0, p1, seed, on_step=rec.on_step, on_snapshot=rec.on_snapshot)
+    h = trace_hash(rec.trace, result.winner, result.turns)
+    created_at = created_at or datetime.now(UTC).isoformat()
+    header = {
+        "replay_id": "r_" + h.split(":")[1][:12],
+        "created_at": created_at,
+        "source": source,
+        "format": "locma-replay/1",
+        "engine_version": _engine_version(),
+        "policy_a": p_a.name,
+        "policy_b": p_b.name,
+        "seed": seed,
+        "a_seat": a_seat,
+        "winner": result.winner,
+        "turns": result.turns,
+        "step_count": len(rec.steps),
+        "hash": h,
+    }
+    return {
+        "header": header,
+        "draft": {"pool": rec.draft_pool, "picks": rec.draft_picks},
+        "battle": {"opening": rec.opening, "steps": rec.steps},
+        "result": {"winner": result.winner, "turns": result.turns},
+    }

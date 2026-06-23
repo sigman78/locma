@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from locma.core.engine import run_game
-from locma.harness.replay_stream import StreamRecorder
+from locma.harness.replay_stream import StreamRecorder, build_replay
 from locma.policies.random_policy import RandomPolicy
 from locma.policies.registry import make_policy
 
@@ -52,3 +52,24 @@ def test_recorder_captures_opening_and_steps():
     assert creatures, "expected at least one creature on a board during the game"
     for c in creatures:
         assert {"can_attack", "has_attacked"} <= set(c)
+
+
+def test_build_replay_structure_and_hash():
+    rep = build_replay(
+        RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="2026-06-23T00:00:00Z"
+    )
+    h = rep["header"]
+    assert h["format"] == "locma-replay/1"
+    assert h["policy_a"] == "a" and h["policy_b"] == "b" and h["seed"] == 5
+    assert h["a_seat"] == 0
+    assert h["replay_id"] == "r_" + h["hash"].split(":")[1][:12]
+    assert h["step_count"] == len(rep["battle"]["steps"])
+    assert rep["battle"]["opening"] is not None
+    assert len(rep["draft"]["pool"]) == 30 and len(rep["draft"]["picks"]) == 60
+    assert rep["result"]["winner"] in (0, 1)
+
+
+def test_build_replay_winner_matches_run_game():
+    rep = build_replay(RandomPolicy("a"), RandomPolicy("b"), seed=9, created_at="t")
+    gr = run_game(RandomPolicy("a"), RandomPolicy("b"), seed=9)
+    assert rep["result"]["winner"] == gr.winner and rep["result"]["turns"] == gr.turns
