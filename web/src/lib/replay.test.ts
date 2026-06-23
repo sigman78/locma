@@ -50,4 +50,14 @@ describe('Playback', () => {
     pb.prevTurn()
     expect(pb.current.turn).toBe(1)
   })
+
+  it('turn jumps clamp at bounds', () => {
+    const pb = new Playback(replay)
+    pb.seek(3) // last frame (turn 3)
+    pb.nextTurn()
+    expect(pb.cursor).toBe(3) // no later turn → stays at last frame
+    pb.seek(0) // opening frame (turn null)
+    pb.prevTurn()
+    expect(pb.cursor).toBe(0) // no earlier turn → stays at frame 0
+  })
 })
