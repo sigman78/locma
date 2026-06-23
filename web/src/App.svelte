@@ -1,89 +1,35 @@
-<script>
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from './assets/vite.svg'
-  import heroImg from './assets/hero.png'
-  import Counter from './lib/Counter.svelte'
+<!-- web/src/App.svelte -->
+<script lang="ts">
+  import ReplayLibrary from './components/ReplayLibrary/ReplayLibrary.svelte'
+  import ReplayViewer from './components/ReplayViewer/ReplayViewer.svelte'
+  import { getReplay } from './lib/api'
+  import { loadCards } from './lib/cards'
+  import type { Replay } from './lib/replay'
+
+  let ready = false
+  let current: Replay | null = null
+  loadCards().then(() => (ready = true))
+
+  async function open(id: string) { current = await getReplay(id) }
+  function back() { current = null }
 </script>
 
-<section id="center">
-  <div class="hero">
-    <img src={heroImg} class="base" width="170" height="179" alt="" />
-    <img src={svelteLogo} class="framework" alt="Svelte logo" />
-    <img src={viteLogo} class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/App.svelte</code> and save to test <code>HMR</code></p>
-  </div>
-  <Counter />
-</section>
+<main>
+  <h1>LOCM Replay Viewer</h1>
+  {#if !ready}
+    <p>loading cards…</p>
+  {:else if current}
+    <button on:click={back}>← library</button>
+    <ReplayViewer replay={current} />
+  {:else}
+    <ReplayLibrary on:open={(e) => open(e.detail)} />
+  {/if}
+</main>
 
-<div class="ticks"></div>
-
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#documentation-icon"></use>
-    </svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank" rel="noreferrer">
-          <img class="logo" src={viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://svelte.dev/" target="_blank" rel="noreferrer">
-          <img class="button-icon" src={svelteLogo} alt="" />
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#social-icon"></use>
-    </svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li>
-        <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#github-icon"></use>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#discord-icon"></use>
-          </svg>
-          Discord
-        </a>
-      </li>
-      <li>
-        <a href="https://x.com/vite_js" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#x-icon"></use>
-          </svg>
-          X.com
-        </a>
-      </li>
-      <li>
-        <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#bluesky-icon"></use>
-          </svg>
-          Bluesky
-        </a>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<div class="ticks"></div>
-<section id="spacer"></section>
+<style>
+  :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; color: #ddd; }
+  h1 { font-size: 18px; }
+  button { background: #23232b; color: #ddd; border: 1px solid #333; border-radius: 4px;
+    padding: 3px 10px; cursor: pointer; margin-bottom: 8px; }
+</style>
