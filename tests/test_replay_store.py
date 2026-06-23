@@ -27,3 +27,10 @@ def test_list_headers_sorted_desc(tmp_path):
 def test_get_missing_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         get_replay(str(tmp_path), "r_nope")
+
+
+def test_list_headers_tolerates_corrupt(tmp_path):
+    write_replay(str(tmp_path), _replay("r_ok", "2026-03-01T00:00:00Z"))
+    (tmp_path / "r_bad.meta.json").write_text("{not json", encoding="utf-8")
+    heads = list_headers(str(tmp_path))
+    assert [h["replay_id"] for h in heads] == ["r_ok"]
