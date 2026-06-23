@@ -60,8 +60,11 @@ def _write_log(tmp_path):
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
     row = {
-        "policy_a": "greedy", "policy_b": "random", "seed": 2,
-        "a_seat": 0, "hash": rep["header"]["hash"],
+        "policy_a": "greedy",
+        "policy_b": "random",
+        "seed": 2,
+        "a_seat": 0,
+        "hash": rep["header"]["hash"],
     }
     (logs_dir / "g.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
     return "g.jsonl"

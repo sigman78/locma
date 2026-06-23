@@ -21,8 +21,11 @@ def test_make_policy_unknown():
 def _record(seed=1):
     rec = StreamRecorder()
     result = run_game(
-        RandomPolicy("a"), RandomPolicy("b"), seed=seed,
-        on_step=rec.on_step, on_snapshot=rec.on_snapshot,
+        RandomPolicy("a"),
+        RandomPolicy("b"),
+        seed=seed,
+        on_step=rec.on_step,
+        on_snapshot=rec.on_snapshot,
     )
     return rec, result
 
@@ -78,8 +81,11 @@ def test_build_replay_winner_matches_run_game():
 def test_build_replay_from_log_row_roundtrip():
     rep = build_replay(make_policy("greedy"), make_policy("random"), seed=4, created_at="t")
     row = {
-        "policy_a": "greedy", "policy_b": "random", "seed": 4,
-        "a_seat": 0, "hash": rep["header"]["hash"],
+        "policy_a": "greedy",
+        "policy_b": "random",
+        "seed": 4,
+        "a_seat": 0,
+        "hash": rep["header"]["hash"],
     }
     out = build_replay_from_log_row(row, source="game-log:x.jsonl#0", make_policy=make_policy)
     assert out["header"]["hash"] == row["hash"]

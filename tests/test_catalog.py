@@ -11,6 +11,15 @@ def test_catalog_shape():
     assert c1["cost"] == 1 and c1["attack"] == 2 and c1["defense"] == 1
     assert "Summon" in c1["description"]
     assert set(c1) == {
-        "id", "name", "type", "cost", "attack", "defense",
-        "abilities", "player_hp", "enemy_hp", "card_draw", "description",
+        "id",
+        "name",
+        "type",
+        "cost",
+        "attack",
+        "defense",
+        "abilities",
+        "player_hp",
+        "enemy_hp",
+        "card_draw",
+        "description",
     }

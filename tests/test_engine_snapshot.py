@@ -9,7 +9,9 @@ from locma.policies.random_policy import RandomPolicy
 def test_on_snapshot_fires_once_at_battle_start():
     phases = []
     run_game(
-        RandomPolicy("r0"), RandomPolicy("r1"), seed=1,
+        RandomPolicy("r0"),
+        RandomPolicy("r1"),
+        seed=1,
         on_snapshot=lambda gs: phases.append(gs.phase),
     )
     assert phases == [Phase.BATTLE]
@@ -19,7 +21,9 @@ def test_on_snapshot_does_not_change_trace():
     _, baseline = record_game(RandomPolicy("a"), RandomPolicy("b"), seed=3)
     steps = []
     run_game(
-        RandomPolicy("a"), RandomPolicy("b"), seed=3,
+        RandomPolicy("a"),
+        RandomPolicy("b"),
+        seed=3,
         on_step=lambda seat, action, gs: steps.append((seat, action)),
         on_snapshot=lambda gs: None,
     )

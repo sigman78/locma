@@ -6,8 +6,12 @@ from locma.harness.replay_store import get_replay, list_headers, write_replay
 
 
 def _replay(rid, created):
-    return {"header": {"replay_id": rid, "created_at": created, "winner": 0},
-            "draft": {}, "battle": {}, "result": {}}
+    return {
+        "header": {"replay_id": rid, "created_at": created, "winner": 0},
+        "draft": {},
+        "battle": {},
+        "result": {},
+    }
 
 
 def test_write_then_get_roundtrip(tmp_path):
