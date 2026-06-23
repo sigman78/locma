@@ -51,6 +51,8 @@ def play(
     log: str = typer.Option(None, help="write a game-log JSONL (enables replay)"),
 ):
     """Run a mirrored match A vs B; optionally render and/or log each game."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
     pa, pb = make_policy(a), make_policy(b)
     wins_a = total = 0
     if render or log:
@@ -175,6 +177,8 @@ def tournament(
 @app.command("noise-floor")
 def noise_floor(a: str, games: int = 200, seed: int = 0):
     """Play policy A against an independent copy of itself: the luck baseline."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
     res = run_match(make_policy(a), make_policy(a), games=games, seed=seed)
     lo, hi = wilson_ci(res.wins_a, res.games)
     half = (hi - lo) / 2
@@ -197,6 +201,8 @@ def sprt(
     seed: int = 0,
 ):
     """Sequential probability ratio test; stops as soon as evidence decides."""
+    if max_games < 1:
+        raise typer.BadParameter("max-games must be >= 1")
     px, py = make_policy(x), make_policy(vs)
     wins = n = k = 0
     r = None

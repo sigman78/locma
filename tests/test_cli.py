@@ -63,3 +63,17 @@ def test_replay_detects_tampered_hash(tmp_path):
     log.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     res = runner.invoke(app, ["replay", str(log), "--assert-hash"])
     assert res.exit_code != 0
+
+
+def test_play_rejects_zero_games():
+    assert runner.invoke(app, ["play", "greedy", "random", "--games", "0"]).exit_code != 0
+
+
+def test_noise_floor_rejects_zero_games():
+    assert runner.invoke(app, ["noise-floor", "random", "--games", "0"]).exit_code != 0
+
+
+def test_sprt_rejects_zero_max_games():
+    assert (
+        runner.invoke(app, ["sprt", "greedy", "--vs", "random", "--max-games", "0"]).exit_code != 0
+    )
