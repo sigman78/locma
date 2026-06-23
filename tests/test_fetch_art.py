@@ -85,3 +85,30 @@ def test_force_redownloads(tmp_path, monkeypatch):
     n = fetch.fetch_art(dest=str(tmp_path), force=True)
     assert "001.png" in ids           # re-downloaded
     assert n == 160
+
+
+def test_download_sends_user_agent(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeResp:
+        def read(self): return b"PNG"
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout=0):
+        captured["ua"] = req.get_header("User-agent")
+        return FakeResp()
+
+    monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
+    ok = fetch._download("http://x/001.png", str(tmp_path / "001.png"))
+    assert ok is True
+    assert captured["ua"] and "locma" in captured["ua"]
+
+
+def test_fetch_art_sleeps_between_requests(tmp_path, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(fetch, "_download", lambda url, path: False)
+    monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0.01)
+    monkeypatch.setattr(fetch.time, "sleep", lambda s: sleeps.append(s))
+    fetch.fetch_art(dest=str(tmp_path))
+    assert len(sleeps) == 160 and sleeps[0] == 0.01
