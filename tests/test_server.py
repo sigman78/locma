@@ -75,3 +75,19 @@ def test_game_logs_and_import(tmp_path):
     r = c.post("/api/replays/import", json={"path": name, "row": 0})
     assert r.status_code == 200
     assert r.json()["source"] == f"game-log:{name}#0"
+
+
+def test_art_endpoint(tmp_path):
+    assets = tmp_path / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    # 1x1 transparent PNG bytes
+    png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000a49444154789c6360000002000100ffff03000006000557bfabd400"
+        "00000049454e44ae426082"
+    )
+    (assets / "001.png").write_bytes(png)
+    c = _client(tmp_path)
+    assert c.get("/api/art/1").status_code == 200
+    assert c.get("/api/art/1").headers["content-type"] == "image/png"
+    assert c.get("/api/art/999").status_code == 404

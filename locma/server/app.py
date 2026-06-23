@@ -5,6 +5,8 @@ import glob
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from locma.data.cards_db import catalog
@@ -87,6 +89,17 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e)) from e
         write_replay(replay_dir, rep)
         return rep["header"]
+
+    @app.get("/api/art/{card_id}")
+    def get_art(card_id: int):
+        path = os.path.join(asset_dir, f"{card_id:03d}.png")
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="art not found")
+        return FileResponse(path, media_type="image/png")
+
+    dist = os.path.join(os.path.dirname(__file__), "..", "..", "web", "dist")
+    if os.path.isdir(dist):
+        app.mount("/", StaticFiles(directory=dist, html=True), name="spa")
 
     # later tasks register replay / game-log / art / static routes on `app`
     app.state.replay_dir = replay_dir
