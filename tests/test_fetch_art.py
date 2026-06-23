@@ -53,3 +53,35 @@ def test_never_raises_on_download_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0)
     n = fetch.fetch_art(dest=str(tmp_path))  # all fail, no exception
     assert n == 0
+
+
+def test_skip_existing(tmp_path, monkeypatch):
+    (tmp_path / "001.png").write_bytes(b"old")
+    ids = []
+    def fake(url, path):
+        ids.append(os.path.basename(path))
+        with open(path, "wb") as f:
+            f.write(b"PNG")
+        return True
+    import os
+    monkeypatch.setattr(fetch, "_download", fake)
+    monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0)
+    n = fetch.fetch_art(dest=str(tmp_path))
+    assert "001.png" not in ids       # skipped
+    assert n == 159                   # 160 - 1 already present
+
+
+def test_force_redownloads(tmp_path, monkeypatch):
+    (tmp_path / "001.png").write_bytes(b"old")
+    ids = []
+    def fake(url, path):
+        ids.append(os.path.basename(path))
+        with open(path, "wb") as f:
+            f.write(b"PNG")
+        return True
+    import os
+    monkeypatch.setattr(fetch, "_download", fake)
+    monkeypatch.setattr(fetch, "_REQUEST_DELAY", 0)
+    n = fetch.fetch_art(dest=str(tmp_path), force=True)
+    assert "001.png" in ids           # re-downloaded
+    assert n == 160
