@@ -8,40 +8,19 @@ in the domain of TcG like games.
 
 ---
 
+## Documentation
+
+- [CLI reference](docs/cli.md) — every command and flag
+- [Experiment methodology](docs/experiments.md) — noise floor, SPRT, ratings, replay
+- [Architecture](docs/architecture.md) — engine, trace hook, game-log format
+
 ## Quickstart
 
-### Install
-
 ```bash
-# Core install (engine, CLI, policies, eval, tournament)
-uv sync
-
-# With ML extras (Gym env + Stable-Baselines3 training)
-uv sync --extra ml
-```
-
-### CLI commands
-
-```bash
-# Play greedy policy against random for 50 mirrored games (seed 0 for reproducibility)
+uv sync                      # core install
+uv sync --extra ml           # + Gym env & SB3 training
 uv run locma play greedy random --games 50 --seed 0
-
-# Evaluate greedy vs random using SPRT — prints verdict (accept_h1 / accept_h0 / continue) and win rate
-uv run locma eval greedy --vs random --max-games 200
-
-# Run a round-robin tournament among three policies and print an Elo ratings table
-uv run locma tournament random scripted greedy --games 30
-```
-
-### Run tests
-
-```bash
+uv run locma tournament random scripted greedy --games 30 --matrix
 uv run pytest
-```
-
-### Train an RL agent (requires `[ml]` extra)
-
-```bash
-uv run python train.py --steps 50000
 ```
 
