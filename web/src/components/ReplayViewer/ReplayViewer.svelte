@@ -17,6 +17,7 @@
 
   $: nameA = replay.header.a_seat === 0 ? replay.header.policy_a : replay.header.policy_b
   $: nameB = replay.header.a_seat === 0 ? replay.header.policy_b : replay.header.policy_a
+  $: snapshot = pb.frames[cursor]?.snapshot
 
   function sync() { cursor = pb.cursor }
   function seek(i: number) { pb.seek(i); sync() }
@@ -49,7 +50,7 @@
   {:else}
     <div class="battle">
       <div class="main">
-        <Board snapshot={pb.current.snapshot} {nameA} {nameB} />
+        <Board {snapshot} {nameA} {nameB} />
         <Timeline {cursor} length={pb.frames.length} {playing}
           on:seek={(e) => seek(e.detail)} on:step={(e) => step(e.detail)}
           on:turn={(e) => turn(e.detail)} on:toggle={toggle} />
