@@ -29,3 +29,7 @@ uv run locma play greedy random --games 50 --seed 0
 uv run locma tournament random scripted greedy --games 30 --matrix
 uv run pytest
 ```
+
+## License
+
+[MIT](LICENSE) © SiGMan

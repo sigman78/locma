@@ -2,7 +2,20 @@
 name = "locma"
 version = "0.1.0"
 description = "Legends of Code & Magic 1.2 explore kit"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "SiGMan", email = "sigman78@gmail.com" }]
+keywords = ["locm", "card-game", "reinforcement-learning", "game-ai", "tcg"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Games/Entertainment :: Turn Based Strategy",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = ["typer>=0.12", "rich>=13", "scipy>=1.11", "numpy>=1.26", "openskill>=5"]
 
 [project.optional-dependencies]
