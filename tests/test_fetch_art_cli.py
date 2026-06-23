@@ -11,9 +11,11 @@ runner = CliRunner()
 
 def test_fetch_art_cli_passes_force_and_prints_notice(monkeypatch):
     seen = {}
+
     def stub(force=False):
         seen["force"] = force
         return 7
+
     monkeypatch.setattr(fetch, "fetch_art", stub)
     result = runner.invoke(app, ["fetch-art", "--force"])
     assert result.exit_code == 0
