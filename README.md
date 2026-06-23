@@ -13,6 +13,7 @@ in the domain of TcG like games.
 - [CLI reference](docs/cli.md) — every command and flag
 - [Experiment methodology](docs/experiments.md) — noise floor, SPRT, ratings, replay
 - [Architecture](docs/architecture.md) — engine, trace hook, game-log format
+- [Baseline](docs/BASELINE.md) — reference results for the built-in policies
 
 ## Install
 
