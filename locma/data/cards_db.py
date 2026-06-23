@@ -77,3 +77,32 @@ def load_cards() -> list[Card]:
 def card_by_id(cards: list[Card]) -> dict[int, Card]:
     """Return a mapping from card id to Card."""
     return {c.id: c for c in cards}
+
+
+def catalog() -> list[dict]:
+    """Return all 160 cards as plain dicts including the description column."""
+    text = resources.files("locma.data").joinpath("cardlist.txt").read_text(encoding="utf-8")
+    rows: list[dict] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [p.strip() for p in line.split(";")]
+        if len(parts) < 10:
+            continue
+        rows.append(
+            {
+                "id": int(parts[0]),
+                "name": parts[1],
+                "type": parts[2].lower(),
+                "cost": int(parts[3]),
+                "attack": int(parts[4]),
+                "defense": int(parts[5]),
+                "abilities": normalize_abilities(parts[6]),
+                "player_hp": int(parts[7]),
+                "enemy_hp": int(parts[8]),
+                "card_draw": int(parts[9]),
+                "description": parts[10] if len(parts) > 10 else "",
+            }
+        )
+    return rows
