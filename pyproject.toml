@@ -1,0 +1,20 @@
+[project]
+name = "locma"
+version = "0.1.0"
+description = "Legends of Code & Magic 1.2 explore kit"
+requires-python = ">=3.11"
+dependencies = ["typer>=0.12", "rich>=13", "scipy>=1.11", "numpy>=1.26"]
+
+[project.optional-dependencies]
+ml = ["gymnasium>=0.29", "stable-baselines3>=2.3", "sb3-contrib>=2.3", "torch>=2.2", "trueskill>=0.4.5"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+locma = "locma.cli.app:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

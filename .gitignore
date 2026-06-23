@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+*.zip
+locma/data/assets/*
+!locma/data/assets/manifest.json
+runs/
