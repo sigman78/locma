@@ -1,5 +1,6 @@
 from __future__ import annotations
-from locma.core.actions import Summon, Attack, Use, Pass
+
+from locma.core.actions import Attack, Pass, Summon
 
 
 def _kw_count(abilities: str) -> int:
@@ -37,11 +38,13 @@ class GreedyPolicy:
         # (2) Summon the most expensive affordable creature
         summons = [a for a in legal if isinstance(a, Summon)]
         if summons:
+
             def cost_of(a):
                 for c in view.my_hand:
                     if c.instance_id == a.card_instance_id:
                         return c.cost
                 return 0
+
             return max(summons, key=cost_of)
 
         # (3) Attack into enemy creatures, else attack face

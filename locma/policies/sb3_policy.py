@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
-
+from locma.envs.encode import action_mask, encode_battle, index_to_action
 from locma.policies.random_policy import RandomPolicy
-from locma.envs.encode import encode_battle, action_mask, index_to_action
 
 
 class SB3Policy:

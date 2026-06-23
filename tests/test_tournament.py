@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from locma.stats.ratings import elo_update
 from locma.harness.tournament import run_tournament
 from locma.policies.random_policy import RandomPolicy
 from locma.policies.scripted import ScriptedPolicy
+from locma.stats.ratings import elo_update
 
 
 def test_elo_winner_gains():

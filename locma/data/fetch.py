@@ -4,6 +4,7 @@ This module provides:
 - fetch_cards: download and verify cardlist, atomically replace vendored file
 - fetch_art: best-effort download of card images (returns int count, never raises)
 """
+
 from __future__ import annotations
 
 import json
@@ -65,7 +66,7 @@ def fetch_cards(dest=None) -> str:
 
             # Verify we have exactly 160 cards
             if len(cards) == 160:
-                # Atomic replace: on Windows, this will fail if dest exists, so unlink first if needed
+                # Atomic replace: on Windows replace() overwrites atomically.
                 if os.path.exists(path):
                     os.replace(tmp, path)
                 else:

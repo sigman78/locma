@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from locma.core.cards import Card
-from locma.core.state import GameState, Phase
 from locma.core.instance import CardInstance
+from locma.core.state import GameState, Phase
+
 
 def start_draft(gs: GameState, cards: list[Card], rounds: int = 30) -> None:
     pool = []
@@ -13,11 +15,14 @@ def start_draft(gs: GameState, cards: list[Card], rounds: int = 30) -> None:
     gs.current = 0
     gs.phase = Phase.DRAFT
 
+
 def draft_legal(gs: GameState) -> list[int]:
     return [0, 1, 2]
 
+
 def current_triplet(gs: GameState) -> list[Card]:
     return gs.draft_pool[gs.draft_round]
+
 
 def apply_draft_pick(gs: GameState, pick: int) -> None:
     player = gs.current
@@ -31,12 +36,14 @@ def apply_draft_pick(gs: GameState, pick: int) -> None:
         if gs.draft_round >= len(gs.draft_pool):
             _finish_draft(gs)
 
+
 def _finish_draft(gs: GameState) -> None:
     iid = 0
     for p in (0, 1):
         deck = []
         for card in gs.picks[p]:
-            deck.append(CardInstance.from_card(card, iid)); iid += 1
+            deck.append(CardInstance.from_card(card, iid))
+            iid += 1
         gs.rng.shuffle(deck)
         gs.players[p].deck = deck
     gs.phase = Phase.BATTLE

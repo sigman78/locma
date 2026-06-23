@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from locma.core.engine import run_game
 from locma.policies.random_policy import RandomPolicy
 

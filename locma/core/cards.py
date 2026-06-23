@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import IntEnum
 
 ABILITY_ORDER = "BCDGLW"  # Breakthrough, Charge, Drain, Guard, Lethal, Ward
+
 
 class CardType(IntEnum):
     CREATURE = 0
@@ -10,9 +12,11 @@ class CardType(IntEnum):
     RED_ITEM = 2
     BLUE_ITEM = 3
 
+
 def normalize_abilities(raw: str) -> str:
     present = {ch for ch in raw if ch in ABILITY_ORDER}
     return "".join(ch if ch in present else "-" for ch in ABILITY_ORDER)
+
 
 @dataclass(frozen=True)
 class Card:

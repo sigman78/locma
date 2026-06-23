@@ -1,7 +1,9 @@
 import random
+
+from locma.core.draft import apply_draft_pick, current_triplet, draft_legal, start_draft
 from locma.core.state import GameState, Phase
-from locma.core.draft import start_draft, draft_legal, apply_draft_pick, current_triplet
 from locma.data.cards_db import load_cards
+
 
 def test_draft_runs_30_rounds_and_builds_decks():
     gs = GameState.new(random.Random(42))
@@ -16,7 +18,10 @@ def test_draft_runs_30_rounds_and_builds_decks():
     assert len(gs.picks[0]) == 30 and len(gs.picks[1]) == 30
     assert len(gs.players[0].deck) == 30 and len(gs.players[1].deck) == 30
 
+
 def test_draft_is_deterministic():
-    a = GameState.new(random.Random(7)); start_draft(a, load_cards())
-    b = GameState.new(random.Random(7)); start_draft(b, load_cards())
+    a = GameState.new(random.Random(7))
+    start_draft(a, load_cards())
+    b = GameState.new(random.Random(7))
+    start_draft(b, load_cards())
     assert [[c.id for c in t] for t in a.draft_pool] == [[c.id for c in t] for t in b.draft_pool]

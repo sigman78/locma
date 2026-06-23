@@ -12,18 +12,19 @@ The opponent policy is fixed at construction time.  In v1 it also drives the
 draft for both seats.  Opponent battle turns are resolved automatically inside
 reset() and step() so that the returned observation always belongs to the agent.
 """
+
 from __future__ import annotations
 
 import random
 
-import numpy as np
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
 
-from locma.core.state import GameState, Phase
-from locma.core import draft as draftmod
 from locma.core import battle as battlemod
+from locma.core import draft as draftmod
 from locma.core.engine import make_battle_view, make_draft_view
+from locma.core.state import GameState, Phase
 from locma.data.cards_db import load_cards
 from locma.envs.encode import (
     ACTION_SIZE,
@@ -71,10 +72,7 @@ class BattleEnv(gym.Env):
 
     def _opp_play_until_agent(self) -> None:
         """Advance opponent turns until it is the agent's turn (or game ends)."""
-        while (
-            self.gs.phase == Phase.BATTLE
-            and self.gs.current != self.agent_seat
-        ):
+        while self.gs.phase == Phase.BATTLE and self.gs.current != self.agent_seat:
             legal = battlemod.battle_legal(self.gs)
             view = make_battle_view(self.gs)
             action = self.opponent.battle_action(view, legal)
@@ -94,10 +92,7 @@ class BattleEnv(gym.Env):
         """
         super().reset(seed=seed)
 
-        if seed is not None:
-            eff = seed
-        else:
-            eff = self.base_seed + self._ep
+        eff = seed if seed is not None else self.base_seed + self._ep
         self._ep += 1
 
         self.gs = GameState.new(random.Random(eff))

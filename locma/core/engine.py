@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import random
 from dataclasses import dataclass
 
-from locma.core.state import GameState, Phase
-from locma.core import draft as draftmod
 from locma.core import battle as battlemod
-from locma.core.views import DraftView, BattleView, CardView
+from locma.core import draft as draftmod
+from locma.core.state import GameState, Phase
+from locma.core.views import BattleView, CardView, DraftView
 from locma.data.cards_db import load_cards
 
 

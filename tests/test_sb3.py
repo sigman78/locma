@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 pytest.importorskip("sb3_contrib")
 from locma.policies.sb3_policy import SB3Policy
 

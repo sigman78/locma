@@ -10,6 +10,7 @@ Observation layout (OBS_SIZE = 146 floats):
 Per-card 7-feature block:
   [present, cost, attack, defense, hasGuard, hasLethal, hasWard]
 """
+
 from __future__ import annotations
 
 import numpy as np

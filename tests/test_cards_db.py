@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from locma.core.cards import CardType
-from locma.data.cards_db import load_cards, parse_cardlist, card_by_id
+from locma.data.cards_db import card_by_id, load_cards, parse_cardlist
 
 
 def test_load_cards_count():
@@ -18,7 +18,7 @@ def test_card_by_id_unique():
 
 def test_parse_one_line():
     # Real line copied verbatim from locma/data/cardlist.txt (line 1)
-    line = "1 ; Slimer ; creature ; 1 ; 2 ; 1 ; ------ ; 1 ; 0 ; 0 ; 2/1 Creature. Summon: You gain 1 health."
+    line = "1 ; Slimer ; creature ; 1 ; 2 ; 1 ; ------ ; 1 ; 0 ; 0 ; 2/1 Creature. Summon: You gain 1 health."  # noqa: E501
     cards = parse_cardlist(line)
     assert len(cards) == 1
     c = cards[0]
@@ -49,16 +49,16 @@ def test_parse_abilities_non_empty():
 
 def test_parse_items():
     # Green item
-    line_green = "80 ; Strength Potion ; itemGreen ; 2 ; 2 ; 0 ; ------ ; 0 ; 0 ; 0 ; Green Item. Give a friendly creature +2/+0."
+    line_green = "80 ; Strength Potion ; itemGreen ; 2 ; 2 ; 0 ; ------ ; 0 ; 0 ; 0 ; Green Item. Give a friendly creature +2/+0."  # noqa: E501
     cards_g = parse_cardlist(line_green)
     assert cards_g[0].type == CardType.GREEN_ITEM
 
     # Red item (negative stats)
-    line_red = "110 ; Decimate ; itemRed ; 4 ; 0 ; -6 ; ------ ; 0 ; 0 ; 0 ; Red Item. Give an enemy creature +0/-6."
+    line_red = "110 ; Decimate ; itemRed ; 4 ; 0 ; -6 ; ------ ; 0 ; 0 ; 0 ; Red Item. Give an enemy creature +0/-6."  # noqa: E501
     cards_r = parse_cardlist(line_red)
     assert cards_r[0].type == CardType.RED_ITEM
 
     # Blue item
-    line_blue = "160 ; Minor Life Steal Potion ; itemBlue ; 2 ; 0 ; 0 ; ------ ; 2 ; -2 ; 0 ; Blue Item. Deal 2 damage to your opponent and gain 2 health."
+    line_blue = "160 ; Minor Life Steal Potion ; itemBlue ; 2 ; 0 ; 0 ; ------ ; 2 ; -2 ; 0 ; Blue Item. Deal 2 damage to your opponent and gain 2 health."  # noqa: E501
     cards_b = parse_cardlist(line_blue)
     assert cards_b[0].type == CardType.BLUE_ITEM

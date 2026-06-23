@@ -4,12 +4,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from locma.policies.random_policy import RandomPolicy
-from locma.policies.scripted import ScriptedPolicy
-from locma.policies.greedy import GreedyPolicy
 from locma.harness.match import run_match
 from locma.harness.tournament import run_tournament
-from locma.stats.intervals import wilson_ci, binomial_test
+from locma.policies.greedy import GreedyPolicy
+from locma.policies.random_policy import RandomPolicy
+from locma.policies.scripted import ScriptedPolicy
+from locma.stats.intervals import binomial_test, wilson_ci
 from locma.stats.sprt import sprt
 
 app = typer.Typer(help="Legends of Code & Magic 1.2 explore kit")
@@ -76,14 +76,14 @@ def eval(
             break
     lo, hi = wilson_ci(wins, n)
     console.print(
-        f"verdict: [bold]{r.decision}[/]  winrate={wins/n:.3f} "
-        f"(CI {lo:.3f}-{hi:.3f}), n={n}"
+        f"verdict: [bold]{r.decision}[/]  winrate={wins / n:.3f} (CI {lo:.3f}-{hi:.3f}), n={n}"
     )
 
 
 @app.command("fetch-cards")
 def fetch_cards_cmd():
     from locma.data.fetch import fetch_cards  # noqa: PLC0415 — lazy import
+
     path = fetch_cards()
     console.print(f"cards at {path}")
 
@@ -91,5 +91,6 @@ def fetch_cards_cmd():
 @app.command("fetch-art")
 def fetch_art_cmd():
     from locma.data.fetch import fetch_art  # noqa: PLC0415 — lazy import
+
     n = fetch_art()
     console.print(f"fetched {n} art assets (best-effort)")

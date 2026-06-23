@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from locma.policies.greedy import GreedyPolicy
 from locma.core.views import CardView, DraftView
+from locma.harness.match import run_match
+from locma.policies.greedy import GreedyPolicy
+from locma.policies.random_policy import RandomPolicy
 
 
 def test_greedy_prefers_stronger_card():
@@ -13,7 +15,5 @@ def test_greedy_prefers_stronger_card():
 
 
 def test_greedy_beats_random_over_many_games():
-    from locma.harness.match import run_match
-    from locma.policies.random_policy import RandomPolicy
     res = run_match(GreedyPolicy("g"), RandomPolicy("r"), games=60, seed=0)
     assert res.win_rate_a > 0.5

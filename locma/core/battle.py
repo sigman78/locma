@@ -1,7 +1,11 @@
 from __future__ import annotations
+
+from locma.core.actions import Action, Attack, Pass, Summon, Use
+from locma.core.cards import ABILITY_ORDER, CardType
 from locma.core.state import GameState, Phase
 
 MAX_MANA = 12
+
 
 def draw(gs: GameState, player: int, n: int) -> None:
     p = gs.players[player]
@@ -14,6 +18,7 @@ def draw(gs: GameState, player: int, n: int) -> None:
             # deck-out rune penalty: escalating self damage
             p.health -= 1
 
+
 def start_turn(gs: GameState) -> None:
     p = gs.players[gs.current]
     p.max_mana = min(MAX_MANA, p.max_mana + 1)
@@ -23,6 +28,7 @@ def start_turn(gs: GameState) -> None:
         c.has_attacked = False
     draw(gs, gs.current, 1 + p.bonus_draw)
     p.bonus_draw = 0
+
 
 def start_battle(gs: GameState) -> None:
     gs.phase = Phase.BATTLE
@@ -34,10 +40,12 @@ def start_battle(gs: GameState) -> None:
     p.max_mana = 1
     p.mana = 1
 
+
 def end_turn(gs: GameState) -> None:
     gs.current = gs.opponent(gs.current)
     gs.turn += 1
     start_turn(gs)
+
 
 def check_winner(gs: GameState) -> None:
     for idx in (0, 1):
@@ -50,9 +58,6 @@ def check_winner(gs: GameState) -> None:
 # ---------------------------------------------------------------------------
 # Task 8: legal-action generation + apply (summon / use / pass)
 # ---------------------------------------------------------------------------
-
-from locma.core.actions import Summon, Attack, Use, Pass, Action
-from locma.core.cards import CardType, ABILITY_ORDER
 
 
 def _find_in_hand(p, iid):
@@ -192,9 +197,10 @@ def apply_battle(gs: GameState, action: Action) -> None:
 # Task 9: combat resolution with B/C/D/G/L/W keywords
 # ---------------------------------------------------------------------------
 
+
 def _clear_ward(unit) -> None:
     i = ABILITY_ORDER.index("W")
-    unit.abilities = unit.abilities[:i] + "-" + unit.abilities[i + 1:]
+    unit.abilities = unit.abilities[:i] + "-" + unit.abilities[i + 1 :]
 
 
 def _deal_to_unit(unit, amount: int, lethal: bool) -> int:
@@ -212,17 +218,20 @@ def _deal_to_unit(unit, amount: int, lethal: bool) -> int:
 
 
 def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
-    p = gs.players[gs.current]; opp = gs.players[gs.opponent(gs.current)]
+    p = gs.players[gs.current]
+    opp = gs.players[gs.opponent(gs.current)]
     atk = _find_on_board(p, attacker_id)
     if atk is None:
         return
-    atk.has_attacked = True; atk.can_attack = False
+    atk.has_attacked = True
+    atk.can_attack = False
     if target_id == -1:
         dmg = atk.attack
         opp.health -= dmg
         if atk.has("D") and dmg > 0:
             p.health += dmg
-        check_winner(gs); return
+        check_winner(gs)
+        return
     dfn = _find_on_board(opp, target_id)
     if dfn is None:
         return

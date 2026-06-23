@@ -4,11 +4,11 @@ import pytest
 
 gym = pytest.importorskip("gymnasium")
 
-import numpy as np
+import numpy as np  # noqa: E402
 
-from locma.envs.battle_env import BattleEnv
-from locma.envs.encode import OBS_SIZE, encode_battle
-from locma.policies.random_policy import RandomPolicy
+from locma.envs.battle_env import BattleEnv  # noqa: E402
+from locma.envs.encode import OBS_SIZE, encode_battle  # noqa: E402
+from locma.policies.random_policy import RandomPolicy  # noqa: E402
 
 
 def test_env_reset_step():
@@ -24,9 +24,11 @@ def test_env_reset_step():
 
 def test_obs_size_matches_encode():
     """Verify OBS_SIZE constant matches encode_battle output length."""
-    from locma.core.views import BattleView, CardView
+    from locma.core.views import BattleView, CardView  # noqa: PLC0415
 
-    dummy_card = CardView(instance_id=1, card_id=1, type=0, cost=1, attack=2, defense=3, abilities="------")
+    dummy_card = CardView(
+        instance_id=1, card_id=1, type=0, cost=1, attack=2, defense=3, abilities="------"
+    )
     view = BattleView(
         turn=1,
         me_health=30,

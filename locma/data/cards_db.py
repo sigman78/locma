@@ -4,7 +4,8 @@ Vendored card list source:
   https://raw.githubusercontent.com/ronaldosvieira/gym-locm/master/gym_locm/engine/resources/cardlist.txt
 
 The file is semicolon-delimited with 11 columns (all with surrounding spaces):
-  id ; name ; type_word ; cost ; attack ; defense ; abilities ; player_hp ; enemy_hp ; card_draw ; description
+  id ; name ; type_word ; cost ; attack ; defense ; abilities ; player_hp ; enemy_hp ;
+  card_draw ; description
 
 Where type_word maps to CardType:
   creature  -> CardType.CREATURE  (0)
@@ -14,6 +15,7 @@ Where type_word maps to CardType:
 
 abilities is a 6-char mask in BCDGLW order (e.g. "-----W", "B-D-L-").
 """
+
 from __future__ import annotations
 
 from importlib import resources
@@ -32,7 +34,8 @@ def parse_cardlist(text: str) -> list[Card]:
     """Parse a semicolon-delimited cardlist text into a list of Card objects.
 
     Handles the real LOCM 1.2 format:
-      id ; name ; type_word ; cost ; attack ; defense ; abilities ; player_hp ; enemy_hp ; card_draw ; description
+      id ; name ; type_word ; cost ; attack ; defense ; abilities ; player_hp ; enemy_hp ;
+      card_draw ; description
     """
     cards: list[Card] = []
     for raw in text.splitlines():
