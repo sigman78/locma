@@ -50,5 +50,15 @@ it the command exits with a clear error.
 
 Example: `uv run locma train --steps 50000 --opponent random --out model.zip`
 
-## fetch-cards / fetch-art
-Refresh the vendored card list / best-effort art download.
+## fetch-cards
+`locma fetch-cards`
+Refresh the vendored card list from the upstream source.
+
+### `locma fetch-art [--force]`
+
+Opt-in download of card portrait art into the local cache
+(`locma/data/assets/`, gitignored). Skips already-cached files unless `--force`.
+Portraits are sourced from `legendsofcodeandmagic.com`.
+
+> Card art is downloaded for local use only; seek permission from the authors
+> before redistribution.
