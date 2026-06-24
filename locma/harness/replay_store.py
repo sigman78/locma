@@ -48,7 +48,10 @@ def write_replay(dirpath: str, replay: dict) -> str:
     # battle turn lines — group by CONSECUTIVE (seat, turn) runs
     steps = battle.get("steps", [])
     for (seat, turn), group in groupby(steps, key=lambda s: (s["seat"], s["turn"])):
-        actions = [{"action": s["action"], "state": s["state"]} for s in group]
+        actions = [
+            {"action": s["action"], "state": s["state"], "events": s.get("events", [])}
+            for s in group
+        ]
         lines.append(
             json.dumps(
                 {"k": "turn", "seat": seat, "turn": turn, "actions": actions},
@@ -115,6 +118,7 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
                             "turn": turn,
                             "action": entry["action"],
                             "state": entry["state"],
+                            "events": entry.get("events", []),
                         }
                     )
             elif k == "result":

@@ -92,7 +92,7 @@ def test_build_replay_structure_and_hash():
         RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="2026-06-23T00:00:00Z"
     )
     h = rep["header"]
-    assert h["format"] == "locma-replay/1"
+    assert h["format"] == "locma-replay/2"
     assert h["policy_a"] == "a" and h["policy_b"] == "b" and h["seed"] == 5
     assert h["a_seat"] == 0
     assert h["replay_id"] == "r_" + h["hash"].split(":")[1][:12]
@@ -136,3 +136,13 @@ def test_build_replay_from_log_row_hash_mismatch():
     row = {"policy_a": "greedy", "policy_b": "random", "seed": 4, "a_seat": 0, "hash": "sha256:bad"}
     with pytest.raises(ValueError):
         build_replay_from_log_row(row, source="s", make_policy=make_policy)
+
+
+def test_steps_carry_events_and_pass_decomposed():
+    rep = build_replay(make_policy("random"), make_policy("random"), seed=1)
+    assert rep["header"]["format"] == "locma-replay/2"
+    steps = rep["battle"]["steps"]
+    assert all("events" in s for s in steps)
+    # at least one turn-ending pass step carries turn_ended + turn_started
+    pass_steps = [s for s in steps if s["action"] == {"t": "pass"}]
+    assert any({"turn_ended", "turn_started"} <= {e["t"] for e in s["events"]} for s in pass_steps)
