@@ -323,7 +323,7 @@ code {
 }
 .locma-dmg {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  font-weight: 800; font-size: 22px; color: #ff5252;
-  text-shadow: 0 1px 3px #000, 0 0 6px #ff5252; pointer-events: none; z-index: 5;
+  font-weight: 900; font-size: 38px; color: #ff5252;
+  text-shadow: 0 2px 4px #000, 0 0 10px #ff2a2a; pointer-events: none; z-index: 6;
   animation: locma-dmg 600ms ease-out forwards;
 }

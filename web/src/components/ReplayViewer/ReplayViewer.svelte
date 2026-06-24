@@ -71,13 +71,16 @@
     <DraftPanel draft={replay.draft} />
   {:else}
     <div class="battle">
-      <div class="main">
+      <div class="gutter"></div>
+      <div class="stage">
         <Board {snapshot} {nameA} {nameB} {fx} {fxToken} />
         <Timeline {cursor} length={pb.frames.length} {playing}
           on:seek={(e) => seek(e.detail)} on:step={(e) => step(e.detail)}
           on:turn={(e) => turn(e.detail)} on:toggle={toggle} />
       </div>
-      <aside><ActionLog frames={pb.frames} {cursor} cardIds={pb.cardIds} on:seek={(e) => seek(e.detail)} /></aside>
+      <div class="gutter right">
+        <aside><ActionLog frames={pb.frames} {cursor} cardIds={pb.cardIds} on:seek={(e) => seek(e.detail)} /></aside>
+      </div>
     </div>
   {/if}
 </div>
@@ -90,5 +93,10 @@
     padding: 2px 10px; cursor: pointer; }
   .tabs button.on { background: #2a2a44; }
   .battle { display: flex; gap: 16px; align-items: flex-start; }
-  .main { flex: 0 0 auto; } aside { width: 260px; flex: 1 1 auto; }
+  /* gutters share remaining width equally, so .stage stays centered in the view */
+  .gutter { flex: 1 1 0; min-width: 0; display: flex; }
+  .gutter.right { justify-content: flex-start; }
+  .stage { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; }
+  /* action log: only as wide as its text */
+  aside { width: max-content; max-width: 100%; }
 </style>

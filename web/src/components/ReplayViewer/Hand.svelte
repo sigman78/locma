@@ -11,9 +11,12 @@
 </div>
 
 <style>
-  .hand { display: flex; gap: var(--gap, 8px); justify-content: flex-start; flex-wrap: nowrap;
-    padding: 6px; background: #101015; border-radius: 6px;
+  .hand { display: flex; gap: var(--gap, 8px); justify-content: center; align-items: center;
+    flex-wrap: nowrap; padding: 8px; border-radius: 8px;
+    background: #20212b;
+    border: 1px solid #313445;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     width: calc(var(--hand-cols, 8) * var(--card-w, 108px)
-      + (var(--hand-cols, 8) - 1) * var(--gap, 8px) + 12px);
-    min-height: calc(var(--card-h, 150px) + 12px); }
+      + (var(--hand-cols, 8) - 1) * var(--gap, 8px) + 16px);
+    min-height: calc(var(--card-h, 150px) + 16px); }
 </style>

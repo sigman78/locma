@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
 
@@ -12,6 +12,7 @@
 
   let imgOk = true
   $: name = cardName(card.card_id)
+  $: meta = cardMeta(card.card_id)
   $: abil = abilityList(card.abilities)
   $: guard = hasAura(card.abilities, 'G')
   $: ward = hasAura(card.abilities, 'W')
@@ -20,41 +21,65 @@
 </script>
 
 {#if !faceUp}
-  <div class="card back">🂠</div>
+  <div class="cardwrap"><div class="card back">🂠</div></div>
 {:else}
-  <div
-    class="card"
-    class:guard
-    class:ward
-    class:lethal
-    class:attacked={card.has_attacked}
-    use:restartAnim={{ cls: lungeCls, token: fxToken }}
-  >
-    {#if imgOk}
-      <img src={artUrl(card.card_id)} alt={name} on:error={() => (imgOk = false)} />
-    {:else}
-      <div class="placeholder"><span class="nm">{name}</span></div>
-    {/if}
-    {#if lethal}<div class="tint"></div>{/if}
-    <div class="stats"><span class="atk">{card.atk}</span><span class="def">{card.def}</span></div>
-    <div class="abil">
-      {#each abil as a}
-        <span class="chip" style={`background:${a.color}`} title={a.name}>{a.letter}</span>
-      {/each}
+  <div class="cardwrap">
+    <div
+      class="card"
+      class:guard
+      class:ward
+      class:lethal
+      class:attacking={!!lunge}
+      class:attacked={card.has_attacked}
+      use:restartAnim={{ cls: lungeCls, token: fxToken }}
+    >
+      {#if imgOk}
+        <img src={artUrl(card.card_id)} alt={name} on:error={() => (imgOk = false)} />
+      {:else}
+        <div class="placeholder"><span class="nm">{name}</span></div>
+      {/if}
+      {#if lethal}<div class="tint"></div>{/if}
+      <div class="stats"><span class="atk">{card.atk}</span><span class="def">{card.def}</span></div>
+      <div class="abil">
+        {#each abil as a}
+          <span class="chip" style={`background:${a.color}`} title={a.name}>{a.letter}</span>
+        {/each}
+      </div>
+      {#key fxToken}
+        {#if damage != null}<div class="locma-dmg">-{damage}</div>{/if}
+      {/key}
     </div>
-    {#key fxToken}
-      {#if damage != null}<div class="locma-dmg">-{damage}</div>{/if}
-    {/key}
+
+    <div class="tooltip">
+      <div class="tt-head">
+        <span class="tt-name">{meta?.name ?? name}</span>
+        {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
+      </div>
+      {#if meta}<div class="tt-type">{meta.type}</div>{/if}
+      <div class="tt-stats"><span class="atk">⚔ {card.atk}</span><span class="def">🛡 {card.def}</span></div>
+      {#if abil.length}
+        <div class="tt-keys">
+          {#each abil as a}
+            <div class="tt-key"><span class="chip" style={`background:${a.color}`}>{a.letter}</span> {a.name}</div>
+          {/each}
+        </div>
+      {/if}
+      {#if meta?.description}<div class="tt-desc">{meta.description}</div>{/if}
+    </div>
   </div>
 {/if}
 
 <style>
-  .card { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px);
-    border-radius: 6px; overflow: hidden; background: #1c1c22; border: 1px solid #333; }
+  .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px); }
+  .cardwrap:hover { z-index: 40; }
+  .card { position: relative; width: 100%; height: 100%;
+    border-radius: 6px; overflow: hidden; border: 1px solid #333;
+    background-color: #1c1c22;
+    background-image:
+      repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 6px); }
   .card img { width: 100%; height: 100%; object-fit: cover; }
-  .back { display: grid; place-items: center; font-size: 40px; color: #557;
-    width: var(--card-w, 108px); height: var(--card-h, 150px);
-    border-radius: 6px; background: #1c1c22; border: 1px solid #333; }
+  .back { display: grid; place-items: center; font-size: 40px; color: #557; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
     text-align: center; font-size: 13px; color: #ddd; }
   /* auras (compose on different visual channels) */
@@ -66,6 +91,9 @@
     box-shadow: inset 0 0 18px 4px rgba(79,217,122,0.55);
     border: 1px solid rgba(79,217,122,0.6); border-radius: 6px; }
   .card.attacked { filter: saturate(0.6); }
+  /* attacker highlight — declared after .attacked so it wins the filter */
+  .card.attacking { outline: 3px solid #ffd23d; outline-offset: 2px;
+    filter: brightness(1.18); z-index: 4; }
   .stats { position: absolute; bottom: 0; left: 0; right: 0; display: flex;
     justify-content: space-between; padding: 3px 6px; font-weight: 700;
     background: rgba(0,0,0,0.6); font-size: 16px; }
@@ -74,4 +102,23 @@
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { font-size: 11px; font-weight: 700; color: #0c0c10; border-radius: 3px;
     padding: 0 4px; line-height: 16px; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+
+  /* hover detail tooltip */
+  .tooltip { position: absolute; left: calc(100% + 8px); top: 0; z-index: 30;
+    width: 220px; padding: 8px 10px; border-radius: 8px;
+    background: #0d0f16; border: 1px solid #3a3f55;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6); color: #ddd;
+    font-size: 12px; line-height: 1.4; text-align: left;
+    opacity: 0; visibility: hidden; transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease; pointer-events: none; }
+  .cardwrap:hover .tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
+  .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tt-name { font-weight: 700; font-size: 13px; color: #fff; }
+  .tt-cost { color: #6bb8ff; font-weight: 700; white-space: nowrap; }
+  .tt-type { color: #99a; text-transform: capitalize; font-size: 11px; margin-top: 1px; }
+  .tt-stats { display: flex; gap: 14px; margin: 5px 0; font-weight: 700; }
+  .tt-keys { display: flex; flex-direction: column; gap: 3px; margin: 5px 0;
+    border-top: 1px solid #2a2f42; padding-top: 5px; }
+  .tt-key { display: flex; align-items: center; gap: 6px; }
+  .tt-desc { margin-top: 5px; color: #bcbcc8; border-top: 1px solid #2a2f42; padding-top: 5px; }
 </style>
