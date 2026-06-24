@@ -209,22 +209,25 @@ def battle_legal(gs: GameState) -> list[Action]:
 
 def apply_battle(gs: GameState, action: Action) -> None:
     p = gs.players[gs.current]
-    if isinstance(action, Pass):
-        end_turn(gs)
-        return
-    if isinstance(action, Summon):
-        c = _find_in_hand(p, action.card_instance_id)
-        p.hand.remove(c)
-        p.mana -= c.card.cost
-        p.board.append(c)
-        _trigger_summon_effects(gs, gs.current, c)
-    elif isinstance(action, Use):
-        c = _find_in_hand(p, action.item_instance_id)
-        p.hand.remove(c)
-        p.mana -= c.card.cost
-        _apply_item(gs, c, action.target_id)
-    elif isinstance(action, Attack):
-        _resolve_attack(gs, action.attacker_id, action.target_id)  # Task 9
+    match action:
+        case Pass():
+            end_turn(gs)
+            return
+        case Summon(card_instance_id=iid):
+            c = _find_in_hand(p, iid)
+            p.hand.remove(c)
+            p.mana -= c.card.cost
+            p.board.append(c)
+            _trigger_summon_effects(gs, gs.current, c)
+        case Use(item_instance_id=iid, target_id=tid):
+            c = _find_in_hand(p, iid)
+            p.hand.remove(c)
+            p.mana -= c.card.cost
+            _apply_item(gs, c, tid)
+        case Attack(attacker_id=aid, target_id=tid):
+            _resolve_attack(gs, aid, tid)
+        case _:
+            raise TypeError(f"unknown action: {action!r}")
     check_winner(gs)
 
 
