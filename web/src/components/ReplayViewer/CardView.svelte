@@ -114,10 +114,12 @@
     box-shadow: 0 -2px 7px rgba(255, 255, 255, 0.5); }
   .card.guard.face-down { border-bottom: 4px solid #fff;
     box-shadow: 0 2px 7px rgba(255, 255, 255, 0.5); }
-  /* Ward — inner bubble: light-blue tint over the sprite + inner glow */
+  /* Ward — bright shining protective bubble (screen-blend so it adds light, not gray) */
   .ward-tint { position: absolute; inset: 0; pointer-events: none; border-radius: 6px;
-    background: rgba(127, 231, 255, 0.12);
-    box-shadow: inset 0 0 16px 3px rgba(127, 231, 255, 0.7); }
+    mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 50% 45%,
+      rgba(180, 245, 255, 0.6), rgba(120, 220, 255, 0.2) 55%, transparent 78%);
+    box-shadow: inset 0 0 22px 5px rgba(150, 235, 255, 0.95); }
   .card.attacked { filter: saturate(0.6); }
   /* summoning-sick / inactive dim — on the card only, so the tooltip stays opaque */
   .card.dim { opacity: 0.5; }
