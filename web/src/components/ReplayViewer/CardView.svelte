@@ -69,6 +69,8 @@
       {/key}
     </div>
 
+    {#if dim}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
+
     <div class="tooltip">
       <div class="tt-head">
         <span class="tt-name">{meta?.name ?? name}</span>
@@ -91,6 +93,9 @@
 <style>
   .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px); }
   .cardwrap:hover { z-index: 40; }
+  /* sleeping (summoning-sick) indicator — sits above the dimmed card */
+  .sleep { position: absolute; top: 1px; left: 4px; font-size: 20px; z-index: 3;
+    pointer-events: none; filter: drop-shadow(0 1px 2px #000); }
   .card { position: relative; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
     background-color: #1c1c22;
