@@ -13,9 +13,7 @@ from locma.data.cards_db import catalog
 from locma.harness.replay_store import get_replay, list_headers, write_replay
 from locma.harness.replay_stream import build_replay, build_replay_from_log_row
 from locma.harness.trace import read_game_log
-from locma.policies.registry import make_policy
-
-POLICIES = ["random", "scripted", "greedy"]
+from locma.policies.registry import make_policy, policy_names
 
 
 class RunRequest(BaseModel):
@@ -39,7 +37,7 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
 
     @app.get("/api/policies")
     def get_policies() -> list[str]:
-        return POLICIES
+        return policy_names()
 
     @app.post("/api/replays")
     def run_replay(req: RunRequest) -> dict:
