@@ -104,12 +104,11 @@
   /* auras (battlefield only; each on an independent visual channel) */
   /* Lethal — green outline */
   .card.lethal { outline: 2px solid #4fd97a; outline-offset: 0; }
-  /* Guard — strong directional outer glow + edge toward the opponent side */
-  .card.guard { box-shadow: 0 0 18px 1px rgba(90, 169, 255, 0.85); }
-  .card.guard.face-up { border-top: 3px solid #5aa9ff;
-    box-shadow: 0 -10px 22px 1px rgba(90, 169, 255, 0.9); }
-  .card.guard.face-down { border-bottom: 3px solid #5aa9ff;
-    box-shadow: 0 10px 22px 1px rgba(90, 169, 255, 0.9); }
+  /* Guard — bold white edge on the opponent-facing side ("shield wall") */
+  .card.guard.face-up { border-top: 4px solid #fff;
+    box-shadow: 0 -2px 7px rgba(255, 255, 255, 0.5); }
+  .card.guard.face-down { border-bottom: 4px solid #fff;
+    box-shadow: 0 2px 7px rgba(255, 255, 255, 0.5); }
   /* Ward — inner bubble: light-blue tint over the sprite + inner glow */
   .ward-tint { position: absolute; inset: 0; pointer-events: none; border-radius: 6px;
     background: rgba(127, 231, 255, 0.12);
