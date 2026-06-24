@@ -165,9 +165,24 @@ def _apply_item(gs, item, target_id):
         if tgt:
             tgt.attack = max(0, tgt.attack + item.card.attack)
             tgt.abilities = _merge_abilities(tgt.abilities, item.card.abilities, add=False)
+            before = tgt.defense
             tgt.defense += item.card.defense
+            if before - tgt.defense > 0:
+                _emit(
+                    gs,
+                    {
+                        "t": "damage",
+                        "seat": gs.opponent(gs.current),
+                        "target": tgt.instance_id,
+                        "amount": before - tgt.defense,
+                        "fatal": tgt.defense <= 0,
+                    },
+                )
             if tgt.defense <= 0:
                 opp.board.remove(tgt)
+                _emit(
+                    gs, {"t": "unit_died", "seat": gs.opponent(gs.current), "iid": tgt.instance_id}
+                )
         _change_health(gs, gs.current, -item.card.player_hp)
         _change_health(gs, gs.opponent(gs.current), -item.card.enemy_hp, from_opponent=True)
     else:  # BLUE_ITEM
@@ -183,9 +198,25 @@ def _apply_item(gs, item, target_id):
         else:
             tgt = _find_on_board(opp, target_id)
             if tgt:
+                before = tgt.defense
                 tgt.defense += item.card.defense
+                if before - tgt.defense > 0:
+                    _emit(
+                        gs,
+                        {
+                            "t": "damage",
+                            "seat": gs.opponent(gs.current),
+                            "target": tgt.instance_id,
+                            "amount": before - tgt.defense,
+                            "fatal": tgt.defense <= 0,
+                        },
+                    )
                 if tgt.defense <= 0:
                     opp.board.remove(tgt)
+                    _emit(
+                        gs,
+                        {"t": "unit_died", "seat": gs.opponent(gs.current), "iid": tgt.instance_id},
+                    )
         _change_health(gs, gs.current, -item.card.player_hp)
         _change_health(gs, gs.opponent(gs.current), -item.card.enemy_hp, from_opponent=True)
 
@@ -271,8 +302,10 @@ def _deal_to_unit(unit, amount: int, lethal: bool) -> int:
 
 
 def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
-    p = gs.players[gs.current]
-    opp = gs.players[gs.opponent(gs.current)]
+    cur = gs.current
+    opp_seat = gs.opponent(cur)
+    p = gs.players[cur]
+    opp = gs.players[opp_seat]
     atk = _find_on_board(p, attacker_id)
     if atk is None:
         return
@@ -280,9 +313,9 @@ def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
     atk.can_attack = False
     if target_id == -1:
         dmg = atk.attack
-        _change_health(gs, gs.opponent(gs.current), dmg, from_opponent=True)
+        _change_health(gs, opp_seat, dmg, from_opponent=True)
         if atk.has("D") and dmg > 0:
-            _change_health(gs, gs.current, -dmg)
+            _change_health(gs, cur, -dmg)
         check_winner(gs)
         return
     dfn = _find_on_board(opp, target_id)
@@ -291,15 +324,39 @@ def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
     warded = dfn.has("W")
     def_before = dfn.defense
     applied = _deal_to_unit(dfn, atk.attack, atk.has("L"))  # consumes ward if present
+    if applied > 0:
+        _emit(
+            gs,
+            {
+                "t": "damage",
+                "seat": opp_seat,
+                "target": dfn.instance_id,
+                "amount": applied,
+                "fatal": dfn.defense <= 0,
+            },
+        )
     if atk.has("D") and applied > 0:
-        _change_health(gs, gs.current, -applied)
+        _change_health(gs, cur, -applied)
     if atk.has("B") and not warded:
         overflow = atk.attack - max(0, def_before)
         if overflow > 0:
-            _change_health(gs, gs.opponent(gs.current), overflow, from_opponent=True)
-    _deal_to_unit(atk, dfn.attack, dfn.has("L"))
+            _change_health(gs, opp_seat, overflow, from_opponent=True)
+    atk_applied = _deal_to_unit(atk, dfn.attack, dfn.has("L"))
+    if atk_applied > 0:
+        _emit(
+            gs,
+            {
+                "t": "damage",
+                "seat": cur,
+                "target": atk.instance_id,
+                "amount": atk_applied,
+                "fatal": atk.defense <= 0,
+            },
+        )
     if dfn.defense <= 0 and dfn in opp.board:
         opp.board.remove(dfn)
+        _emit(gs, {"t": "unit_died", "seat": opp_seat, "iid": dfn.instance_id})
     if atk.defense <= 0 and atk in p.board:
         p.board.remove(atk)
+        _emit(gs, {"t": "unit_died", "seat": cur, "iid": atk.instance_id})
     check_winner(gs)

@@ -1,10 +1,70 @@
 import random
 
+import pytest
+
 from locma.core import battle as b
-from locma.core.actions import Pass
+from locma.core.actions import Attack, Pass
+from locma.core.cards import Card, CardType, normalize_abilities
 from locma.core.draft import apply_draft_pick, start_draft
-from locma.core.state import GameState
+from locma.core.instance import CardInstance
+from locma.core.state import GameState, Phase
 from locma.data.cards_db import load_cards
+
+
+def _gs():
+    gs = GameState.new(random.Random(0))
+    gs.phase = Phase.BATTLE
+    gs.current = 0
+    return gs
+
+
+def _c(iid, atk, dfn, ab=""):
+    card = Card(1, "X", CardType.CREATURE, 1, atk, dfn, normalize_abilities(ab), 0, 0, 0)
+    inst = CardInstance.from_card(card, iid)
+    inst.can_attack = True
+    return inst
+
+
+@pytest.fixture
+def make_combat_gs():
+    def _make(attacker_atk, defender_def):
+        gs = _gs()
+        atk_unit = _c(1, attacker_atk, 10)
+        dfn_unit = _c(7, 0, defender_def)
+        dfn_unit.can_attack = True
+        dfn_unit.has_attacked = False
+        gs.players[0].board.append(atk_unit)
+        gs.players[1].board.append(dfn_unit)
+        return gs
+
+    return _make
+
+
+def _events_for(gs, action):
+    events: list[dict] = []
+    gs.emit = events.append
+    b.apply_battle(gs, action)
+    gs.emit = None
+    return events
+
+
+def test_lethal_attack_emits_damage_and_unit_died(make_combat_gs):
+    # make_combat_gs: a fixture/helper that returns a battle gs where seat 0 has
+    # attacker iid=1 (attack 5) and seat 1 has defender iid=7 (defense 3, no W/L).
+    gs = make_combat_gs(attacker_atk=5, defender_def=3)
+    events = _events_for(gs, Attack(attacker_id=1, target_id=7))
+    dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
+    assert dmg and dmg[0]["seat"] == 1 and dmg[0]["fatal"] is True
+    died = [e for e in events if e["t"] == "unit_died" and e["iid"] == 7]
+    assert died and died[0]["seat"] == 1
+
+
+def test_nonlethal_attack_emits_damage_not_died(make_combat_gs):
+    gs = make_combat_gs(attacker_atk=2, defender_def=5)
+    events = _events_for(gs, Attack(attacker_id=1, target_id=7))
+    dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
+    assert dmg and dmg[0]["amount"] == 2 and dmg[0]["fatal"] is False
+    assert not [e for e in events if e["t"] == "unit_died"]
 
 
 def _new_battle(seed=0):
