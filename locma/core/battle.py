@@ -29,10 +29,10 @@ def _change_health(p, damage: int, *, from_opponent: bool = False) -> None:
 def draw(gs: GameState, player: int, n: int) -> None:
     p = gs.players[player]
     for _ in range(n):
+        if len(p.hand) >= 8:
+            break  # hand full (cap 8): the card stays in the deck, not drawn/burned
         if p.deck:
             p.hand.append(p.deck.pop(0))
-            if len(p.hand) > 8:
-                p.hand.pop()  # overdraw burns the card (1.5 hand cap 8)
         else:
             # deck-out: 10 self-damage per missed draw (LOCM 1.5, no runes)
             _change_health(p, 10)
@@ -69,10 +69,10 @@ def start_battle(gs: GameState) -> None:
     gs.current = 0
     draw(gs, 0, 4)
     draw(gs, 1, 5)
-    p = gs.players[0]
-    p.max_mana = 1
-    p.mana = 1
     gs.players[1].bonus_mana = 1  # second-player compensation ("the coin")
+    # Player 0's first turn: ramp to 1 mana and draw a card (so both players
+    # reach 5 cards at the start of their first turn).
+    start_turn(gs)
 
 
 def end_turn(gs: GameState) -> None:

@@ -115,6 +115,37 @@ def test_damage_counter_resets_each_turn():
     assert p1.damage_counter == 0  # cleared so fractions never carry across rounds
 
 
+# --- opening draw + hand cap ------------------------------------------------
+
+
+def test_first_player_draws_on_first_turn():
+    gs = _drafted()
+    start_battle(gs)
+    # both players reach 5 cards: P0 = 4 opening + 1 first-turn draw, P1 = 5
+    assert len(gs.players[0].hand) == 5
+    assert len(gs.players[1].hand) == 5
+
+
+def test_overdraw_leaves_card_in_deck():
+    gs = _gs()
+    p = gs.players[0]
+    p.hand = [_attacker(100 + i, 1) for i in range(8)]  # full hand
+    p.deck = [_attacker(200, 1), _attacker(201, 1)]
+    draw(gs, 0, 2)
+    assert len(p.hand) == 8  # no overdraw
+    assert len(p.deck) == 2  # cards stay in deck, not burned
+
+
+def test_draw_fills_to_cap_then_stops():
+    gs = _gs()
+    p = gs.players[0]
+    p.hand = [_attacker(100 + i, 1) for i in range(7)]
+    p.deck = [_attacker(200, 1), _attacker(201, 1), _attacker(202, 1)]
+    draw(gs, 0, 3)
+    assert len(p.hand) == 8  # drew exactly 1 to reach the cap
+    assert len(p.deck) == 2  # only that one card left the deck
+
+
 # --- deck-out: 10 self-damage per missed draw (no runes) -------------------
 
 
