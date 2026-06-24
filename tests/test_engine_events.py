@@ -42,9 +42,7 @@ def make_combat_gs():
 
 def _events_for(gs, action):
     events: list[dict] = []
-    gs.emit = events.append
-    b.apply_battle(gs, action)
-    gs.emit = None
+    b.apply_battle(gs, action, emit=events.append)
     return events
 
 
@@ -107,9 +105,7 @@ def test_red_item_lethal_emits_damage_and_unit_died():
     gs.players[1].board.append(tgt)
     item = _item(2, CardType.RED_ITEM, dfn=-5)
     events: list[dict] = []
-    gs.emit = events.append
-    b._apply_item(gs, item, 7)
-    gs.emit = None
+    b._apply_item(gs, item, 7, emit=events.append)
     dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
     assert dmg and dmg[0]["seat"] == 1 and dmg[0]["fatal"] is True
     assert dmg[0]["amount"] == 5  # before(3) - after(-2) defense delta
@@ -135,8 +131,7 @@ def _drafted_battle(seed=1):
 def test_emit_sink_collects_action_applied():
     gs = _new_battle()
     events: list[dict] = []
-    gs.emit = events.append
-    b.apply_battle(gs, Pass())
+    b.apply_battle(gs, Pass(), emit=events.append)
     assert events[0]["t"] == "action_applied"
     assert events[0]["seat"] == 0
     assert events[0]["action"] == {"t": "pass"}
@@ -144,7 +139,6 @@ def test_emit_sink_collects_action_applied():
 
 def test_emit_is_noop_when_sink_none():
     gs = _new_battle()
-    assert gs.emit is None
     b.apply_battle(gs, Pass())  # must not raise
 
 
@@ -152,8 +146,7 @@ def test_change_health_emits_face_damage_event():
     gs = _new_battle()
     gs.players[1].health = 30  # ensure non-fatal: 30 - 4 = 26 > 0
     events: list[dict] = []
-    gs.emit = events.append
-    b._change_health(gs, 1, 4, from_opponent=True)
+    b._change_health(gs, 1, 4, from_opponent=True, emit=events.append)
     assert events == [{"t": "damage", "seat": 1, "target": "face", "amount": 4, "fatal": False}]
 
 
@@ -161,16 +154,14 @@ def test_change_health_healing_emits_nothing():
     gs = _new_battle()
     gs.players[0].health = 30
     events: list[dict] = []
-    gs.emit = events.append
-    b._change_health(gs, 0, -5)
+    b._change_health(gs, 0, -5, emit=events.append)
     assert [e for e in events if e["t"] == "damage"] == []
 
 
 def test_pass_decomposes_into_turn_events():
     gs = _drafted_battle()
     events: list[dict] = []
-    gs.emit = events.append
-    b.apply_battle(gs, Pass())  # turn-ending pass by seat 0
+    b.apply_battle(gs, Pass(), emit=events.append)  # turn-ending pass by seat 0
     tags = [e["t"] for e in events]
     assert tags[0] == "action_applied"
     assert "turn_ended" in tags and "turn_started" in tags

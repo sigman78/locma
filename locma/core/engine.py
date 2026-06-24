@@ -105,7 +105,6 @@ def run_game(
     policy0.reset(seed)
     policy1.reset(seed)
     gs = GameState.new(random.Random(seed))
-    gs.emit = on_event
 
     # --- Draft phase ---
     draftmod.start_draft(gs, cards)
@@ -119,7 +118,7 @@ def run_game(
             on_step(seat, pick, gs)
 
     # --- Battle phase ---
-    battlemod.start_battle(gs)
+    battlemod.start_battle(gs, emit=on_event)
     if on_snapshot is not None:
         on_snapshot(gs)
     safety = 0
@@ -138,12 +137,12 @@ def run_game(
                 # flips gs.current and draws for the opponent — so post-apply state
                 # no longer belongs to `seat`).
                 on_pre_step(seat, action, gs)
-            battlemod.apply_battle(gs, action)
+            battlemod.apply_battle(gs, action, emit=on_event)
             if on_step is not None:
                 on_step(seat, action, gs)
             per_turn += 1
             if per_turn > 100:
-                battlemod.end_turn(gs)
+                battlemod.end_turn(gs, emit=on_event)
                 break
         safety += 1
         if safety > 1000:

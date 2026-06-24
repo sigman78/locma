@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -36,7 +35,6 @@ class GameState:
     draft_round: int = 0
     picks: tuple | None = None
     winner: int | None = None
-    emit: Callable[[dict], None] | None = None  # transient event sink; None = off
 
     @classmethod
     def new(cls, rng: random.Random) -> GameState:
