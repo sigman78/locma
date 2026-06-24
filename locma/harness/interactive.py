@@ -5,13 +5,14 @@ import random
 
 from locma.core import battle as battlemod
 from locma.core import draft as draftmod
-from locma.core.actions import action_to_dict
-from locma.core.engine import make_draft_view
+from locma.core.actions import action_from_dict, action_to_dict
+from locma.core.engine import make_battle_view, make_draft_view
 from locma.core.state import GameState, Phase
 from locma.harness.replay_stream import (
     StreamRecorder,
     _card_dict,
     _creature_dict,
+    assemble_replay,
 )
 
 MAX_TURNS = 200
@@ -71,7 +72,73 @@ class InteractiveGame:
             self.rec.on_step(seat, pick, gs)
         if gs.phase == Phase.DRAFT:
             return  # human's draft pick needed
-        # (battle transition + battle loop added in Task 3)
+
+        if not self._battle_started:
+            battlemod.start_battle(gs, emit=self._emit)
+            self.rec.on_snapshot(gs)
+            self._battle_started = True
+            # opening draws are shown by the opening view, not animated as a slice
+            self._slice = []
+
+        self._battle_loop_until_human_or_end()
+
+    def _battle_loop_until_human_or_end(self):
+        gs = self.gs
+        while gs.phase == Phase.BATTLE and gs.turn <= MAX_TURNS:
+            if gs.current == self.human_seat:
+                return  # human's battle action needed
+            per_turn = 0
+            turn_owner = gs.current
+            while gs.current == turn_owner and gs.phase == Phase.BATTLE:
+                seat = gs.current
+                legal = battlemod.battle_legal(gs)
+                action = self.ai.battle_action(make_battle_view(gs), legal)
+                self.rec.on_pre_step(seat, action, gs)
+                battlemod.apply_battle(gs, action, emit=self._emit)
+                self.rec.on_step(seat, action, gs)
+                per_turn += 1
+                if per_turn > 100:
+                    battlemod.end_turn(gs, emit=self._emit)
+                    break
+        self._finish()
+
+    def submit_action(self, action_dict: dict) -> dict:
+        gs = self.gs
+        if self.result is not None or gs.phase != Phase.BATTLE or gs.current != self.human_seat:
+            raise WrongPhase("not your battle turn")
+        action = action_from_dict(action_dict)
+        if action not in battlemod.battle_legal(gs):
+            raise IllegalMove(f"illegal action: {action_dict!r}")
+        self._slice = []
+        seat = gs.current
+        self.rec.on_pre_step(seat, action, gs)
+        battlemod.apply_battle(gs, action, emit=self._emit)
+        self.rec.on_step(seat, action, gs)
+        # non-Pass keeps the same turn (gs.current still human → loop returns at once);
+        # Pass flips to the AI, which is then auto-resolved.
+        self._battle_loop_until_human_or_end()
+        return self._response()
+
+    def _finish(self):
+        gs = self.gs
+        if gs.winner is None:
+            h0, h1 = gs.players[0].health, gs.players[1].health
+            gs.winner = 0 if h0 >= h1 else 1
+        self._replay = assemble_replay(
+            self.rec,
+            winner=gs.winner,
+            turns=gs.turn,
+            policy_a="human",
+            policy_b=self.ai.name,
+            seed=self.seed,
+            a_seat=self.human_seat,
+            source="human-vs-ai",
+        )
+        self.result = {
+            "winner_is_human": gs.winner == self.human_seat,
+            "turns": gs.turn,
+            "replay_id": self._replay["header"]["replay_id"],
+        }
 
     def submit_draft(self, pick: int) -> dict:
         gs = self.gs
