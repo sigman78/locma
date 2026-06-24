@@ -54,11 +54,36 @@ Example: `uv run locma train --steps 50000 --opponent random --out model.zip`
 `locma fetch-cards`
 Refresh the vendored card list from the upstream source.
 
-### `locma fetch-art [--force]`
+## fetch-art
+`locma fetch-art [--force]`
 
 Opt-in download of card portrait art into the local cache
 (`locma/data/assets/`, gitignored). Skips already-cached files unless `--force`.
-Portraits are sourced from `legendsofcodeandmagic.com`.
+Portraits are sourced from `legendsofcodeandmagic.com`. The web replay viewer
+(`locma serve`) reads this cache and falls back to generated placeholders for
+any card whose art is missing, so fetching is optional.
+
+- `--force` re-download even if a file is already cached.
+
+Example: `uv run locma fetch-art`
 
 > Card art is downloaded for local use only; seek permission from the authors
 > before redistribution.
+
+## serve
+`locma serve [--host 127.0.0.1] [--port 8000] [--replay-dir replays] [--asset-dir locma/data/assets] [--gamelog-dir .]`
+
+Start the local web replay viewer API (run matchups, browse/import replays, and
+play them back in the browser). **Requires the `[server]` extra**
+(`uv sync --extra server`); without it the command exits with a clear error.
+
+- `--host` / `--port` bind address (default `127.0.0.1:8000`).
+- `--replay-dir` where generated replays are persisted (gitignored, default `replays/`).
+- `--asset-dir` card-art cache served at `/api/art/{id}` (default `locma/data/assets`; see `fetch-art`).
+- `--gamelog-dir` directory scanned for `*.jsonl` game-logs to import (default `.`).
+
+In development, also run the Vite UI which proxies `/api` to this server:
+`cd web && npm install && npm run dev`. In production, build the bundle
+(`cd web && npm run build`) and `serve` will host it at `/`.
+
+Example: `uv run locma serve --port 8000`
