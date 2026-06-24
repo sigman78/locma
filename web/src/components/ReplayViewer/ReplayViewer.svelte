@@ -77,7 +77,7 @@
           on:seek={(e) => seek(e.detail)} on:step={(e) => step(e.detail)}
           on:turn={(e) => turn(e.detail)} on:toggle={toggle} />
       </div>
-      <aside><ActionLog frames={pb.frames} {cursor} on:seek={(e) => seek(e.detail)} /></aside>
+      <aside><ActionLog frames={pb.frames} {cursor} cardIds={pb.cardIds} on:seek={(e) => seek(e.detail)} /></aside>
     </div>
   {/if}
 </div>

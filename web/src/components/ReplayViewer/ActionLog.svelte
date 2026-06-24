@@ -6,15 +6,21 @@
 
   export let frames: Frame[] = []
   export let cursor = 0
+  export let cardIds = new Map<number, number>()
   const dispatch = createEventDispatcher<{ seek: number }>()
+
+  function nm(iid: number): string {
+    const cid = cardIds.get(iid)
+    return cid != null ? cardName(cid) : `#${iid}`
+  }
 
   function describe(f: Frame): string {
     if (!f.action) return 'opening'
     const s = `P${f.seat}`
     const a = f.action
-    if (a.t === 'summon') return `${s} summons ${cardName(a.id)}`
+    if (a.t === 'summon') return `${s} summons ${nm(a.id)}`
     if (a.t === 'attack') return `${s} attacks ${a.target === -1 ? 'face' : '#' + a.target}`
-    if (a.t === 'use') return `${s} uses ${cardName(a.item)}`
+    if (a.t === 'use') return `${s} uses ${nm(a.item)}`
     return `${s} passes`
   }
 </script>
