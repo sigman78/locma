@@ -18,7 +18,7 @@
   $: faceDmg = fx?.splashes.find((s) => s.target === 'face' && s.seat === seat)?.amount ?? null
 </script>
 
-<div class="player" class:active class:acting>
+<div class="player">
   <div
     class="avatar"
     class:acting
@@ -49,17 +49,11 @@
 
 <style>
   .player { display: flex; gap: 12px; align-items: center; padding: 6px 10px;
-    border-radius: 8px; border: 1px solid transparent; text-align: left;
-    transition: border-color 0.2s, background 0.2s; }
-  /* persistent "whose turn" accent — strong, side-anchored */
-  .player.active { border-color: #ffd23d;
-    background: linear-gradient(90deg, rgba(255, 210, 61, 0.18), rgba(255, 210, 61, 0.02));
-    box-shadow: inset 4px 0 0 #ffd23d; }
+    text-align: left; }
   .info { text-align: left; }
   .avatar { width: 56px; height: 56px; border-radius: 50%; display: grid;
     place-items: center; font-weight: 700; color: #fff; font-size: 26px;
     transition: box-shadow 0.15s; }
-  .player.active .avatar { box-shadow: 0 0 0 2px #ffd23d99; }
   /* transient action pop (the actual move being played) */
   .avatar.acting { box-shadow: 0 0 0 3px #ffd23d, 0 0 16px 3px rgba(255, 210, 61, 0.9); }
   .name { font-weight: 600; font-size: 20px; text-align: left; }

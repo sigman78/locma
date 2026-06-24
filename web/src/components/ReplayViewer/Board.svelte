@@ -29,9 +29,9 @@
 
 <div class="board">
   <Player player={p1} name={nameB} seat={1} active={snapshot.current === 1} {fx} {fxToken} />
-  <Hand cards={p1.hand} faceUp={true} />
+  <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} />
   <div class="battlefield">
-    <div class="field top">
+    <div class="field top" class:active={snapshot.current === 1}>
       {#each p1.board as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
@@ -40,7 +40,7 @@
       {/each}
     </div>
     <hr />
-    <div class="field bottom">
+    <div class="field bottom" class:active={snapshot.current === 0}>
       {#each p0.board as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
@@ -49,7 +49,7 @@
       {/each}
     </div>
   </div>
-  <Hand cards={p0.hand} faceUp={true} />
+  <Hand cards={p0.hand} faceUp={true} active={snapshot.current === 0} />
   <Player player={p0} name={nameA} seat={0} active={snapshot.current === 0} {fx} {fxToken} />
 </div>
 
@@ -68,7 +68,9 @@
   .field { display: flex; gap: var(--gap); align-items: center; justify-content: center;
     padding: 6px; background: rgba(255, 255, 255, 0.015); border-radius: 6px;
     width: calc(var(--board-cols) * var(--card-w) + (var(--board-cols) - 1) * var(--gap) + 12px);
-    min-height: calc(var(--card-h) + 12px); }
+    min-height: calc(var(--card-h) + 12px); transition: background 0.2s; }
+  /* faintly warm the active player's half of the arena */
+  .field.active { background: rgba(255, 210, 61, 0.07); }
   .field > div { flex: 0 0 auto; }
   hr { width: 70%; align-self: center; border: none;
     border-top: 1px dashed #3a4a3c; margin: 0; }

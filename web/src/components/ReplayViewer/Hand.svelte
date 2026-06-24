@@ -4,9 +4,10 @@
   import CardView from './CardView.svelte'
   export let cards: CardState[] = []
   export let faceUp = true
+  export let active = false
 </script>
 
-<div class="hand">
+<div class="hand" class:active>
   {#each cards as c (c.iid)}<CardView card={c} {faceUp} />{/each}
 </div>
 
@@ -18,5 +19,7 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     width: calc(var(--hand-cols, 8) * var(--card-w, 108px)
       + (var(--hand-cols, 8) - 1) * var(--gap, 8px) + 16px);
-    min-height: calc(var(--card-h, 150px) + 16px); }
+    min-height: calc(var(--card-h, 150px) + 16px); transition: background 0.2s, border-color 0.2s; }
+  /* faintly warm the active player's hand */
+  .hand.active { background: #2a2a24; border-color: #4a4636; }
 </style>

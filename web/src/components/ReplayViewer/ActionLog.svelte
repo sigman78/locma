@@ -19,17 +19,16 @@
     return cid != null ? short(cardName(cid)) : `#${iid}`
   }
 
-  // Alternating band parity that flips on each new (turn, seat) run, so one
-  // peer's sequence of actions within a turn shares a single faint shade.
+  // Alternating band parity that flips whenever the acting player changes, so
+  // one player's whole run of consecutive actions shares a single faint shade.
   $: bands = (() => {
     const out: Record<number, number> = {}
     let parity = 0
-    let prevKey: string | null = null
+    let prevSeat: number | null | undefined = undefined
     for (const f of frames) {
-      const key = `${f.turn}:${f.seat}`
-      if (prevKey !== null && key !== prevKey) parity ^= 1
+      if (prevSeat !== undefined && f.seat !== prevSeat) parity ^= 1
       out[f.index] = parity
-      prevKey = key
+      prevSeat = f.seat
     }
     return out
   })()
@@ -44,7 +43,7 @@
       return `${s} ${nm(a.a)} → ${target}`
     }
     if (a.t === 'use') return `${s} uses ${nm(a.item)}`
-    return `${s} passes`
+    return `${s} end turn`
   }
 </script>
 
