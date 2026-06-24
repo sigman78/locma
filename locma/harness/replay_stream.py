@@ -31,7 +31,7 @@ def _player_dict(p) -> dict:
         "health": p.health,
         "mana": p.mana,
         "max_mana": p.max_mana,
-        "next_rune": p.next_rune,
+        "damage_counter": p.damage_counter,
         "bonus_draw": p.bonus_draw,
         "deck_count": len(p.deck),
         "hand": [_card_dict(c) for c in p.hand],

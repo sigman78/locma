@@ -6,7 +6,7 @@ from locma.core.state import GameState, PlayerState
 
 def test_player_defaults():
     p = PlayerState()
-    assert p.health == 30 and p.mana == 0 and p.next_rune == 25
+    assert p.health == 30 and p.mana == 0 and p.damage_counter == 0
     assert p.deck == [] and p.hand == [] and p.board == []
 
 

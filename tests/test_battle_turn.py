@@ -17,7 +17,8 @@ def _drafted():
 def test_start_battle_deals_hands_and_mana():
     gs = _drafted()
     start_battle(gs)
-    assert len(gs.players[0].hand) == 4
+    # player 0 draws 4 opening + 1 on their first turn; player 1 draws 5 opening
+    assert len(gs.players[0].hand) == 5
     assert len(gs.players[1].hand) == 5
     assert gs.players[0].max_mana == 1 and gs.players[0].mana == 1
 

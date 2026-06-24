@@ -40,7 +40,11 @@
         {/key}
       </span>
       <span class="mana">◆ {player.mana}/{player.max_mana}</span>
-      <span class="rune">⛓ {player.next_rune}</span>
+      {#if player.bonus_draw > 0}
+        <span class="draw" title="extra cards drawn next turn (damage taken)">
+          +{player.bonus_draw}🂠
+        </span>
+      {/if}
       <span class="deck">🂠 {player.deck_count}</span>
       <span class="hand">✋ {player.hand.length}</span>
     </div>
@@ -63,6 +67,6 @@
     border-radius: 10px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
   .row { display: flex; gap: 16px; font-size: 19px; align-items: center; }
   .hp { color: #ff6b6b; position: relative; } .mana { color: #6bb8ff; }
-  .rune { color: #c9a0ff; }
+  .draw { color: #7ddf7d; font-weight: 700; }
   .locma-dmg.face { font-size: 30px; top: -12px; }
 </style>

@@ -6,7 +6,7 @@ const card = (iid: number, def: number): any => ({
   iid, card_id: iid, atk: 1, def, abilities: '------',
 })
 const player = (health: number, board: any[]): any => ({
-  health, mana: 0, max_mana: 0, next_rune: 0, bonus_draw: 0, deck_count: 0, hand: [], board,
+  health, mana: 0, max_mana: 0, damage_counter: 0, bonus_draw: 0, deck_count: 0, hand: [], board,
 })
 const snap = (p0: any, p1: any): Snapshot => ({ current: 0, players: [p0, p1] })
 
