@@ -120,6 +120,9 @@ def _new_battle(seed=0):
 
 
 def _drafted_battle(seed=1):
+    # Install the emit sink AFTER this returns (e.g. pass emit= to apply_battle),
+    # not into start_battle here — otherwise you'd also capture turn 1's
+    # start-of-turn turn_started event emitted during start_battle.
     gs = GameState.new(random.Random(seed))
     start_draft(gs, load_cards())
     for _ in range(60):

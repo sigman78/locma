@@ -54,7 +54,7 @@ def _realistic_replay(rid="r_test001", created="2026-06-24T12:00:00Z"):
         "replay_id": rid,
         "created_at": created,
         "source": "test",
-        "format": "locma-replay/1",
+        "format": "locma-replay/2",
         "engine_version": "0+test",
         "policy_a": "random",
         "policy_b": "random",
