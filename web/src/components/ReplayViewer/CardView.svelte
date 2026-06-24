@@ -94,8 +94,8 @@
   .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px); }
   .cardwrap:hover { z-index: 40; }
   /* sleeping (summoning-sick) indicator — sits above the dimmed card */
-  .sleep { position: absolute; top: 1px; left: 4px; font-size: 20px; z-index: 3;
-    pointer-events: none; filter: drop-shadow(0 1px 2px #000); }
+  .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 3px #000); }
   .card { position: relative; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
     background-color: #1c1c22;
