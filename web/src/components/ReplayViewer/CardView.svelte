@@ -10,6 +10,8 @@
   export let damage: number | null = null
   export let fxToken = 0
   export let dim = false
+  export let showAuras = true
+  export let facing: 'up' | 'down' | null = null // direction toward the opponent
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -36,9 +38,11 @@
   <div class="cardwrap">
     <div
       class="card"
-      class:guard
-      class:ward
-      class:lethal
+      class:guard={showAuras && guard}
+      class:ward={showAuras && ward}
+      class:lethal={showAuras && lethal}
+      class:face-up={facing === 'up'}
+      class:face-down={facing === 'down'}
       class:attacking={!!lunge}
       class:attacked={card.has_attacked}
       class:dim
@@ -49,7 +53,7 @@
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
-      {#if lethal}<div class="tint"></div>{/if}
+      {#if showAuras && ward}<div class="ward-tint"></div>{/if}
       <div class="stats">
         <span class="atk">{card.atk}</span>
         {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
@@ -97,14 +101,19 @@
   .back { display: grid; place-items: center; font-size: 40px; color: #557; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
     text-align: center; font-size: 13px; color: #ddd; }
-  /* auras (compose on different visual channels) */
-  .card.guard { border: 2px solid #5aa9ff; box-shadow: inset 0 0 10px rgba(90,169,255,0.55); }
-  .card.ward { box-shadow: 0 0 0 2px #7fe7ff, 0 0 12px 2px rgba(127,231,255,0.7); }
-  .card.guard.ward { box-shadow: inset 0 0 10px rgba(90,169,255,0.55),
-    0 0 0 2px #7fe7ff, 0 0 12px 2px rgba(127,231,255,0.7); }
-  .tint { position: absolute; inset: 0; pointer-events: none;
-    box-shadow: inset 0 0 18px 4px rgba(79,217,122,0.55);
-    border: 1px solid rgba(79,217,122,0.6); border-radius: 6px; }
+  /* auras (battlefield only; each on an independent visual channel) */
+  /* Lethal — green outline */
+  .card.lethal { outline: 2px solid #4fd97a; outline-offset: 0; }
+  /* Guard — strong directional outer glow + edge toward the opponent side */
+  .card.guard { box-shadow: 0 0 18px 1px rgba(90, 169, 255, 0.85); }
+  .card.guard.face-up { border-top: 3px solid #5aa9ff;
+    box-shadow: 0 -10px 22px 1px rgba(90, 169, 255, 0.9); }
+  .card.guard.face-down { border-bottom: 3px solid #5aa9ff;
+    box-shadow: 0 10px 22px 1px rgba(90, 169, 255, 0.9); }
+  /* Ward — inner bubble: light-blue tint over the sprite + inner glow */
+  .ward-tint { position: absolute; inset: 0; pointer-events: none; border-radius: 6px;
+    background: rgba(127, 231, 255, 0.12);
+    box-shadow: inset 0 0 16px 3px rgba(127, 231, 255, 0.7); }
   .card.attacked { filter: saturate(0.6); }
   /* summoning-sick / inactive dim — on the card only, so the tooltip stays opaque */
   .card.dim { opacity: 0.5; }

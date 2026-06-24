@@ -35,7 +35,7 @@
       {#each p1.board as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
-            dim={c.can_attack === false} {fxToken} />
+            dim={c.can_attack === false} facing="down" {fxToken} />
         </div>
       {/each}
     </div>
@@ -44,7 +44,7 @@
       {#each p0.board as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
-            dim={c.can_attack === false} {fxToken} />
+            dim={c.can_attack === false} facing="up" {fxToken} />
         </div>
       {/each}
     </div>
