@@ -9,3 +9,6 @@ docs/superpowers/*
 .ruff_cache/*
 .pytest_cache/*
 .superpowers/*
+replays/
+web/node_modules/
+web/dist/
