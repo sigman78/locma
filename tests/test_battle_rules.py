@@ -91,16 +91,18 @@ def test_large_hit_grants_multiple_draws():
 
 
 def test_self_damage_does_not_grant_draw():
-    p = _gs().players[0]
-    _change_health(p, 6)  # self / game damage (from_opponent defaults False)
+    gs = _gs()
+    p = gs.players[0]
+    _change_health(gs, 0, 6)  # self / game damage (from_opponent defaults False)
     assert p.health == 24
     assert p.bonus_draw == 0
     assert p.damage_counter == 0
 
 
 def test_healing_does_not_grant_draw():
-    p = _gs().players[0]
-    _change_health(p, -10, from_opponent=True)  # negative damage = heal
+    gs = _gs()
+    p = gs.players[0]
+    _change_health(gs, 0, -10, from_opponent=True)  # negative damage = heal
     assert p.health == 40
     assert p.bonus_draw == 0
     assert p.damage_counter == 0

@@ -67,6 +67,7 @@ def run_game(
     on_step=None,
     on_snapshot=None,
     on_pre_step=None,
+    on_event=None,
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
@@ -88,6 +89,8 @@ def run_game(
         perspective (gs.current == seat) — the natural state to record, since a
         Pass's apply_battle runs end_turn() and the post-apply state belongs to
         the opponent.
+      - on_event(ev): fired for each atomic engine event (action_applied,
+        damage, unit_died, turn_ended, turn_started). None = no emission.
       - on_step(seat, action, gs): fired AFTER each draft/battle action.
 
     Safety caps:
@@ -102,6 +105,7 @@ def run_game(
     policy0.reset(seed)
     policy1.reset(seed)
     gs = GameState.new(random.Random(seed))
+    gs.emit = on_event
 
     # --- Draft phase ---
     draftmod.start_draft(gs, cards)
