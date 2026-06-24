@@ -202,3 +202,30 @@ def test_no_opening_roundtrip(tmp_path):
     got = get_replay(str(tmp_path), "r_no_open")
     assert got["battle"]["opening"] is None
     assert got == original
+
+
+def test_nonconsecutive_same_seat_turn_preserved(tmp_path):
+    """Steps with the same (seat, turn) key that are NON-CONSECUTIVE must be
+    stored as separate turn runs and round-trip in their original order.
+
+    A correct consecutive-run groupby emits three turn lines for the three
+    steps below; a wrong global dict accumulator would merge steps 0 and 2
+    into a single turn line (two actions) and corrupt order.
+    """
+    original = _realistic_replay("r_nonconsec", "2026-06-24T07:00:00Z")
+    # Override steps: (seat=0,turn=1), (seat=1,turn=1), (seat=0,turn=1) — same
+    # key for steps 0 and 2 but they are separated by step 1.
+    original["battle"]["steps"] = [
+        {"seat": 0, "turn": 1, "action": {"t": "pass"}, "state": _snap(0)},
+        {"seat": 1, "turn": 1, "action": {"t": "pass"}, "state": _snap(1)},
+        {
+            "seat": 0,
+            "turn": 1,
+            "action": {"t": "attack", "attacker": 5, "target": -1},
+            "state": _snap(0),
+        },
+    ]
+    write_replay(str(tmp_path), original)
+    got = get_replay(str(tmp_path), "r_nonconsec")
+    assert got["battle"]["steps"] == original["battle"]["steps"]
+    assert got == original

@@ -92,10 +92,7 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
                 r = line["round"]
                 if pool is None:
                     pool = []
-                # extend pool list to cover this round index
-                while len(pool) <= r:
-                    pool.append([])
-                pool[r] = line["pool"]
+                pool.append(line["pool"])
                 for p in line.get("picks", []):
                     picks.append({"round": r, "seat": p["seat"], "pick": p["pick"]})
             elif k == "open":
