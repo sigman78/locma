@@ -55,6 +55,7 @@ def test_lethal_attack_emits_damage_and_unit_died(make_combat_gs):
     events = _events_for(gs, Attack(attacker_id=1, target_id=7))
     dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
     assert dmg and dmg[0]["seat"] == 1 and dmg[0]["fatal"] is True
+    assert dmg[0]["amount"] == 5  # equals attacker's attack
     died = [e for e in events if e["t"] == "unit_died" and e["iid"] == 7]
     assert died and died[0]["seat"] == 1
 
@@ -65,6 +66,55 @@ def test_nonlethal_attack_emits_damage_not_died(make_combat_gs):
     dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
     assert dmg and dmg[0]["amount"] == 2 and dmg[0]["fatal"] is False
     assert not [e for e in events if e["t"] == "unit_died"]
+
+
+def test_attacker_retaliation_emits_damage_for_both():
+    # Defender has nonzero attack and both survive, so the attacker takes
+    # retaliation damage -- exercises the atk_applied emit block (seat 0 = cur).
+    gs = _gs()
+    atk_unit = _c(1, 1, 10)
+    dfn_unit = _c(7, 3, 10)
+    gs.players[0].board.append(atk_unit)
+    gs.players[1].board.append(dfn_unit)
+    events = _events_for(gs, Attack(attacker_id=1, target_id=7))
+    assert {
+        "t": "damage",
+        "seat": 0,
+        "target": 1,
+        "amount": 3,
+        "fatal": False,
+    } in events
+    assert {
+        "t": "damage",
+        "seat": 1,
+        "target": 7,
+        "amount": 1,
+        "fatal": False,
+    } in events
+    assert not [e for e in events if e["t"] == "unit_died"]
+
+
+def _item(iid, item_type, atk=0, dfn=0, ab=""):
+    card = Card(100, "I", item_type, 1, atk, dfn, normalize_abilities(ab), 0, 0, 0)
+    return CardInstance.from_card(card, iid)
+
+
+def test_red_item_lethal_emits_damage_and_unit_died():
+    # RED_ITEM with negative defense reduces the opponent unit to <=0:
+    # emits both a fatal damage event and a unit_died for the opponent's unit.
+    gs = _gs()
+    tgt = _c(7, 0, 3)
+    gs.players[1].board.append(tgt)
+    item = _item(2, CardType.RED_ITEM, dfn=-5)
+    events: list[dict] = []
+    gs.emit = events.append
+    b._apply_item(gs, item, 7)
+    gs.emit = None
+    dmg = [e for e in events if e["t"] == "damage" and e["target"] == 7]
+    assert dmg and dmg[0]["seat"] == 1 and dmg[0]["fatal"] is True
+    assert dmg[0]["amount"] == 5  # before(3) - after(-2) defense delta
+    died = [e for e in events if e["t"] == "unit_died" and e["iid"] == 7]
+    assert died and died[0]["seat"] == 1
 
 
 def _new_battle(seed=0):
