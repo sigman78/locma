@@ -13,7 +13,7 @@ export const ABILITIES: Record<string, AbilityInfo> = {
   D: { letter: 'D', name: 'Drain', color: '#c264ff', emoji: '🩸' },
   G: { letter: 'G', name: 'Guard', color: '#5aa9ff', emoji: '🛡️' },
   L: { letter: 'L', name: 'Lethal', color: '#4fd97a', emoji: '☠️' },
-  W: { letter: 'W', name: 'Ward', color: '#7fe7ff', emoji: '🫧' },
+  W: { letter: 'W', name: 'Ward', color: '#7fe7ff', emoji: '🔮' },
 }
 
 /** Aura keywords that get a prominent visual treatment. */
