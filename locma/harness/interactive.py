@@ -84,6 +84,7 @@ class InteractiveGame:
 
     def _battle_loop_until_human_or_end(self):
         gs = self.gs
+        safety = 0
         while gs.phase == Phase.BATTLE and gs.turn <= MAX_TURNS:
             if gs.current == self.human_seat:
                 return  # human's battle action needed
@@ -100,6 +101,9 @@ class InteractiveGame:
                 if per_turn > 100:
                     battlemod.end_turn(gs, emit=self._emit)
                     break
+            safety += 1
+            if safety > 1000:
+                break
         self._finish()
 
     def submit_action(self, action_dict: dict) -> dict:
