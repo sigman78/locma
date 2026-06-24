@@ -19,6 +19,15 @@
   $: ward = hasAura(card.abilities, 'W')
   $: lethal = hasAura(card.abilities, 'L')
   $: lungeCls = lunge ? `lunge-${lunge}` : null
+
+  // red / green / blue item typing (creatures have no item kind)
+  const ITEM = {
+    itemgreen: { color: '#4fd97a', emoji: '🟢', label: 'Green item' },
+    itemred: { color: '#ff5d5d', emoji: '🔴', label: 'Red item' },
+    itemblue: { color: '#5aa9ff', emoji: '🔵', label: 'Blue item' },
+  } as const
+  $: item = meta ? (ITEM as Record<string, { color: string; emoji: string; label: string }>)[meta.type] : undefined
+  $: typeLabel = meta ? (item ? `${item.emoji} ${item.label}` : 'Creature') : ''
 </script>
 
 {#if !faceUp}
@@ -41,7 +50,11 @@
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
       {#if lethal}<div class="tint"></div>{/if}
-      <div class="stats"><span class="atk">{card.atk}</span><span class="def">{card.def}</span></div>
+      <div class="stats">
+        <span class="atk">{card.atk}</span>
+        {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
+        <span class="def">{card.def}</span>
+      </div>
       <div class="abil">
         {#each abil as a}
           <span class="chip" style={`border-color:${a.color}`} title={a.name}>{a.emoji}</span>
@@ -57,7 +70,7 @@
         <span class="tt-name">{meta?.name ?? name}</span>
         {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
       </div>
-      {#if meta}<div class="tt-type">{meta.type}</div>{/if}
+      {#if meta}<div class="tt-type">{typeLabel}</div>{/if}
       <div class="tt-stats"><span class="atk">⚔ {card.atk}</span><span class="def">🛡 {card.def}</span></div>
       {#if abil.length}
         <div class="tt-keys">
@@ -102,6 +115,8 @@
     justify-content: space-between; padding: 3px 6px; font-weight: 700;
     background: rgba(0,0,0,0.6); font-size: 16px; }
   .atk { color: #ffcc55; } .def { color: #66ccff; }
+  .item-dot { width: 13px; height: 13px; border-radius: 50%; align-self: center;
+    border: 1px solid rgba(0, 0, 0, 0.6); box-shadow: 0 0 5px rgba(0, 0, 0, 0.7); }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;
