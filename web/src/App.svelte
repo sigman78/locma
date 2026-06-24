@@ -22,7 +22,6 @@
 </script>
 
 <main>
-  <h1>LOCM Replay Viewer</h1>
   {#if error}
     <p class="error">Error: {error}</p>
     <button on:click={() => (error = null)}>dismiss</button>
@@ -31,9 +30,9 @@
     <p>loading cards…</p>
   {:else if ready}
     {#if current}
-      <button on:click={back}>← library</button>
-      <ReplayViewer replay={current} />
+      <ReplayViewer replay={current} on:back={back} />
     {:else}
+      <h1>LOCM Replay Viewer</h1>
       <ReplayLibrary on:open={(e) => open(e.detail)} />
     {/if}
   {/if}

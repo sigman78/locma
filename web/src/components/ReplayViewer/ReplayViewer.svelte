@@ -1,6 +1,6 @@
 <!-- web/src/components/ReplayViewer/ReplayViewer.svelte -->
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { createEventDispatcher, onDestroy } from 'svelte'
   import { Playback, type Replay } from '../../lib/replay'
   import { computeFx, type Fx } from '../../lib/fx'
   import { animate, pulse } from '../../lib/motion'
@@ -11,6 +11,7 @@
 
   export let replay: Replay
 
+  const dispatch = createEventDispatcher<{ back: void }>()
   let tab: 'draft' | 'battle' = 'battle'
   let pb = new Playback(replay)
   let cursor = 0
@@ -59,8 +60,11 @@
 
 <div class="viewer">
   <header>
-    <strong>{nameA}</strong> vs <strong>{nameB}</strong>
-    · seed {replay.header.seed} · winner P{replay.header.winner} · {replay.header.turns} turns
+    <button class="back" on:click={() => dispatch('back')}>← Library</button>
+    <span class="title">
+      <strong>{nameA}</strong> vs <strong>{nameB}</strong>
+      · seed {replay.header.seed} · winner P{replay.header.winner} · {replay.header.turns} turns
+    </span>
     <span class="tabs">
       <button class:on={tab === 'draft'} on:click={() => (tab = 'draft')}>Draft</button>
       <button class:on={tab === 'battle'} on:click={() => (tab = 'battle')}>Battle</button>
@@ -87,10 +91,15 @@
 
 <style>
   .viewer { color: #ddd; }
-  header { padding: 8px; font-size: 15px; }
-  .tabs { margin-left: 12px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 4px 6px 8px; font-size: 15px; }
+  .title { color: #ccc; }
+  .back { background: #23232b; color: #ddd; border: 1px solid #3a3f55; border-radius: 4px;
+    padding: 3px 12px; cursor: pointer; font-weight: 600; }
+  .back:hover { background: #2c2c38; }
+  .tabs { margin-left: auto; display: flex; gap: 4px; }
   .tabs button { background: #23232b; color: #ddd; border: 1px solid #333;
-    padding: 2px 10px; cursor: pointer; }
+    padding: 3px 12px; cursor: pointer; border-radius: 4px; }
   .tabs button.on { background: #2a2a44; }
   .battle { display: flex; gap: 16px; align-items: flex-start; }
   /* gutters share remaining width equally, so .stage stays centered in the view */

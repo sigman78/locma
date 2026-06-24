@@ -9,6 +9,7 @@
   export let lunge: 'up' | 'down' | null = null
   export let damage: number | null = null
   export let fxToken = 0
+  export let dim = false
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -31,6 +32,7 @@
       class:lethal
       class:attacking={!!lunge}
       class:attacked={card.has_attacked}
+      class:dim
       use:restartAnim={{ cls: lungeCls, token: fxToken }}
     >
       {#if imgOk}
@@ -42,7 +44,7 @@
       <div class="stats"><span class="atk">{card.atk}</span><span class="def">{card.def}</span></div>
       <div class="abil">
         {#each abil as a}
-          <span class="chip" style={`background:${a.color}`} title={a.name}>{a.letter}</span>
+          <span class="chip" style={`border-color:${a.color}`} title={a.name}>{a.emoji}</span>
         {/each}
       </div>
       {#key fxToken}
@@ -60,7 +62,7 @@
       {#if abil.length}
         <div class="tt-keys">
           {#each abil as a}
-            <div class="tt-key"><span class="chip" style={`background:${a.color}`}>{a.letter}</span> {a.name}</div>
+            <div class="tt-key"><span class="chip" style={`border-color:${a.color}`}>{a.emoji}</span> {a.name}</div>
           {/each}
         </div>
       {/if}
@@ -91,17 +93,20 @@
     box-shadow: inset 0 0 18px 4px rgba(79,217,122,0.55);
     border: 1px solid rgba(79,217,122,0.6); border-radius: 6px; }
   .card.attacked { filter: saturate(0.6); }
+  /* summoning-sick / inactive dim — on the card only, so the tooltip stays opaque */
+  .card.dim { opacity: 0.5; }
   /* attacker highlight — declared after .attacked so it wins the filter */
   .card.attacking { outline: 3px solid #ffd23d; outline-offset: 2px;
-    filter: brightness(1.18); z-index: 4; }
+    filter: brightness(1.18); opacity: 1; z-index: 4; }
   .stats { position: absolute; bottom: 0; left: 0; right: 0; display: flex;
     justify-content: space-between; padding: 3px 6px; font-weight: 700;
     background: rgba(0,0,0,0.6); font-size: 16px; }
   .atk { color: #ffcc55; } .def { color: #66ccff; }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
-  .chip { font-size: 11px; font-weight: 700; color: #0c0c10; border-radius: 3px;
-    padding: 0 4px; line-height: 16px; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+  .chip { display: inline-block; min-width: 20px; text-align: center;
+    font-size: 13px; line-height: 18px; border-radius: 4px; padding: 0 2px;
+    background: rgba(8, 8, 12, 0.8); border: 1.5px solid #888; }
 
   /* hover detail tooltip */
   .tooltip { position: absolute; left: calc(100% + 8px); top: 0; z-index: 30;

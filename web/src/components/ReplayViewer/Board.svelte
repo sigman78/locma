@@ -28,27 +28,29 @@
 </script>
 
 <div class="board">
-  <Player player={p1} name={nameB} seat={1} {fx} {fxToken} />
+  <Player player={p1} name={nameB} seat={1} active={snapshot.current === 1} {fx} {fxToken} />
   <Hand cards={p1.hand} faceUp={true} />
   <div class="battlefield">
     <div class="field top">
       {#each p1.board as c (c.iid)}
-        <div class:sick={c.can_attack === false} out:deathFx>
-          <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)} {fxToken} />
+        <div out:deathFx>
+          <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
+            dim={c.can_attack === false} {fxToken} />
         </div>
       {/each}
     </div>
     <hr />
     <div class="field bottom">
       {#each p0.board as c (c.iid)}
-        <div class:sick={c.can_attack === false} out:deathFx>
-          <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)} {fxToken} />
+        <div out:deathFx>
+          <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
+            dim={c.can_attack === false} {fxToken} />
         </div>
       {/each}
     </div>
   </div>
   <Hand cards={p0.hand} faceUp={true} />
-  <Player player={p0} name={nameA} seat={0} {fx} {fxToken} />
+  <Player player={p0} name={nameA} seat={0} active={snapshot.current === 0} {fx} {fxToken} />
 </div>
 
 <style>
@@ -56,8 +58,8 @@
     background: #15151b; border-radius: 8px;
     --card-w: 108px; --card-h: 150px; --gap: 8px; --board-cols: 6; --hand-cols: 8; }
   /* the arena: visually distinct from the players' hands */
-  .battlefield { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
-    border-radius: 10px;
+  .battlefield { display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 10px 12px; border-radius: 10px;
     background:
       radial-gradient(ellipse at 50% 50%, rgba(120, 60, 30, 0.14), transparent 70%),
       #0b0e0c;
@@ -68,7 +70,6 @@
     width: calc(var(--board-cols) * var(--card-w) + (var(--board-cols) - 1) * var(--gap) + 12px);
     min-height: calc(var(--card-h) + 12px); }
   .field > div { flex: 0 0 auto; }
-  .sick { opacity: 0.55; }
   hr { width: 70%; align-self: center; border: none;
     border-top: 1px dashed #3a4a3c; margin: 0; }
 </style>
