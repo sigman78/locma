@@ -28,7 +28,10 @@ export interface ReplayHeader {
 export interface Replay {
   header: ReplayHeader
   draft: { pool: number[][]; picks: { round: number; seat: number; pick: number }[] }
-  battle: { opening: Snapshot; steps: Step[] }
+  // `steps[i].state` is the DECISION-POINT snapshot — the board as the acting seat
+  // saw it just before its move (state.current === seat). `closing` is the final
+  // board after the game-ending action (absent for games that hit the turn cap).
+  battle: { opening: Snapshot; steps: Step[]; closing?: Snapshot | null }
   result: { winner: number; turns: number }
 }
 
@@ -43,12 +46,23 @@ export class Playback {
   cardIds = new Map<number, number>() // instance id -> catalog card_id
 
   constructor(replay: Replay) {
+    const steps = replay.battle.steps
+    const closing = replay.battle.closing
     const frames: Frame[] = [{
       index: 0, snapshot: replay.battle.opening, action: null, seat: null, turn: null,
     }]
-    replay.battle.steps.forEach((s, i) => frames.push({
-      index: i + 1, snapshot: s.state, action: s.action, seat: s.seat, turn: s.turn,
-    }))
+    // Steps store the DECISION-POINT (pre-action) state, so a move's *result* is
+    // the next same-seat decision point. When the turn ends here (the next step
+    // belongs to the opponent — e.g. a closing pass) keep the actor's own board
+    // rather than jumping to the opponent's freshly-drawn turn; when the game ends
+    // here (no next step) show the final `closing` board so the last move's effect
+    // is visible.
+    steps.forEach((s, i) => {
+      const next = steps[i + 1]
+      const result =
+        next && next.seat === s.seat ? next.state : !next ? (closing ?? s.state) : s.state
+      frames.push({ index: i + 1, snapshot: result, action: s.action, seat: s.seat, turn: s.turn })
+    })
     this.frames = frames
     for (const f of this.frames) {
       for (const p of f.snapshot.players) {

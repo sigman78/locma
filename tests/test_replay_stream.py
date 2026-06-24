@@ -26,6 +26,7 @@ def _record(seed=1):
         seed=seed,
         on_step=rec.on_step,
         on_snapshot=rec.on_snapshot,
+        on_pre_step=rec.on_pre_step,
     )
     return rec, result
 
@@ -57,6 +58,35 @@ def test_recorder_captures_opening_and_steps():
         assert {"can_attack", "has_attacked"} <= set(c)
 
 
+def test_every_step_state_is_in_acting_seat_perspective():
+    """Decision-point invariant: each recorded step's snapshot belongs to the
+    seat that took the action. A turn-ending pass must NOT carry the opponent's
+    already-flipped, already-drawn start-of-turn state."""
+    for seed in (1, 5, 7, 9):
+        rec, _ = _record(seed)
+        for i, s in enumerate(rec.steps):
+            assert s["state"]["current"] == s["seat"], (
+                f"seed={seed} step {i}: action={s['action']} recorded for seat "
+                f"{s['seat']} but state.current={s['state']['current']}"
+            )
+
+
+def test_turn_numbers_are_monotonic_one_per_ply():
+    """Decision-point recording keeps each step's turn equal to gs.turn BEFORE the
+    action, so a whole player-turn (closing pass included) shares one turn number
+    and consecutive turns never go backwards."""
+    rec, _ = _record(seed=7)
+    turns = [s["turn"] for s in rec.steps]
+    assert turns == sorted(turns), f"turn numbers not monotonic: {turns}"
+    # a pass shares the turn of the action(s) preceding it in the same run
+    for a, b in zip(rec.steps, rec.steps[1:], strict=False):
+        if a["seat"] == b["seat"] and b["action"].get("t") == "pass":
+            assert a["turn"] == b["turn"], "closing pass must share the actor's turn"
+            break
+    else:
+        raise AssertionError("expected an action immediately followed by its pass")
+
+
 def test_build_replay_structure_and_hash():
     rep = build_replay(
         RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="2026-06-23T00:00:00Z"
@@ -70,6 +100,16 @@ def test_build_replay_structure_and_hash():
     assert rep["battle"]["opening"] is not None
     assert len(rep["draft"]["pool"]) == 30 and len(rep["draft"]["picks"]) == 60
     assert rep["result"]["winner"] in (0, 1)
+
+
+def test_build_replay_captures_closing_final_board():
+    """The closing snapshot is the final board after the game-ending action, so a
+    viewer can show the last move's result (no later step carries it)."""
+    rep = build_replay(RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="t")
+    closing = rep["battle"]["closing"]
+    assert closing is not None, "a game that ends normally should record a closing board"
+    loser = 1 - rep["result"]["winner"]
+    assert closing["players"][loser]["health"] <= 0, "loser should be dead on the final board"
 
 
 def test_build_replay_winner_matches_run_game():
