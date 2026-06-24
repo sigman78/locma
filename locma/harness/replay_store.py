@@ -56,6 +56,11 @@ def write_replay(dirpath: str, replay: dict) -> str:
             )
         )
 
+    # closing snapshot — the final board after the game-ending action
+    closing = battle.get("closing")
+    if closing is not None:
+        lines.append(json.dumps({"k": "close", "state": closing}, separators=(",", ":")))
+
     # result line
     lines.append(json.dumps({"k": "result", **replay["result"]}, separators=(",", ":")))
 
@@ -74,6 +79,7 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
     pool: list | None = None
     picks: list[dict] = []
     opening: dict | None = None
+    closing: dict | None = None
     steps: list[dict] = []
     result: dict = {}
     has_draft_lines = False
@@ -97,6 +103,8 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
                     picks.append({"round": r, "seat": p["seat"], "pick": p["pick"]})
             elif k == "open":
                 opening = line["state"]
+            elif k == "close":
+                closing = line["state"]
             elif k == "turn":
                 seat = line["seat"]
                 turn = line["turn"]
@@ -119,7 +127,7 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
     return {
         "header": header,
         "draft": {"pool": pool, "picks": picks},
-        "battle": {"opening": opening, "steps": steps},
+        "battle": {"opening": opening, "steps": steps, "closing": closing},
         "result": result,
     }
 

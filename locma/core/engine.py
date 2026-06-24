@@ -59,7 +59,14 @@ def make_battle_view(gs: GameState) -> BattleView:
 
 
 def run_game(
-    policy0, policy1, seed: int, cards=None, max_turns: int = 200, on_step=None, on_snapshot=None
+    policy0,
+    policy1,
+    seed: int,
+    cards=None,
+    max_turns: int = 200,
+    on_step=None,
+    on_snapshot=None,
+    on_pre_step=None,
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
@@ -73,6 +80,15 @@ def run_game(
     before any action is applied.  After each apply_battle call we check
     `gs.current != turn_owner` (Pass/end_turn changes gs.current) to detect
     that the turn has ended and break out of the inner loop.
+
+    Recording hooks (all optional):
+      - on_snapshot(gs): fired once at battle start (the opening state).
+      - on_pre_step(seat, action, gs): fired with the decision-point state, just
+        BEFORE each battle action is applied.  This is the actor's own
+        perspective (gs.current == seat) — the natural state to record, since a
+        Pass's apply_battle runs end_turn() and the post-apply state belongs to
+        the opponent.
+      - on_step(seat, action, gs): fired AFTER each draft/battle action.
 
     Safety caps:
       - per-turn action cap of 100 actions forces end_turn to prevent infinite loops.
@@ -112,6 +128,12 @@ def run_game(
             legal = battlemod.battle_legal(gs)
             view = make_battle_view(gs)
             action = pols[gs.current].battle_action(view, legal)
+            if on_pre_step is not None:
+                # Decision point: the game state as the acting seat sees it, BEFORE
+                # apply_battle runs (a turn-ending Pass calls end_turn here, which
+                # flips gs.current and draws for the opponent — so post-apply state
+                # no longer belongs to `seat`).
+                on_pre_step(seat, action, gs)
             battlemod.apply_battle(gs, action)
             if on_step is not None:
                 on_step(seat, action, gs)

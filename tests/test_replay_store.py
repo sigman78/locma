@@ -93,7 +93,7 @@ def _realistic_replay(rid="r_test001", created="2026-06-24T12:00:00Z"):
             "state": _snap(0),
         },
     ]
-    battle = {"opening": _snap(0), "steps": steps}
+    battle = {"opening": _snap(0), "steps": steps, "closing": _snap(1)}
     result = {"winner": 0, "turns": 3}
     return {
         "header": header,
@@ -201,6 +201,16 @@ def test_no_opening_roundtrip(tmp_path):
     write_replay(str(tmp_path), original)
     got = get_replay(str(tmp_path), "r_no_open")
     assert got["battle"]["opening"] is None
+    assert got == original
+
+
+def test_no_closing_roundtrip(tmp_path):
+    """closing=None → close line omitted; round-trips as closing=None."""
+    original = _realistic_replay("r_no_close", "2026-06-24T06:00:00Z")
+    original["battle"]["closing"] = None
+    write_replay(str(tmp_path), original)
+    got = get_replay(str(tmp_path), "r_no_close")
+    assert got["battle"]["closing"] is None
     assert got == original
 
 

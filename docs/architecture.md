@@ -35,12 +35,28 @@ A turn-start deck-out or 50-turn hit can be lethal, so `start_turn` calls
 `check_winner` itself (the `Pass` path in `apply_battle` returns before its own
 winner check).
 
-## Trace hook
-`run_game(..., on_step=None)` calls `on_step(seat, action, gs)` after each
-applied policy decision (draft pick int, or battle Action). Default `None` means
-zero overhead for tournaments/sprt/noise-floor. Two consumers:
-- `harness/trace.Recorder` collects `(seat, action)` pairs.
-- `cli/render.GameRenderer` prints turn-by-turn.
+## Recording hooks
+`run_game` exposes three optional callbacks (all default `None`, so zero overhead
+for tournaments/sprt/noise-floor):
+- `on_step(seat, action, gs)` — fired *after* each applied draft pick (int) or
+  battle `Action`. Consumers: `harness/trace.Recorder` collects `(seat, action)`
+  pairs; `cli/render.GameRenderer` prints turn-by-turn.
+- `on_snapshot(gs)` — fired once at battle start (the opening board).
+- `on_pre_step(seat, action, gs)` — fired with the *decision-point* state, just
+  *before* each battle action is applied (so `gs.current == seat`).
+
+The replay recorder (`harness/replay_stream.StreamRecorder`) records each battle
+step from its **decision-point** state rather than the post-apply state. A
+turn-ending `Pass` runs `end_turn()` inside `apply_battle` — flipping `gs.current`
+and drawing the opponent's start-of-turn card — so reading `gs` only afterwards
+would attribute the opponent's turn to the passing seat. Recording the pre-apply
+state keeps every step in the acting seat's perspective (`state.current == seat`),
+so `write_replay`'s consecutive-`(seat, turn)` groupby keeps each whole turn
+(closing pass included) as one streamed run with monotonic, one-per-ply turn
+numbers. The recorder also captures a `closing` snapshot — the final board after
+the game-ending action — so a viewer can show the last move's result, since no
+later step carries it. See `docs/ideas.md` for deeper refactors this representation
+opens up.
 
 ## Game-log format
 One JSON object per line (a match -> a JSONL file):
