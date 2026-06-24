@@ -40,6 +40,7 @@ export interface Frame {
 export class Playback {
   frames: Frame[]
   cursor = 0
+  cardIds = new Map<number, number>() // instance id -> catalog card_id
 
   constructor(replay: Replay) {
     const frames: Frame[] = [{
@@ -49,6 +50,12 @@ export class Playback {
       index: i + 1, snapshot: s.state, action: s.action, seat: s.seat, turn: s.turn,
     }))
     this.frames = frames
+    for (const f of this.frames) {
+      for (const p of f.snapshot.players) {
+        for (const c of p.board ?? []) this.cardIds.set(c.iid, c.card_id)
+        for (const c of p.hand ?? []) this.cardIds.set(c.iid, c.card_id)
+      }
+    }
   }
 
   get current(): Frame { return this.frames[this.cursor] }

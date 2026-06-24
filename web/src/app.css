@@ -157,7 +157,7 @@ code {
 }
 
 #app {
-  width: 1126px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
@@ -293,4 +293,37 @@ code {
     right: 0;
     border-right-color: var(--border);
   }
+}
+
+/* ---- replay viewer motion ---- */
+@keyframes locma-lunge-up {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+@keyframes locma-lunge-down {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(14px); }
+  100% { transform: translateY(0); }
+}
+.lunge-up { animation: locma-lunge-up 220ms ease-out; }
+.lunge-down { animation: locma-lunge-down 220ms ease-out; }
+
+@keyframes locma-cast {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.15); filter: brightness(1.7); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.cast-pulse { animation: locma-cast 300ms ease-out; }
+
+@keyframes locma-dmg {
+  0% { opacity: 0; transform: translateY(0); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+.locma-dmg {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-weight: 900; font-size: 38px; color: #ff5252;
+  text-shadow: 0 2px 4px #000, 0 0 10px #ff2a2a; pointer-events: none; z-index: 6;
+  animation: locma-dmg 600ms ease-out forwards;
 }

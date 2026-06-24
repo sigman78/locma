@@ -60,4 +60,27 @@ describe('Playback', () => {
     pb.prevTurn()
     expect(pb.cursor).toBe(0) // no earlier turn → stays at frame 0
   })
+
+  it('maps instance ids to catalog card ids across frames', () => {
+    const withCard = (iid: number, cardId: number): any => ({
+      current: 0,
+      players: [
+        { board: [{ iid, card_id: cardId }], hand: [] },
+        { board: [], hand: [{ iid: iid + 1, card_id: cardId + 1 }] },
+      ],
+    })
+    const rep: Replay = {
+      header: {} as any,
+      draft: { pool: [], picks: [] },
+      battle: {
+        opening: withCard(58, 48),
+        steps: [{ seat: 0, turn: 1, action: { t: 'pass' }, state: withCard(58, 48) }],
+      },
+      result: { winner: 0, turns: 1 },
+    }
+    const pb = new Playback(rep)
+    expect(pb.cardIds.get(58)).toBe(48)
+    expect(pb.cardIds.get(59)).toBe(49)
+    expect(pb.cardIds.get(999)).toBeUndefined()
+  })
 })

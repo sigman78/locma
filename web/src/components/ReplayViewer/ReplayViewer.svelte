@@ -1,7 +1,9 @@
 <!-- web/src/components/ReplayViewer/ReplayViewer.svelte -->
 <script lang="ts">
-  import { onDestroy } from 'svelte'
+  import { createEventDispatcher, onDestroy } from 'svelte'
   import { Playback, type Replay } from '../../lib/replay'
+  import { computeFx, type Fx } from '../../lib/fx'
+  import { animate, pulse } from '../../lib/motion'
   import ActionLog from './ActionLog.svelte'
   import Board from './Board.svelte'
   import DraftPanel from './DraftPanel.svelte'
@@ -9,26 +11,47 @@
 
   export let replay: Replay
 
+  const dispatch = createEventDispatcher<{ back: void }>()
   let tab: 'draft' | 'battle' = 'battle'
   let pb = new Playback(replay)
   let cursor = 0
   let playing = false
   let timer: ReturnType<typeof setInterval> | null = null
+  let fx: Fx | null = null
+  let fxToken = 0
 
   $: nameA = replay.header.a_seat === 0 ? replay.header.policy_a : replay.header.policy_b
   $: nameB = replay.header.a_seat === 0 ? replay.header.policy_b : replay.header.policy_a
   $: snapshot = pb.frames[cursor]?.snapshot
 
-  function sync() { cursor = pb.cursor }
-  function seek(i: number) { pb.seek(i); sync() }
-  function step(d: number) { d > 0 ? pb.next() : pb.prev(); sync() }
-  function turn(d: number) { d > 0 ? pb.nextTurn() : pb.prevTurn(); sync() }
+  function clearFx() { fx = null; animate.set(false) }
+
+  /** Advance by one frame, computing fx for the forward transition. */
+  function advance() {
+    const prev = pb.current
+    pb.next()
+    const next = pb.current
+    if (next.index === prev.index + 1 && next.seat !== null) {
+      fx = computeFx(prev.snapshot, next.snapshot, next.action, next.seat)
+      fxToken++
+      pulse()
+    } else {
+      clearFx()
+    }
+    cursor = pb.cursor
+  }
+
+  function seek(i: number) { pb.seek(i); clearFx(); cursor = pb.cursor }
+  function step(d: number) {
+    if (d > 0) { advance() } else { pb.prev(); clearFx(); cursor = pb.cursor }
+  }
+  function turn(d: number) { d > 0 ? pb.nextTurn() : pb.prevTurn(); clearFx(); cursor = pb.cursor }
   function toggle() {
     playing = !playing
     if (playing) {
       timer = setInterval(() => {
         if (pb.cursor >= pb.frames.length - 1) { toggle(); return }
-        pb.next(); sync()
+        advance()
       }, 600)
     } else if (timer) { clearInterval(timer); timer = null }
   }
@@ -37,8 +60,11 @@
 
 <div class="viewer">
   <header>
-    <strong>{nameA}</strong> vs <strong>{nameB}</strong>
-    · seed {replay.header.seed} · winner P{replay.header.winner} · {replay.header.turns} turns
+    <button class="back" on:click={() => dispatch('back')}>← Library</button>
+    <span class="title">
+      <strong>{nameA}</strong> vs <strong>{nameB}</strong>
+      · seed {replay.header.seed} · winner P{replay.header.winner} · {replay.header.turns} turns
+    </span>
     <span class="tabs">
       <button class:on={tab === 'draft'} on:click={() => (tab = 'draft')}>Draft</button>
       <button class:on={tab === 'battle'} on:click={() => (tab = 'battle')}>Battle</button>
@@ -49,24 +75,37 @@
     <DraftPanel draft={replay.draft} />
   {:else}
     <div class="battle">
-      <div class="main">
-        <Board {snapshot} {nameA} {nameB} />
+      <div class="gutter"></div>
+      <div class="stage">
+        <Board {snapshot} {nameA} {nameB} {fx} {fxToken} />
         <Timeline {cursor} length={pb.frames.length} {playing}
           on:seek={(e) => seek(e.detail)} on:step={(e) => step(e.detail)}
           on:turn={(e) => turn(e.detail)} on:toggle={toggle} />
       </div>
-      <aside><ActionLog frames={pb.frames} {cursor} on:seek={(e) => seek(e.detail)} /></aside>
+      <div class="gutter right">
+        <aside><ActionLog frames={pb.frames} {cursor} cardIds={pb.cardIds} on:seek={(e) => seek(e.detail)} /></aside>
+      </div>
     </div>
   {/if}
 </div>
 
 <style>
   .viewer { color: #ddd; }
-  header { padding: 8px; font-size: 14px; }
-  .tabs { margin-left: 12px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 4px 6px 8px; font-size: 15px; }
+  .title { color: #ccc; }
+  .back { background: #23232b; color: #ddd; border: 1px solid #3a3f55; border-radius: 4px;
+    padding: 3px 12px; cursor: pointer; font-weight: 600; }
+  .back:hover { background: #2c2c38; }
+  .tabs { margin-left: auto; display: flex; gap: 4px; }
   .tabs button { background: #23232b; color: #ddd; border: 1px solid #333;
-    padding: 2px 10px; cursor: pointer; }
+    padding: 3px 12px; cursor: pointer; border-radius: 4px; }
   .tabs button.on { background: #2a2a44; }
-  .battle { display: flex; gap: 12px; }
-  .main { flex: 1; } aside { width: 260px; }
+  .battle { display: flex; gap: 16px; align-items: flex-start; }
+  /* gutters share remaining width equally, so .stage stays centered in the view */
+  .gutter { flex: 1 1 0; min-width: 0; display: flex; }
+  .gutter.right { justify-content: flex-start; }
+  .stage { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; }
+  /* action log: only as wide as its text */
+  aside { width: max-content; max-width: 100%; }
 </style>
