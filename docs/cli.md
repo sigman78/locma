@@ -2,6 +2,22 @@
 
 All commands run via `uv run locma <command>`.
 
+## Policies
+
+Any command that takes a policy name (`play`, `tournament`, `noise-floor`,
+`sprt`, `--opponent`) accepts one of:
+
+- `random` — uniform random legal action.
+- `scripted` — random draft + fixed aggressive battle script (green items →
+  attack face/Guard → summon → remaining items), targets chosen at random.
+- `greedy` — stat-based draft + greedy battle (lethal/trade heuristic).
+- `max-guard` — draft prefers Guard creatures; aggressive ground battle.
+- `max-attack` — draft prefers highest-attack creatures; aggressive ground battle.
+
+`max-guard` and `max-attack` share a "ground" battle: develop the board and
+swing at the enemy face, falling back to clearing Guards when the face is not a
+legal target.
+
 ## play
 `locma play A B [--games N] [--seed S] [--render] [--log FILE]`
 Run a mirrored match. Prints win rate + 95% Wilson CI + binomial p-value.
@@ -46,7 +62,7 @@ then save the model. **Requires the `[ml]` extra** (`uv sync --extra ml`); witho
 it the command exits with a clear error.
 - `--steps` total training timesteps (default 50000).
 - `--out` output path for the saved model (default `model.zip`).
-- `--opponent` opponent policy: random | scripted | greedy (default random).
+- `--opponent` opponent policy (see Policies above; default random).
 
 Example: `uv run locma train --steps 50000 --opponent random --out model.zip`
 

@@ -16,9 +16,7 @@ from locma.harness.trace import (
     trace_hash,
     write_game_log,
 )
-from locma.policies.greedy import GreedyPolicy
-from locma.policies.random_policy import RandomPolicy
-from locma.policies.scripted import ScriptedPolicy
+from locma.policies.registry import make_policy as registry_make_policy
 from locma.stats.intervals import binomial_test, wilson_ci
 from locma.stats.openskill_ratings import openskill_from_results, ordinal
 from locma.stats.sprt import sprt as sprt_test
@@ -35,10 +33,10 @@ def _version() -> str:
 
 
 def make_policy(spec: str):
-    table = {"random": RandomPolicy, "scripted": ScriptedPolicy, "greedy": GreedyPolicy}
-    if spec in table:
-        return table[spec](spec)
-    raise typer.BadParameter(f"unknown policy '{spec}'")
+    try:
+        return registry_make_policy(spec)
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
 
 
 @app.command()

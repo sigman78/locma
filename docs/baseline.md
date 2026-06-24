@@ -1,3 +1,122 @@
+# Current baseline
+
+The canonical pair-score matrix for the five built-in policies — row's win rate
+vs column, `locma tournament random scripted greedy max-guard max-attack
+--games 500 --seed 0 --matrix` (1000 games per pair, mirrored, `--seed 0`,
+deterministic). This is the living reference; dated sections below are frozen
+snapshots of past states.
+
+|            | random | scripted | greedy | max-guard | max-attack |
+|------------|--------|----------|--------|-----------|------------|
+| random     | —      | 0.01     | 0.01   | 0.01      | 0.01       |
+| scripted   | 0.99   | —        | 0.55   | 0.47      | 0.56       |
+| greedy     | 0.99   | 0.45     | —      | 0.43      | 0.32       |
+| max-guard  | 0.99   | 0.53     | 0.57   | —         | 0.57       |
+| max-attack | 0.99   | 0.45     | 0.68   | 0.43      | —          |
+
+Ranking by rating (openskill ordinal / Elo): `max-attack` (61.81 / 2846) >
+`max-guard` (31.00 / 1976) > `greedy` (2.27 / 1253) > `scripted` (-15.75 / 886) >
+`random` (-41.21 / 539). Note the pool is **non-transitive** — `max-guard` beats
+`max-attack` and `scripted` beats `greedy` head-to-head, against the rating
+order — so read the matrix, not just the ordinal.
+
+---
+
+# Baselines — 2026-06-24: new ground baselines + reworked `scripted`
+
+_Date: 2026-06-24_
+
+This version adds two ground-strategy baselines and reworks `scripted`. All
+numbers reproducible with `--seed 0` (engine deterministic; the now-stochastic
+policies are re-seeded per game, so logged games still replay byte-identically —
+verified below). The original three-policy report is preserved unchanged below
+the `---`.
+
+## New baselines
+
+- **`max-guard`** — draft prefers Guard creatures (then any creature, tie-broken
+  by stat sum); "ground" battle: develop the board and swing at the enemy face,
+  falling back to clearing Guards when the face is not a legal target.
+- **`max-attack`** — draft prefers the highest-attack creature (creatures over
+  items, tie-broken by defense); same ground battle.
+
+## What changed
+
+- **`scripted` reworked.** Was: fixed heuristic (always pick draft slot 0; first
+  non-`Pass` legal action). Now: **random draft** + a fixed aggressive battle
+  script — use green items on own creatures → attack the face (clear a Guard
+  first when no face attack is legal) → summon creatures → use remaining items →
+  pass, with targets chosen at random. Effect: `scripted` jumped from losing to
+  `greedy` (old: greedy beat it 84%) to **beating `greedy` 55%** head-to-head,
+  and from ~87% to **98.6%** vs `random`.
+- The pre-existing three-policy numbers below are now **stale for `scripted`**
+  (kept for historical continuity); use the tables in this section.
+
+## Tournament ratings (5 policies)
+
+`locma tournament random scripted greedy max-guard max-attack --games 500 --seed 0 --matrix`:
+
+| Policy     | openskill (ordinal) | Elo  | p vs random |
+|------------|---------------------|------|-------------|
+| max-attack | 61.81               | 2846 | 4.48e-276   |
+| max-guard  | 31.00               | 1976 | 2.57e-286   |
+| greedy     | 2.27                | 1253 | 4.54e-282   |
+| scripted   | -15.75              | 886  | 1.98e-270   |
+| random     | -41.21              | 539  | —           |
+
+Pair-score matrix (row's win rate vs column):
+
+|            | random | scripted | greedy | max-guard | max-attack |
+|------------|--------|----------|--------|-----------|------------|
+| random     | —      | 0.01     | 0.01   | 0.01      | 0.01       |
+| scripted   | 0.99   | —        | 0.55   | 0.47      | 0.56       |
+| greedy     | 0.99   | 0.45     | —      | 0.43      | 0.32       |
+| max-guard  | 0.99   | 0.53     | 0.57   | —         | 0.57       |
+| max-attack | 0.99   | 0.45     | 0.68   | 0.43      | —          |
+
+## Head-to-head win rates
+
+`locma play A B --games 500 --seed 0` (1000 games each), win rate of A:
+
+| Matchup                 | Win rate A | 95% CI        | binomial p |
+|-------------------------|------------|---------------|------------|
+| max-guard vs random     | 0.994      | 0.987–0.997   | 2.57e-286  |
+| max-attack vs random    | 0.989      | 0.980–0.994   | 4.48e-276  |
+| scripted vs random      | 0.986      | 0.977–0.992   | 1.98e-270  |
+| max-attack vs greedy    | 0.677      | 0.647–0.705   | 1.59e-29   |
+| max-guard vs greedy     | 0.569      | 0.538–0.599   | 1.43e-05   |
+| max-guard vs max-attack | 0.569      | 0.538–0.599   | 1.43e-05   |
+| scripted vs greedy      | 0.551      | 0.520–0.582   | 1.39e-03   |
+
+## Non-transitivity
+
+The pool is **not a clean total order** — the rating models (Elo and openskill
+both assume transitive skill) hide a rock-paper-scissors structure:
+
+- `max-guard` **beats** `max-attack` head-to-head (0.569), yet `max-attack` tops
+  the table — it crushes `greedy` harder (0.68 vs `max-guard`'s 0.57), which the
+  latent-skill models reward.
+- `scripted` **beats** both `greedy` (0.55) and `max-attack` (0.56) head-to-head
+  but **loses** to `max-guard` (0.47), so it rates *below* `greedy` despite
+  beating it. Read the pair-score matrix, not just the ordinal, for this pool.
+
+## Reproduce
+
+```bash
+uv run locma tournament random scripted greedy max-guard max-attack --games 500 --seed 0 --matrix
+uv run locma play max-attack greedy    --games 500 --seed 0
+uv run locma play max-guard  greedy    --games 500 --seed 0
+uv run locma play max-attack max-guard --games 500 --seed 0
+uv run locma play scripted   random    --games 500 --seed 0
+uv run locma play greedy     scripted  --games 500 --seed 0
+
+# Replay determinism still holds with the stochastic policies:
+uv run locma play scripted random --games 50 --seed 0 --log v2.jsonl
+uv run locma replay v2.jsonl --assert-hash   # exit 0
+```
+
+---
+
 # Baseline Experiments
 
 Reference baseline for the three built-in policies on single-lane LOCM 1.2.
