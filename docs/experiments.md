@@ -3,12 +3,14 @@
 ## Noise floor (luck baseline)
 `noise-floor` plays a policy against an independent copy of itself. It answers:
 "how big must a win-rate edge be before it's real?"
-- **Stochastic policies** (e.g. random): win rate centers on 0.50; the CI width
-  is the measurement floor.
-- **Deterministic policies** (greedy/scripted): self-play variance comes only
-  from seat asymmetry and the seed's RNG draws, so the win rate may sit stably
-  off 0.50. Read the **resolution limit** (CI half-width), not the point value:
-  any measured edge smaller than it is indistinguishable from luck.
+- **Stochastic policies** (random, scripted): win rate centers on 0.50; the CI
+  width is the measurement floor. (Both are seeded per game seed, so a logged
+  game still replays byte-identically — stochastic across seeds, reproducible
+  within one.)
+- **Deterministic policies** (greedy): self-play variance comes only from seat
+  asymmetry and the seed's RNG draws, so the win rate may sit stably off 0.50.
+  Read the **resolution limit** (CI half-width), not the point value: any
+  measured edge smaller than it is indistinguishable from luck.
 
 ## SPRT (sequential testing)
 `sprt` tests H0: winrate = p0 against H1: winrate = p1 using Wald's

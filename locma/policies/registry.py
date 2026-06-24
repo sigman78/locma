@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from locma.policies.baselines import MaxAttackDraftPolicy, MaxGuardDraftPolicy
 from locma.policies.greedy import GreedyPolicy
 from locma.policies.random_policy import RandomPolicy
 from locma.policies.scripted import ScriptedPolicy
 
-_REGISTRY = {"random": RandomPolicy, "scripted": ScriptedPolicy, "greedy": GreedyPolicy}
+_REGISTRY = {
+    "random": RandomPolicy,
+    "scripted": ScriptedPolicy,
+    "greedy": GreedyPolicy,
+    "max-guard": MaxGuardDraftPolicy,
+    "max-attack": MaxAttackDraftPolicy,
+}
 
 
 def make_policy(spec: str):
