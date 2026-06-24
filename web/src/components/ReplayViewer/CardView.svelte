@@ -16,7 +16,13 @@
   let imgOk = true
   $: name = cardName(card.card_id)
   $: meta = cardMeta(card.card_id)
+  // face shows the live in-play state (incl. buffs); tooltip shows the printed card
   $: abil = abilityList(card.abilities)
+  $: baseAbil = abilityList(meta?.abilities)
+  // letters present on the printed card — anything extra on the face is granted by an effect
+  $: baseLetters = new Set([...(meta?.abilities ?? '')].filter((ch) => ch !== '-'))
+  $: atkDelta = meta ? card.atk - meta.attack : 0
+  $: defDelta = meta ? card.def - meta.defense : 0
   $: guard = hasAura(card.abilities, 'G')
   $: ward = hasAura(card.abilities, 'W')
   $: lethal = hasAura(card.abilities, 'L')
@@ -55,13 +61,17 @@
       {/if}
       {#if showAuras && ward}<div class="ward-tint"></div>{/if}
       <div class="stats">
-        <span class="atk">{card.atk}</span>
+        <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
         {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
-        <span class="def">{card.def}</span>
+        <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
       </div>
       <div class="abil">
         {#each abil as a}
-          <span class="chip" style={`border-color:${a.color}`} title={a.name}>{a.emoji}</span>
+          <span
+            class="chip"
+            class:granted={!baseLetters.has(a.letter)}
+            style={`border-color:${a.color}`}
+            title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
         {/each}
       </div>
       {#key fxToken}
@@ -77,10 +87,14 @@
         {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
       </div>
       {#if meta}<div class="tt-type">{typeLabel}</div>{/if}
-      <div class="tt-stats"><span class="atk">⚔ {card.atk}</span><span class="def">🛡 {card.def}</span></div>
-      {#if abil.length}
+      <!-- tooltip mirrors the printed card (base stats), not the in-play buffed state -->
+      <div class="tt-stats">
+        <span class="atk">⚔ {meta ? meta.attack : card.atk}</span>
+        <span class="def">🛡 {meta ? meta.defense : card.def}</span>
+      </div>
+      {#if baseAbil.length}
         <div class="tt-keys">
-          {#each abil as a}
+          {#each baseAbil as a}
             <div class="tt-key"><span class="chip" style={`border-color:${a.color}`}>{a.emoji}</span> {a.name}</div>
           {/each}
         </div>
@@ -130,6 +144,9 @@
     justify-content: space-between; padding: 3px 6px; font-weight: 700;
     background: rgba(0,0,0,0.6); font-size: 16px; }
   .atk { color: #ffcc55; } .def { color: #66ccff; }
+  /* live stat deviations from the printed card: green = buffed, red = reduced/damaged */
+  .stats .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
+  .stats .reduced { color: #ff6b6b; text-shadow: 0 0 6px rgba(255, 107, 107, 0.7); }
   .item-dot { width: 13px; height: 13px; border-radius: 50%; align-self: center;
     border: 1px solid rgba(0, 0, 0, 0.6); box-shadow: 0 0 5px rgba(0, 0, 0, 0.7); }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
@@ -137,6 +154,9 @@
   .chip { display: inline-block; min-width: 20px; text-align: center;
     font-size: 13px; line-height: 18px; border-radius: 4px; padding: 0 2px;
     background: rgba(8, 8, 12, 0.8); border: 1.5px solid #888; }
+  /* abilities granted in-play (not on the printed card) read as a glowing buff */
+  .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
+    box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
 
   /* hover detail tooltip */
   .tooltip { position: absolute; left: calc(100% + 8px); top: 0; z-index: 30;
