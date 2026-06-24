@@ -69,7 +69,7 @@
       {/key}
     </div>
 
-    {#if dim}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
+    {#if dim && !card.has_attacked}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
 
     <div class="tooltip">
       <div class="tt-head">
