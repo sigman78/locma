@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from locma.core.actions import Action, Attack, Pass, Summon, Use, action_to_dict
+from locma.core.actions import Action, Attack, Pass, Summon, Use
 from locma.core.cards import ABILITY_ORDER, CardType
 from locma.core.state import GameState, Phase
 
@@ -262,7 +262,6 @@ def battle_legal(gs: GameState) -> list[Action]:
 
 
 def apply_battle(gs: GameState, action: Action, emit=None) -> None:
-    _emit(emit, {"t": "action_applied", "seat": gs.current, "action": action_to_dict(action)})
     p = gs.players[gs.current]
     match action:
         case Pass():

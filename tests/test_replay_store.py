@@ -233,8 +233,8 @@ def test_events_roundtrip(tmp_path):
                 "action": {"t": "pass"},
                 "state": _snap(0),
                 "events": [
-                    {"t": "action_applied", "seat": 0, "action": {"t": "pass"}},
                     {"t": "turn_ended", "seat": 0},
+                    {"t": "turn_started", "seat": 1, "draws": [10]},
                 ],
             }
         ]

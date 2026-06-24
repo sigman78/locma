@@ -89,8 +89,8 @@ def run_game(
         perspective (gs.current == seat) — the natural state to record, since a
         Pass's apply_battle runs end_turn() and the post-apply state belongs to
         the opponent.
-      - on_event(ev): fired for each atomic engine event (action_applied,
-        damage, unit_died, turn_ended, turn_started). None = no emission.
+      - on_event(ev): fired for each atomic engine event (damage, unit_died,
+        turn_ended, turn_started). None = no emission.
       - on_step(seat, action, gs): fired AFTER each draft/battle action.
 
     Safety caps:

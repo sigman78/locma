@@ -131,13 +131,12 @@ def _drafted_battle(seed=1):
     return gs
 
 
-def test_emit_sink_collects_action_applied():
+def test_emit_sink_collects_events():
     gs = _new_battle()
     events: list[dict] = []
     b.apply_battle(gs, Pass(), emit=events.append)
-    assert events[0]["t"] == "action_applied"
-    assert events[0]["seat"] == 0
-    assert events[0]["action"] == {"t": "pass"}
+    # A turn-ending Pass decomposes into turn events; the actor's turn ends first.
+    assert events[0] == {"t": "turn_ended", "seat": 0}
 
 
 def test_emit_is_noop_when_sink_none():
@@ -166,7 +165,7 @@ def test_pass_decomposes_into_turn_events():
     events: list[dict] = []
     b.apply_battle(gs, Pass(), emit=events.append)  # turn-ending pass by seat 0
     tags = [e["t"] for e in events]
-    assert tags[0] == "action_applied"
+    assert tags[0] == "turn_ended"
     assert "turn_ended" in tags and "turn_started" in tags
     ended = next(e for e in events if e["t"] == "turn_ended")
     started = next(e for e in events if e["t"] == "turn_started")

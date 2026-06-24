@@ -6,7 +6,6 @@ export type ActionDict =
   | { t: "pass" };
 
 export type EventDict =
-  | { t: "action_applied"; seat: number; action: ActionDict }
   | {
       t: "damage";
       seat: number;
