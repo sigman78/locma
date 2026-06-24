@@ -55,6 +55,13 @@ class StreamRecorder:
         self.draft_picks: list[dict] = []
         self.opening: dict | None = None
         self.steps: list[dict] = []
+        self._pre: tuple[int, dict] | None = None
+
+    def on_pre_step(self, seat: int, action, gs) -> None:
+        # Capture the acting player's (turn, state) BEFORE the action is applied.
+        # Used for turn-ending passes, whose apply_battle runs end_turn() — flipping
+        # gs.current and drawing for the opponent — before on_step sees gs.
+        self._pre = (gs.turn, snapshot(gs))
 
     def on_step(self, seat: int, action, gs) -> None:
         self.trace.append((seat, action))
@@ -65,14 +72,17 @@ class StreamRecorder:
                 {"round": len(self.draft_picks) // 2, "seat": seat, "pick": action}
             )
         else:  # battle action
-            self.steps.append(
-                {
-                    "seat": seat,
-                    "turn": gs.turn,
-                    "action": action_to_dict(action),
-                    "state": snapshot(gs),
-                }
-            )
+            ad = action_to_dict(action)
+            # A pass ends the turn: end_turn() already flipped gs.current and drew
+            # for the opponent. Record the actor's pre-pass state so every step stays
+            # in the acting seat's perspective and the opponent's start-of-turn draw
+            # belongs to the opponent's own turn (natural for streaming).
+            if ad.get("t") == "pass" and self._pre is not None:
+                turn, state = self._pre
+            else:
+                turn, state = gs.turn, snapshot(gs)
+            self.steps.append({"seat": seat, "turn": turn, "action": ad, "state": state})
+        self._pre = None
 
     def on_snapshot(self, gs) -> None:
         self.opening = snapshot(gs)
@@ -88,7 +98,14 @@ def _engine_version() -> str:
 def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) -> dict:
     p0, p1 = (p_a, p_b) if a_seat == 0 else (p_b, p_a)
     rec = StreamRecorder()
-    result = run_game(p0, p1, seed, on_step=rec.on_step, on_snapshot=rec.on_snapshot)
+    result = run_game(
+        p0,
+        p1,
+        seed,
+        on_step=rec.on_step,
+        on_snapshot=rec.on_snapshot,
+        on_pre_step=rec.on_pre_step,
+    )
     h = trace_hash(rec.trace, result.winner, result.turns)
     created_at = created_at or datetime.now(UTC).isoformat()
     header = {

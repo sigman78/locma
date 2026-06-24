@@ -26,6 +26,7 @@ def _record(seed=1):
         seed=seed,
         on_step=rec.on_step,
         on_snapshot=rec.on_snapshot,
+        on_pre_step=rec.on_pre_step,
     )
     return rec, result
 
@@ -55,6 +56,33 @@ def test_recorder_captures_opening_and_steps():
     assert creatures, "expected at least one creature on a board during the game"
     for c in creatures:
         assert {"can_attack", "has_attacked"} <= set(c)
+
+
+def test_every_step_state_is_in_acting_seat_perspective():
+    """Streaming invariant: each recorded step's snapshot belongs to the player
+    who took the action. A turn-ending pass must NOT carry the opponent's
+    already-flipped, already-drawn start-of-turn state."""
+    for seed in (1, 5, 7, 9):
+        rec, _ = _record(seed)
+        for i, s in enumerate(rec.steps):
+            assert s["state"]["current"] == s["seat"], (
+                f"seed={seed} step {i}: action={s['action']} recorded for seat "
+                f"{s['seat']} but state.current={s['state']['current']}"
+            )
+
+
+def test_pass_keeps_actor_turn_and_shares_run_with_its_turn():
+    """A turn-ending pass shares the acting seat's turn number (so groupby keeps
+    the whole turn as one streamed run), and the opponent's start-of-turn draw is
+    NOT yet reflected on the pass snapshot."""
+    rec, _ = _record(seed=7)
+    # Find a turn that has a real action followed by its closing pass.
+    for a, b in zip(rec.steps, rec.steps[1:], strict=False):
+        if a["seat"] == b["seat"] and b["action"].get("t") == "pass":
+            assert a["turn"] == b["turn"], "closing pass must share the actor's turn"
+            break
+    else:
+        raise AssertionError("expected an action immediately followed by its pass")
 
 
 def test_build_replay_structure_and_hash():

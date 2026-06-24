@@ -59,7 +59,14 @@ def make_battle_view(gs: GameState) -> BattleView:
 
 
 def run_game(
-    policy0, policy1, seed: int, cards=None, max_turns: int = 200, on_step=None, on_snapshot=None
+    policy0,
+    policy1,
+    seed: int,
+    cards=None,
+    max_turns: int = 200,
+    on_step=None,
+    on_snapshot=None,
+    on_pre_step=None,
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
@@ -112,6 +119,8 @@ def run_game(
             legal = battlemod.battle_legal(gs)
             view = make_battle_view(gs)
             action = pols[gs.current].battle_action(view, legal)
+            if on_pre_step is not None:
+                on_pre_step(seat, action, gs)  # state BEFORE the action is applied
             battlemod.apply_battle(gs, action)
             if on_step is not None:
                 on_step(seat, action, gs)
