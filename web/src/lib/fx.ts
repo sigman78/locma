@@ -10,7 +10,7 @@ export interface Splash {
 export interface Lunge {
   seat: number
   iid: number
-  toward: 'face' | { seat: number; idx: number }
+  toward: 'face' | { seat: number; iid: number }
 }
 
 export interface Cast {
@@ -52,12 +52,12 @@ export function computeFx(
   let lunge: Lunge | null = null
   let cast: Cast | null = null
   if (action?.t === 'attack') {
-    const attacker = prev.players[seat].board[action.a]
+    const attacker = prev.players[seat].board.find((c) => c.iid === action.a)
     if (attacker) {
       lunge = {
         seat,
         iid: attacker.iid,
-        toward: action.target === -1 ? 'face' : { seat: 1 - seat, idx: action.target },
+        toward: action.target === -1 ? 'face' : { seat: 1 - seat, iid: action.target },
       }
     }
   } else if (action?.t === 'use') {
