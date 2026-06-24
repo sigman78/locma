@@ -14,6 +14,11 @@ _REGISTRY = {
 }
 
 
+def policy_names() -> list[str]:
+    """Names of all built-in policies, in registration order."""
+    return list(_REGISTRY)
+
+
 def make_policy(spec: str):
     """Construct a built-in policy by name. Raises ValueError on unknown spec."""
     if spec in _REGISTRY:

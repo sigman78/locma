@@ -5,7 +5,7 @@ import json
 from fastapi.testclient import TestClient
 
 from locma.harness.replay_stream import build_replay
-from locma.policies.registry import make_policy
+from locma.policies.registry import make_policy, policy_names
 from locma.server.app import create_app
 
 
@@ -28,7 +28,10 @@ def test_cards_endpoint(tmp_path):
 def test_policies_endpoint(tmp_path):
     r = _client(tmp_path).get("/api/policies")
     assert r.status_code == 200
-    assert r.json() == ["random", "scripted", "greedy"]
+    names = r.json()
+    assert names == policy_names()
+    # the endpoint must expose every registered policy, including baselines
+    assert {"random", "scripted", "greedy", "max-guard", "max-attack"} <= set(names)
 
 
 def test_run_list_get_replay(tmp_path):
