@@ -18,7 +18,7 @@ class PlayerState:
     mana: int = 0
     max_mana: int = 0
     bonus_mana: int = 0  # second-player "coin": +1 mana not counted toward max
-    next_rune: int = 25
+    damage_counter: int = 0  # opponent damage taken this round, mod 5 (LOCM 1.5 draw)
     bonus_draw: int = 0
     deck: list = field(default_factory=list)
     hand: list = field(default_factory=list)

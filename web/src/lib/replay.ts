@@ -11,7 +11,7 @@ export interface CardState {
 }
 
 export interface PlayerState {
-  health: number; mana: number; max_mana: number; next_rune: number
+  health: number; mana: number; max_mana: number; damage_counter: number
   bonus_draw: number; deck_count: number; hand: CardState[]; board: CardState[]
 }
 

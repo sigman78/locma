@@ -7,18 +7,23 @@ from locma.core.state import GameState, Phase
 MAX_MANA = 12
 
 
-def _change_health(p, damage: int) -> None:
-    """Apply ``damage`` to a player (negative = healing) and break runes.
+def _change_health(p, damage: int, *, from_opponent: bool = False) -> None:
+    """Apply ``damage`` to a player (negative = healing).
 
-    LOCM 1.2: the first time HP drops to or below a rune threshold
-    (25/20/15/10/5) that rune breaks, granting one extra draw next turn.  A
-    single large hit can cascade through several runes.  Healing never restores
-    a broken rune (``next_rune`` only ever decreases).
+    LOCM 1.5 draw rule (no runes): for every 5 health a player loses to
+    *opponent* damage during a round, they draw one extra card at the start of
+    their next turn.  ``damage_counter`` accumulates the running remainder and
+    is reset each turn in :func:`start_turn`.  Self-inflicted damage (a card's
+    own ``player_hp``) and game damage (deck-out, the 50-turn penalty) do not
+    count toward the bonus, so only opponent-sourced damage passes
+    ``from_opponent=True``.
     """
     p.health -= damage
-    while p.next_rune > 0 and p.health <= p.next_rune:
-        p.next_rune -= 5
-        p.bonus_draw += 1
+    if from_opponent and damage > 0:
+        p.damage_counter += damage
+        while p.damage_counter >= 5:
+            p.damage_counter -= 5
+            p.bonus_draw += 1
 
 
 def draw(gs: GameState, player: int, n: int) -> None:
@@ -27,11 +32,10 @@ def draw(gs: GameState, player: int, n: int) -> None:
         if p.deck:
             p.hand.append(p.deck.pop(0))
             if len(p.hand) > 8:
-                p.hand.pop()  # overdraw burns the card (1.2 hand cap 8)
+                p.hand.pop()  # overdraw burns the card (1.5 hand cap 8)
         else:
-            # deck-out: lose the next rune, dropping HP to its threshold
-            # (HP -> 0 once all runes are gone, since next_rune is then 0).
-            _change_health(p, p.health - p.next_rune)
+            # deck-out: 10 self-damage per missed draw (LOCM 1.5, no runes)
+            _change_health(p, 10)
 
 
 def start_turn(gs: GameState) -> None:
@@ -44,17 +48,18 @@ def start_turn(gs: GameState) -> None:
     if p.max_mana < MAX_MANA:
         p.max_mana += 1
     p.mana = p.max_mana + p.bonus_mana
+    p.damage_counter = 0  # fresh accumulator for opponent damage taken this round
     for c in p.board:
         c.can_attack = True
         c.has_attacked = False
-    # 50-turn rule: once a player has played over 50 turns their deck is
-    # considered empty (gs.turn counts plies, so >100 == >50 turns each).
+    # 50-turn rule (LOCM 1.5): once a player has played over 50 turns they take
+    # 10 damage at the start of every turn (gs.turn counts plies, so >100).
     if gs.turn > 100:
-        p.deck = []
+        _change_health(p, 10)
     draw(gs, gs.current, 1 + p.bonus_draw)
     p.bonus_draw = 0
-    # A deck-out at the start of a turn can drop HP to 0 (no runes left); the
-    # Pass path returns before apply_battle's check_winner, so settle it here.
+    # Deck-out / 50-turn damage at turn start can drop HP to 0; the Pass path
+    # returns before apply_battle's check_winner, so settle the result here.
     check_winner(gs)
 
 
@@ -111,7 +116,7 @@ def _trigger_summon_effects(gs, player, c):
     p = gs.players[player]
     opp = gs.players[gs.opponent(player)]
     _change_health(p, -c.card.player_hp)
-    _change_health(opp, -c.card.enemy_hp)
+    _change_health(opp, -c.card.enemy_hp, from_opponent=True)
     p.bonus_draw += c.card.card_draw
 
 
@@ -139,7 +144,7 @@ def _apply_item(gs, item, target_id):
             tgt.defense += item.card.defense
             tgt.abilities = _merge_abilities(tgt.abilities, item.card.abilities, add=True)
         _change_health(p, -item.card.player_hp)
-        _change_health(opp, -item.card.enemy_hp)
+        _change_health(opp, -item.card.enemy_hp, from_opponent=True)
         p.bonus_draw += item.card.card_draw
     elif t == CardType.RED_ITEM:
         tgt = _find_on_board(opp, target_id)
@@ -150,7 +155,7 @@ def _apply_item(gs, item, target_id):
             if tgt.defense <= 0:
                 opp.board.remove(tgt)
         _change_health(p, -item.card.player_hp)
-        _change_health(opp, -item.card.enemy_hp)
+        _change_health(opp, -item.card.enemy_hp, from_opponent=True)
     else:  # BLUE_ITEM
         if target_id == -1:
             # Blue items targeting face reuse card.defense as face damage (it is
@@ -159,7 +164,8 @@ def _apply_item(gs, item, target_id):
             # correct: only card 155 "Scroll of Firebolt" has both fields non-zero,
             # and its intended total effect is the union of the two (face damage +
             # enemy health modifier), not a double-count.
-            _change_health(opp, -item.card.defense)  # blue carries negative defense as damage
+            # blue carries negative defense as face damage (opponent-sourced)
+            _change_health(opp, -item.card.defense, from_opponent=True)
         else:
             tgt = _find_on_board(opp, target_id)
             if tgt:
@@ -167,7 +173,7 @@ def _apply_item(gs, item, target_id):
                 if tgt.defense <= 0:
                     opp.board.remove(tgt)
         _change_health(p, -item.card.player_hp)
-        _change_health(opp, -item.card.enemy_hp)
+        _change_health(opp, -item.card.enemy_hp, from_opponent=True)
 
 
 def battle_legal(gs: GameState) -> list[Action]:
@@ -256,7 +262,7 @@ def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
     atk.can_attack = False
     if target_id == -1:
         dmg = atk.attack
-        _change_health(opp, dmg)
+        _change_health(opp, dmg, from_opponent=True)
         if atk.has("D") and dmg > 0:
             _change_health(p, -dmg)
         check_winner(gs)
@@ -272,7 +278,7 @@ def _resolve_attack(gs: GameState, attacker_id: int, target_id: int) -> None:
     if atk.has("B") and not warded:
         overflow = atk.attack - max(0, def_before)
         if overflow > 0:
-            _change_health(opp, overflow)
+            _change_health(opp, overflow, from_opponent=True)
     _deal_to_unit(atk, dfn.attack, dfn.has("L"))
     if dfn.defense <= 0 and dfn in opp.board:
         opp.board.remove(dfn)

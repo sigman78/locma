@@ -1,10 +1,12 @@
-"""Fidelity tests for subtle LOCM 1.2 rules: runes, deck-out, second-player
-bonus mana, and the 50-turn deck-empty rule.
+"""Fidelity tests for subtle LOCM 1.5 rules: the damage-based extra draw (no
+runes), deck-out, the second-player bonus mana, and the 50-turn penalty.
 
-Reference: gym-locm Version12BattlePhase and the Strategy-Card-Game-AI
-GAME-RULES.md.  Rune break uses ``health <= next_rune`` and cascades; deck-out
-sets HP to the next threshold and breaks that rune; the second player keeps a
-+1 mana bonus (not counted toward max) until the turn after fully spending it.
+Reference: gym-locm Version15BattlePhase and the Strategy-Card-Game-AI
+GAME-RULES.md.  There are no runes: for every 5 health a player loses to
+opponent damage during a round they draw one extra card next turn.  Deck-out
+deals 10 self-damage per missed draw; turn 51+ deals 10 self-damage per turn;
+the second player keeps a +1 mana bonus (not counted toward max) until the turn
+after fully spending it.
 """
 
 import random
@@ -47,78 +49,101 @@ def _drafted():
     return gs
 
 
-# --- runes: breaking on threshold crossing ---------------------------------
+def start_turn_for(gs, idx):
+    gs.current = idx
+    start_turn(gs)
 
 
-def test_rune_breaks_at_threshold_grants_bonus_draw():
+# --- v1.5 draw-on-damage: +1 card per 5 health lost to the opponent ---------
+
+
+def test_opponent_damage_grants_bonus_draw_per_five():
     gs = _gs()
     gs.players[0].board.append(_attacker(1, 6))
-    _resolve_attack(gs, 1, -1)  # 30 -> 24, crosses 25
+    _resolve_attack(gs, 1, -1)  # 6 face damage from opponent
     p1 = gs.players[1]
     assert p1.health == 24
-    assert p1.next_rune == 20
-    assert p1.bonus_draw == 1
+    assert p1.bonus_draw == 1  # 6 // 5
+    assert p1.damage_counter == 1  # remainder carried within the round
 
 
-def test_rune_breaks_exactly_on_threshold():
+def test_damage_accumulates_within_a_round():
     gs = _gs()
-    gs.players[0].board.append(_attacker(1, 5))
-    _resolve_attack(gs, 1, -1)  # 30 -> 25, <= 25 breaks
+    gs.players[0].board.append(_attacker(1, 3))
+    gs.players[0].board.append(_attacker(2, 4))
+    _resolve_attack(gs, 1, -1)  # counter 3, no draw yet
+    assert gs.players[1].bonus_draw == 0
+    _resolve_attack(gs, 2, -1)  # counter 7 -> 1 draw, remainder 2
     p1 = gs.players[1]
-    assert p1.health == 25 and p1.next_rune == 20 and p1.bonus_draw == 1
+    assert p1.health == 23
+    assert p1.bonus_draw == 1
+    assert p1.damage_counter == 2
 
 
-def test_rune_cascade_breaks_multiple_runes():
+def test_large_hit_grants_multiple_draws():
     gs = _gs()
     gs.players[0].board.append(_attacker(1, 22))
-    _resolve_attack(gs, 1, -1)  # 30 -> 8, crosses 25/20/15/10
+    _resolve_attack(gs, 1, -1)  # 22 damage -> 4 draws, remainder 2
     p1 = gs.players[1]
     assert p1.health == 8
-    assert p1.next_rune == 5
     assert p1.bonus_draw == 4
+    assert p1.damage_counter == 2
 
 
-def test_healing_does_not_restore_broken_runes():
+def test_self_damage_does_not_grant_draw():
     p = _gs().players[0]
-    _change_health(p, 6)  # 30 -> 24, breaks 25
-    assert p.next_rune == 20 and p.bonus_draw == 1
-    _change_health(p, -20)  # heal to 44
-    assert p.health == 44
-    assert p.next_rune == 20  # still broken, not restored
-    assert p.bonus_draw == 1
+    _change_health(p, 6)  # self / game damage (from_opponent defaults False)
+    assert p.health == 24
+    assert p.bonus_draw == 0
+    assert p.damage_counter == 0
 
 
-# --- deck-out: rune-based, not flat -1 -------------------------------------
+def test_healing_does_not_grant_draw():
+    p = _gs().players[0]
+    _change_health(p, -10, from_opponent=True)  # negative damage = heal
+    assert p.health == 40
+    assert p.bonus_draw == 0
+    assert p.damage_counter == 0
 
 
-def test_deckout_sets_health_to_threshold_and_breaks_rune():
-    gs = _gs()
-    p = gs.players[0]
-    p.deck = []  # empty
-    assert p.health == 30 and p.next_rune == 25
-    draw(gs, 0, 1)
-    assert p.health == 25  # dropped to threshold, not 29
-    assert p.next_rune == 20
-    assert p.bonus_draw == 1
+def test_damage_counter_resets_each_turn():
+    gs = _drafted()
+    start_battle(gs)
+    p1 = gs.players[1]
+    p1.damage_counter = 3  # leftover remainder from a prior round
+    start_turn_for(gs, 1)
+    assert p1.damage_counter == 0  # cleared so fractions never carry across rounds
 
 
-def test_deckout_repeated_walks_down_runes():
+# --- deck-out: 10 self-damage per missed draw (no runes) -------------------
+
+
+def test_deckout_deals_ten_per_missed_draw():
     gs = _gs()
     p = gs.players[0]
     p.deck = []
-    draw(gs, 0, 1)  # -> 25 / rune 20
-    draw(gs, 0, 1)  # -> 20 / rune 15
-    assert p.health == 20 and p.next_rune == 15 and p.bonus_draw == 2
+    draw(gs, 0, 1)
+    assert p.health == 20  # 30 - 10
+    assert p.bonus_draw == 0  # game damage does not grant draws
+    assert p.damage_counter == 0
 
 
-def test_deckout_with_no_runes_left_is_lethal():
+def test_deckout_repeated_stacks():
+    gs = _gs()
+    p = gs.players[0]
+    p.deck = []
+    draw(gs, 0, 1)
+    draw(gs, 0, 1)
+    assert p.health == 10  # 30 - 20
+
+
+def test_deckout_can_be_lethal():
     gs = _gs()
     p = gs.players[0]
     p.deck = []
     p.health = 5
-    p.next_rune = 0  # all runes already broken
     draw(gs, 0, 1)
-    assert p.health == 0
+    assert p.health == -5
 
 
 def test_deckout_loss_ends_game_at_turn_start():
@@ -127,9 +152,8 @@ def test_deckout_loss_ends_game_at_turn_start():
     p1 = gs.players[1]
     p1.deck = []
     p1.health = 5
-    p1.next_rune = 0  # next deck-out is lethal
     end_turn(gs)  # -> player 1's turn starts, draws from empty deck
-    assert p1.health == 0
+    assert p1.health == -5
     assert gs.phase == Phase.ENDED
     assert gs.winner == 0
 
@@ -151,11 +175,6 @@ def test_second_player_first_turn_has_extra_mana():
     p1 = gs.players[1]
     assert p1.max_mana == 1  # bonus does NOT count toward max
     assert p1.mana == 2  # 1 base + 1 bonus
-
-
-def start_turn_for(gs, idx):
-    gs.current = idx
-    start_turn(gs)
 
 
 def test_bonus_mana_retained_when_not_fully_spent():
@@ -191,15 +210,14 @@ def test_bonus_mana_allows_thirteen():
     assert p1.mana == MAX_MANA + 1  # 13
 
 
-# --- 50-turn deck-empty rule ----------------------------------------------
+# --- 50-turn penalty: 10 self-damage per turn ------------------------------
 
 
-def test_turn_over_fifty_empties_deck():
+def test_turn_over_fifty_deals_ten_damage():
     gs = _drafted()
     start_battle(gs)
     gs.turn = 101  # player 0 is now on their 51st turn
     p0 = gs.players[0]
-    health_before = p0.health
     start_turn_for(gs, 0)
-    assert p0.deck == []
-    assert p0.health < health_before  # deck-out triggered
+    assert p0.health == 20  # 30 - 10, not a deck-out
+    assert p0.deck != []  # deck is NOT emptied (v1.5, unlike v1.2)
