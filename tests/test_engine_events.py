@@ -25,3 +25,21 @@ def test_emit_is_noop_when_sink_none():
     gs = _new_battle()
     assert gs.emit is None
     b.apply_battle(gs, Pass())  # must not raise
+
+
+def test_change_health_emits_face_damage_event():
+    gs = _new_battle()
+    gs.players[1].health = 30  # ensure non-fatal: 30 - 4 = 26 > 0
+    events: list[dict] = []
+    gs.emit = events.append
+    b._change_health(gs, 1, 4, from_opponent=True)
+    assert events == [{"t": "damage", "seat": 1, "target": "face", "amount": 4, "fatal": False}]
+
+
+def test_change_health_healing_emits_nothing():
+    gs = _new_battle()
+    gs.players[0].health = 30
+    events: list[dict] = []
+    gs.emit = events.append
+    b._change_health(gs, 0, -5)
+    assert [e for e in events if e["t"] == "damage"] == []
