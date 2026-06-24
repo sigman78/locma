@@ -41,7 +41,8 @@
 
 <style>
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; color: #ddd; }
+  main { width: 100%; margin: 0; padding: 16px; box-sizing: border-box; color: #ddd; }
+  :global(#app) { width: 100%; max-width: none; }
   h1 { font-size: 18px; }
   .error { color: #ff6b6b; }
   button { background: #23232b; color: #ddd; border: 1px solid #333; border-radius: 4px;
