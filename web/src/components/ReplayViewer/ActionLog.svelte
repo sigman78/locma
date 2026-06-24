@@ -49,12 +49,15 @@
 
 <ul class="log">
   {#each frames as f}
-    <li
-      class:active={f.index === cursor}
-      class:alt={bands[f.index] === 1}
-      on:click={() => dispatch('seek', f.index)}
-    >
-      <span class="turn">T{f.turn ?? '-'}</span><span class="desc">{describe(f)}</span>
+    <li>
+      <button
+        type="button"
+        class:active={f.index === cursor}
+        class:alt={bands[f.index] === 1}
+        on:click={() => dispatch('seek', f.index)}
+      >
+        <span class="turn">T{f.turn ?? '-'}</span><span class="desc">{describe(f)}</span>
+      </button>
     </li>
   {/each}
 </ul>
@@ -62,12 +65,13 @@
 <style>
   .log { list-style: none; margin: 0; padding: 0; max-height: 78vh; overflow: auto;
     font-size: 11px; text-align: left; line-height: 1.35; }
-  li { display: flex; gap: 6px; align-items: baseline; padding: 1px 6px; cursor: pointer;
-    border-radius: 3px; }
+  .log button { display: flex; gap: 6px; align-items: baseline; padding: 1px 6px;
+    cursor: pointer; border-radius: 3px; width: 100%; border: 0; background: none;
+    color: inherit; font: inherit; text-align: left; }
   /* faint per-turn banding so a player's actions within one turn read as a group */
-  li.alt { background: rgba(255, 255, 255, 0.038); }
-  li:hover { background: #1c1c22; }
-  li.active { background: #2a2a44; }
+  .log button.alt { background: rgba(255, 255, 255, 0.038); }
+  .log button:hover { background: #1c1c22; }
+  .log button.active { background: #2a2a44; }
   .turn { color: #777; flex: 0 0 24px; }
   .desc { flex: 1 1 auto; }
 </style>
