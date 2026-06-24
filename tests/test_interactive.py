@@ -116,3 +116,16 @@ def test_determinism_same_inputs_same_replay():
     g2 = drive_to_end(make_game(human_seat=0, seed=11))
     assert g1.result["replay_id"] == g2.result["replay_id"]
     assert g1._replay["header"]["hash"] == g2._replay["header"]["hash"]
+
+
+def test_session_store_create_and_get():
+    import random as _r
+
+    from locma.server.session_store import SessionStore
+
+    store = SessionStore()
+    g = store.create(ai_policy=make_policy("random"), seed=5, cards=CARDS, rng=_r.Random(0))
+    assert g.game_id.startswith("g_")
+    assert g.human_seat in (0, 1)
+    assert store.get(g.game_id) is g
+    assert store.get("nope") is None
