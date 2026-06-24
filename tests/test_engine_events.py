@@ -2,11 +2,22 @@ import random
 
 from locma.core import battle as b
 from locma.core.actions import Pass
+from locma.core.draft import apply_draft_pick, start_draft
 from locma.core.state import GameState
+from locma.data.cards_db import load_cards
 
 
 def _new_battle(seed=0):
     gs = GameState.new(random.Random(seed))
+    b.start_battle(gs)
+    return gs
+
+
+def _drafted_battle(seed=1):
+    gs = GameState.new(random.Random(seed))
+    start_draft(gs, load_cards())
+    for _ in range(60):
+        apply_draft_pick(gs, 0)
     b.start_battle(gs)
     return gs
 
@@ -43,3 +54,21 @@ def test_change_health_healing_emits_nothing():
     gs.emit = events.append
     b._change_health(gs, 0, -5)
     assert [e for e in events if e["t"] == "damage"] == []
+
+
+def test_pass_decomposes_into_turn_events():
+    gs = _drafted_battle()
+    events: list[dict] = []
+    gs.emit = events.append
+    b.apply_battle(gs, Pass())  # turn-ending pass by seat 0
+    tags = [e["t"] for e in events]
+    assert tags[0] == "action_applied"
+    assert "turn_ended" in tags and "turn_started" in tags
+    ended = next(e for e in events if e["t"] == "turn_ended")
+    started = next(e for e in events if e["t"] == "turn_started")
+    assert ended["seat"] == 0
+    assert started["seat"] == 1
+    assert isinstance(started["draws"], list)
+    # second player's first turn draws at least one card
+    assert len(started["draws"]) >= 1
+    assert events.index(ended) < events.index(started)

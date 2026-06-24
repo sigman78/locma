@@ -68,10 +68,12 @@ def start_turn(gs: GameState) -> None:
     # 10 damage at the start of every turn (gs.turn counts plies, so >100).
     if gs.turn > 100:
         _change_health(gs, gs.current, 10)
+    hand_before = len(p.hand)
     draw(gs, gs.current, 1 + p.bonus_draw)
     p.bonus_draw = 0
-    # Deck-out / 50-turn damage at turn start can drop HP to 0; the Pass path
-    # returns before apply_battle's check_winner, so settle the result here.
+    drawn = [c.instance_id for c in p.hand[hand_before:]]
+    _emit(gs, {"t": "turn_started", "seat": gs.current, "draws": drawn})
+    # Deck-out / 50-turn damage at turn start can drop HP to 0; settle here.
     check_winner(gs)
 
 
@@ -88,6 +90,7 @@ def start_battle(gs: GameState) -> None:
 
 
 def end_turn(gs: GameState) -> None:
+    _emit(gs, {"t": "turn_ended", "seat": gs.current})
     gs.current = gs.opponent(gs.current)
     gs.turn += 1
     start_turn(gs)
