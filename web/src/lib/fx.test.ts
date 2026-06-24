@@ -63,4 +63,14 @@ describe("computeFx", () => {
       splashes: [],
     });
   });
+
+  it("combat-lethal emits a single splash (damage+unit_died deduped)", () => {
+    const events: EventDict[] = [
+      { t: "damage", seat: 1, target: 7, amount: 5, fatal: true },
+      { t: "unit_died", seat: 1, iid: 7 },
+    ];
+    const fx = computeFx(events, { t: "attack", a: 1, target: 7 }, 0);
+    const forSeven = fx.splashes.filter((s) => s.target === 7);
+    expect(forSeven).toEqual([{ seat: 1, target: 7, amount: 5, fatal: true }]);
+  });
 });
