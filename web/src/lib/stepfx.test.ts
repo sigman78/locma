@@ -25,6 +25,10 @@ describe('planStepFx — attack slide', () => {
     const p = planStepFx(a, [], rectOf, -40)
     expect(p.slides).toEqual([{ iid: 7, dx: 0, dy: -40 }])
   })
+  it('produces no slide when the attacker rect is missing', () => {
+    const a: ActionDict = { t: 'attack', a: 555, target: 12 } // no rect for 555
+    expect(planStepFx(a, [], rectOf, -40).slides).toEqual([])
+  })
 })
 
 describe('planStepFx — flash + dying', () => {
@@ -51,6 +55,10 @@ describe('planStepFx — flash + dying', () => {
     expect(planStepFx({ t: 'use', item: 3, target: 9 }, evs, rectOf, 40).dying).toEqual([
       { seat: 1, iid: 9, amount: 0 },
     ])
+  })
+  it('does not flash when a no-target item has no face damage', () => {
+    const a: ActionDict = { t: 'use', item: 3, target: -1 }
+    expect(planStepFx(a, [], rectOf, 40).flashes).toEqual([])
   })
 })
 
