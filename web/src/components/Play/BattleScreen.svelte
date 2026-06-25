@@ -14,8 +14,11 @@
   } from '../../lib/play'
   import { computeFx } from '../../lib/fx'
   import { popIn } from '../../lib/motion'
+  import { nearestTarget, type AimTarget } from '../../lib/aim'
+  import { dock } from '../../lib/dock'
   import CardView from '../ReplayViewer/CardView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
+  import PointerLine from './PointerLine.svelte'
 
   export let pending: BattlePending
   export let you: number
@@ -27,94 +30,125 @@
 
   const dispatch = createEventDispatcher<{ act: ActionDict }>()
 
-  // selections drive the existing click flow (replaced by drag in a later task)
-  let selectedAttacker: number | null = null
-  let selectedItem: number | null = null
-
   $: view = liveStep ? liveStep.view : pending.view
   $: legal = pending.legal
   $: meSeat = you
   $: opSeat = 1 - you
   $: interactive = !playing
-  // acting seat: a live AI step carries its own seat; a human move is `you`
   $: actSeat = liveStep ? liveStep.seat : you
   $: fx = computeFx(events, currentAction, actSeat)
   $: splashes = splashesFor(events)
 
-  // reset transient selections whenever a new server state arrives or playback starts
-  $: if (pending || playing) {
-    selectedAttacker = null
-    selectedItem = null
-  }
-
   function send(a: ActionDict) {
-    selectedAttacker = null
-    selectedItem = null
+    drag = null
+    snapId = null
     dispatch('act', a)
   }
-  function cancel() {
-    selectedAttacker = null
-    selectedItem = null
-  }
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') cancel()
-  }
-  $: selecting = selectedAttacker !== null || selectedItem !== null
 
-  function isPlayable(c: CardState): boolean {
-    return interactive && (canSummon(legal, c.iid) || itemTargets(legal, c.iid).length > 0)
-  }
-
-  function clickHand(c: CardState) {
-    if (!interactive) return
-    if (selectedItem === c.iid) {
-      selectedItem = null
-      return
+  // --- target anchor registry: board slots + opponent face register their DOM node ---
+  const anchors = new Map<number | 'face', HTMLElement>()
+  function anchor(node: HTMLElement, id: number | 'face') {
+    anchors.set(id, node)
+    return {
+      destroy() {
+        if (anchors.get(id) === node) anchors.delete(id)
+      },
     }
+  }
+  function centerOf(el: HTMLElement): { x: number; y: number } {
+    const r = el.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  }
+
+  // --- drag-to-aim state ---
+  type Drag = { kind: 'attack' | 'use'; src: number; from: { x: number; y: number } }
+  let drag: Drag | null = null
+  let cursor = { x: 0, y: 0 }
+  let snapId: number | 'face' | null = null
+
+  function legalIdsFor(d: Drag): number[] {
+    return d.kind === 'attack' ? attackTargets(legal, d.src) : itemTargets(legal, d.src)
+  }
+  // ids legal for the current drag, mapped to anchor keys (-1 → 'face')
+  $: legalKeys = drag
+    ? new Set<number | 'face'>(legalIdsFor(drag).map((id) => (id === -1 ? 'face' : id)))
+    : new Set<number | 'face'>()
+
+  function aimTargets(d: Drag): AimTarget[] {
+    const out: AimTarget[] = []
+    for (const id of legalIdsFor(d)) {
+      const key: number | 'face' = id === -1 ? 'face' : id
+      const el = anchors.get(key)
+      if (el) {
+        const c = centerOf(el)
+        out.push({ id: key, x: c.x, y: c.y })
+      }
+    }
+    return out
+  }
+
+  function startAttack(e: MouseEvent, c: CardState) {
+    if (!interactive) return
+    if (attackTargets(legal, c.iid).length === 0) return
+    e.preventDefault() // suppress native text-selection / focus during the drag
+    drag = { kind: 'attack', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
+    cursor = { x: e.clientX, y: e.clientY }
+    snapId = null
+  }
+  // hand mousedown: targeted items start a drag; summon / no-target handled on click
+  function downHand(e: MouseEvent, c: CardState) {
+    if (!interactive) return
+    const ts = itemTargets(legal, c.iid)
+    if (ts.length === 0) return
+    if (ts.length === 1 && ts[0] === -1) return // no-target item → click handles it
+    e.preventDefault()
+    drag = { kind: 'use', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
+    cursor = { x: e.clientX, y: e.clientY }
+    snapId = null
+  }
+  function clickHand(c: CardState) {
+    if (!interactive || drag) return
     if (canSummon(legal, c.iid)) {
       send({ t: 'summon', id: c.iid })
       return
     }
-    const targets = itemTargets(legal, c.iid)
-    if (targets.length === 0) return
-    if (targets.length === 1 && targets[0] === -1) {
-      send({ t: 'use', item: c.iid, target: -1 })
-      return
-    }
-    selectedItem = c.iid
+    const ts = itemTargets(legal, c.iid)
+    if (ts.length === 1 && ts[0] === -1) send({ t: 'use', item: c.iid, target: -1 })
   }
 
-  function clickMyBoard(c: CardState) {
-    if (!interactive) return
-    if (selectedItem !== null && itemTargets(legal, selectedItem).includes(c.iid)) {
-      send({ t: 'use', item: selectedItem, target: c.iid })
-      return
-    }
-    if (attackTargets(legal, c.iid).length > 0) {
-      selectedAttacker = selectedAttacker === c.iid ? null : c.iid
-    }
+  function onMove(e: MouseEvent) {
+    if (!drag) return
+    cursor = { x: e.clientX, y: e.clientY }
+    const best = nearestTarget(cursor.x, cursor.y, aimTargets(drag))
+    snapId = best ? best.id : null
   }
-
-  function clickOpBoard(c: CardState) {
-    if (!interactive) return
-    if (selectedAttacker !== null && attackTargets(legal, selectedAttacker).includes(c.iid)) {
-      send({ t: 'attack', a: selectedAttacker, target: c.iid })
-      return
-    }
-    if (selectedItem !== null && itemTargets(legal, selectedItem).includes(c.iid)) {
-      send({ t: 'use', item: selectedItem, target: c.iid })
+  function onUp() {
+    if (!drag) return
+    const d = drag
+    const sid = snapId
+    drag = null
+    snapId = null
+    if (sid === null) return // released on empty → cancel, no action
+    const target = sid === 'face' ? -1 : sid
+    if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
+    else send({ t: 'use', item: d.src, target })
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      drag = null
+      snapId = null
     }
   }
 
-  function clickOpFace() {
-    if (!interactive) return
-    if (selectedAttacker !== null && attackTargets(legal, selectedAttacker).includes(-1)) {
-      send({ t: 'attack', a: selectedAttacker, target: -1 })
-      return
-    }
-    if (selectedItem !== null && itemTargets(legal, selectedItem).includes(-1)) {
-      send({ t: 'use', item: selectedItem, target: -1 })
-    }
+  // line endpoint: snap to the highlighted target's center, else follow the cursor
+  $: lineTo = drag
+    ? snapId !== null && anchors.get(snapId)
+      ? centerOf(anchors.get(snapId) as HTMLElement)
+      : cursor
+    : null
+
+  function isPlayable(c: CardState): boolean {
+    return interactive && (canSummon(legal, c.iid) || itemTargets(legal, c.iid).length > 0)
   }
 
   $: mePlayer = {
@@ -132,11 +166,18 @@
   $: oppBacks = new Array(view.op.hand_count).fill(back)
 </script>
 
-<svelte:window on:keydown={onKey} />
+<svelte:window on:keydown={onKey} on:mousemove={onMove} on:mouseup={onUp} />
+
+<PointerLine from={drag ? drag.from : null} to={lineTo} />
 
 <div class="battle" class:playing>
   <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
-  <button class="face op" on:click={clickOpFace} title="attack opponent">🎯 face</button>
+  <button
+    class="face op"
+    class:legaltarget={legalKeys.has('face')}
+    class:snapped={snapId === 'face'}
+    use:anchor={'face'}
+    title="opponent (drag a unit here to attack)">🎯 face</button>
 
   <div class="hand backs">
     {#each oppBacks as _b, i (i)}<CardView card={back} faceUp={false} />{/each}
@@ -144,7 +185,8 @@
 
   <div class="field top">
     {#each view.op.board as c (c.iid)}
-      <button class="slot" in:popIn on:click={() => clickOpBoard(c)}>
+      <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
+        use:anchor={c.iid} in:popIn>
         <CardView card={c} facing="down" lunge={lungeDirFor(fx, you, opSeat, c.iid)}
           damage={cardDamage(splashes, opSeat, c.iid)} {fxToken} />
       </button>
@@ -155,8 +197,9 @@
 
   <div class="field bottom">
     {#each view.me.board as c (c.iid)}
-      <button class="slot" class:selected={selectedAttacker === c.iid} in:popIn
-        on:click={() => clickMyBoard(c)}>
+      <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
+        class:armed={drag?.src === c.iid} use:anchor={c.iid} in:popIn
+        on:mousedown={(e) => startAttack(e, c)}>
         <CardView card={c} facing="up" dim={c.can_attack === false}
           lunge={lungeDirFor(fx, you, meSeat, c.iid)}
           damage={cardDamage(splashes, meSeat, c.iid)} {fxToken} />
@@ -164,10 +207,10 @@
     {/each}
   </div>
 
-  <div class="hand mine">
+  <div class="hand mine" use:dock={{ enabled: interactive && !drag }}>
     {#each view.me.hand as c (c.iid)}
-      <button class="slot" class:selected={selectedItem === c.iid} class:playable={isPlayable(c)}
-        in:popIn on:click={() => clickHand(c)}>
+      <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
+        in:popIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} showAuras={false} />
       </button>
     {/each}
@@ -178,9 +221,8 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if selectedAttacker !== null}Pick a target (or opponent face) — Esc to cancel.{:else if selectedItem !== null}Pick an item target — Esc to cancel.{:else}Your turn — summon, attack, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, drag an item to its target, click to summon, or end turn.{/if}
     </span>
-    {#if selecting}<button class="cancel" on:click={cancel}>✕ Cancel</button>{/if}
     <button class="endturn" on:click={() => send({ t: 'pass' })} disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
@@ -200,10 +242,16 @@
     width: calc(var(--hand-cols) * var(--card-w) + (var(--hand-cols) - 1) * var(--gap) + 16px);
     min-height: calc(var(--card-h) + 12px); }
   .hand.backs { opacity: 0.85; }
-  .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; }
+  /* slots are <button>s (keyboard-focusable, matching the Slice A a11y fix) reset to bare wrappers */
+  .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px;
+    cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .slot:hover { border-color: #4a4f6a; }
   .slot.playable { border-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  .slot.selected { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
+  /* the unit/item currently being dragged */
+  .slot.armed { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
+  /* a legal target during an active drag, brighter when the line is snapped to it */
+  .slot.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
+  .slot.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
   .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
   .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
@@ -213,9 +261,8 @@
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
     border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
   .endturn:disabled { opacity: 0.5; cursor: default; }
-  .cancel { background: #3a2330; color: #ffc4d6; border: 1px solid #6a3a4f;
-    border-radius: 4px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
-  .cancel:hover { background: #4a2c3c; }
   .face.op { background: #2b1a1a; color: #ffb4b4; border: 1px solid #5a3a3a;
-    border-radius: 4px; padding: 4px 12px; cursor: pointer; }
+    border-radius: 4px; padding: 4px 12px; cursor: pointer; transition: box-shadow 0.12s ease; }
+  .face.op.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
+  .face.op.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
 </style>
