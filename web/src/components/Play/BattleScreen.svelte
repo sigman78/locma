@@ -51,9 +51,12 @@
     dispatch('act', a)
   }
 
-  // --- anchor registry: board slots + opponent face register their DOM node ---
-  const anchors = new Map<number | 'face', HTMLElement>()
-  function anchor(node: HTMLElement, id: number | 'face') {
+  // --- anchor registry: board slots + both faces register their DOM node.
+  // 'face' = the opponent (top) face (also the drag target); 'face-me' = the
+  // human's own (bottom) face, needed so an AI→human-face attack can slide down. ---
+  type AnchorKey = number | 'face' | 'face-me'
+  const anchors = new Map<AnchorKey, HTMLElement>()
+  function anchor(node: HTMLElement, id: AnchorKey) {
     anchors.set(id, node)
     return {
       destroy() {
@@ -65,42 +68,49 @@
     const r = el.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
   }
-  const rectOf: RectOf = (key) => {
+  const rectOfKey = (key: AnchorKey): { cx: number; cy: number } | null => {
     const el = anchors.get(key)
     if (!el) return null
     const c = centerOf(el)
     return { cx: c.x, cy: c.y }
   }
+  const rectOf: RectOf = (key) => rectOfKey(key)
 
   // --- FX director state ---
   let displayMe: CardState[] = []
   let displayOp: CardState[] = []
-  const retained = new Map<number, { seat: number; card: CardState }>()
+  const retained = new Map<number, { seat: number; card: CardState; index: number }>()
   let dyingSet = new Set<number>()
   let slideMap = new Map<number, { dx: number; dy: number }>()
   let flashSet = new Set<number | 'face'>()
   let lastToken = -1
 
   function syncDisplay() {
-    const retMe = [...retained.values()].filter((r) => r.seat === meSeat).map((r) => r.card)
-    const retOp = [...retained.values()].filter((r) => r.seat === opSeat).map((r) => r.card)
-    displayMe = mergeDisplayBoard(view.me.board, retMe)
-    displayOp = mergeDisplayBoard(view.op.board, retOp)
+    const ret = (seat: number) =>
+      [...retained.values()]
+        .filter((r) => r.seat === seat)
+        .map((r) => ({ card: r.card, index: r.index }))
+    displayMe = mergeDisplayBoard(view.me.board, ret(meSeat))
+    displayOp = mergeDisplayBoard(view.op.board, ret(opSeat))
   }
 
   function onStep() {
-    // measure on the still-current DOM (the new board has not rendered yet)
+    // measure on the still-current DOM (the new board has not rendered yet).
+    // 'face' means the DEFENDER's face: the human attacks the op (top) face,
+    // the AI attacks the human's own (bottom) 'face-me'.
     const fwd = actSeat === you ? -FORWARD : FORWARD
-    const plan = planStepFx(currentAction, events, rectOf, fwd)
+    const stepRectOf: RectOf = (key) =>
+      key === 'face' ? rectOfKey(actSeat === you ? 'face' : 'face-me') : rectOfKey(key)
+    const plan = planStepFx(currentAction, events, stepRectOf, fwd)
     slideMap = new Map(plan.slides.map((s) => [s.iid, { dx: s.dx, dy: s.dy }]))
     flashSet = new Set(plan.flashes)
-    // retain dying units (pull their CardState from what is currently shown)
+    // retain dying units (pull their CardState + original board index from what is shown)
     const stepDying: number[] = []
     for (const d of plan.dying) {
       const board = d.seat === meSeat ? displayMe : displayOp
-      const src = board.find((c) => c.iid === d.iid)
-      if (src) {
-        retained.set(d.iid, { seat: d.seat, card: src })
+      const index = board.findIndex((c) => c.iid === d.iid)
+      if (index >= 0) {
+        retained.set(d.iid, { seat: d.seat, card: board[index], index })
         dyingSet.add(d.iid)
         stepDying.push(d.iid)
       }
@@ -291,7 +301,9 @@
     {/each}
   </div>
 
-  <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
+  <div class="myface" use:anchor={'face-me'}>
+    <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
+  </div>
 
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>

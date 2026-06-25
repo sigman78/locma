@@ -59,8 +59,29 @@ export function planStepFx(
   return { slides, flashes, dying }
 }
 
-/** The board to render = the settled view board plus any retained dying cards. */
-export function mergeDisplayBoard(viewBoard: CardState[], dyingCards: CardState[]): CardState[] {
+/** A dying card retained for its cross/removal animation, with the board index
+ *  it occupied before it died. */
+export interface RetainedCard {
+  card: CardState
+  index: number
+}
+
+/**
+ * The board to render = the settled view board with each retained dying card
+ * re-inserted at its ORIGINAL slot index. Appending dying cards at the end (the
+ * old behaviour) made a mid-row dying minion teleport to the rightmost slot
+ * before its removal — and an attacker that dies on its own swing would then
+ * slide from that wrong position. Inserting in ascending index order at the
+ * original index keeps each one in place (each insert naturally precedes the
+ * survivors that had a higher original index).
+ */
+export function mergeDisplayBoard(viewBoard: CardState[], dying: RetainedCard[]): CardState[] {
   const present = new Set(viewBoard.map((c) => c.iid))
-  return [...viewBoard, ...dyingCards.filter((c) => !present.has(c.iid))]
+  const out = [...viewBoard]
+  for (const d of dying
+    .filter((d) => !present.has(d.card.iid))
+    .sort((a, b) => a.index - b.index)) {
+    out.splice(Math.min(d.index, out.length), 0, d.card)
+  }
+  return out
 }

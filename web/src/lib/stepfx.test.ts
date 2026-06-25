@@ -64,13 +64,30 @@ describe('planStepFx — flash + dying', () => {
 
 describe('mergeDisplayBoard', () => {
   const c = (iid: number): CardState => ({ iid, card_id: 1, atk: 1, def: 1, abilities: '' })
-  it('appends dying cards not present in the view board', () => {
-    expect(mergeDisplayBoard([c(1)], [c(2)]).map((x) => x.iid)).toEqual([1, 2])
+  it('re-inserts a dying card at its ORIGINAL index, not the end of the row', () => {
+    // board was [1,2,3]; 2 died → view [1,3]; must render [1,2,3], NOT [1,3,2]
+    expect(mergeDisplayBoard([c(1), c(3)], [{ card: c(2), index: 1 }]).map((x) => x.iid)).toEqual([
+      1, 2, 3,
+    ])
+  })
+  it('inserts multiple dying cards at their original indices', () => {
+    // board [1,2,3,4]; 2 and 3 died → view [1,4]; render [1,2,3,4]
+    expect(
+      mergeDisplayBoard([c(1), c(4)], [
+        { card: c(2), index: 1 },
+        { card: c(3), index: 2 },
+      ]).map((x) => x.iid),
+    ).toEqual([1, 2, 3, 4])
   })
   it('does not duplicate a card already in the view board', () => {
-    expect(mergeDisplayBoard([c(1), c(2)], [c(2)]).map((x) => x.iid)).toEqual([1, 2])
+    expect(mergeDisplayBoard([c(1), c(2)], [{ card: c(2), index: 1 }]).map((x) => x.iid)).toEqual([
+      1, 2,
+    ])
   })
   it('returns the view board unchanged when nothing is dying', () => {
     expect(mergeDisplayBoard([c(1)], []).map((x) => x.iid)).toEqual([1])
+  })
+  it('clamps an out-of-range index to the end', () => {
+    expect(mergeDisplayBoard([c(1)], [{ card: c(9), index: 5 }]).map((x) => x.iid)).toEqual([1, 9])
   })
 })
