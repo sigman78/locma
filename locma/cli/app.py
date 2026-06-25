@@ -284,6 +284,69 @@ def train(
     console.print(f"saved {saved}")
 
 
+@app.command("record-practicum")
+def record_practicum_cmd(
+    teacher: str = typer.Option("mcts:100", help="teacher policy spec to clone"),
+    opponents: list[str] = typer.Option(  # noqa: B008
+        ["random", "scripted", "greedy", "max-guard", "max-attack"],
+        help="opponent specs the teacher plays against",
+    ),
+    games: int = typer.Option(200, help="games per opponent (each played in both seats)"),
+    out: str = typer.Option("practicum.npz", help="output practicum .npz path"),
+    seed: int = 0,
+):
+    """Record a practicum of teacher battle decisions for distillation."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    make_policy(teacher)  # validate up front for a friendly error
+    for o in opponents:
+        make_policy(o)
+    from locma.envs.practicum import record_practicum  # noqa: PLC0415
+
+    manifest = record_practicum(
+        teacher=teacher, opponents=tuple(opponents), games=games, out=out, seed=seed
+    )
+    console.print(
+        f"recorded {manifest['n_examples']} examples "
+        f"({manifest['n_dropped_overflow']} dropped) -> {out}"
+    )
+
+
+@app.command()
+def distill(
+    data: str = typer.Option("practicum.npz", help="practicum .npz to clone"),
+    out: str = typer.Option("model.zip", help="output MaskablePPO model path"),
+    epochs: int = 10,
+    batch: int = 256,
+    lr: float = 3e-4,
+    val_frac: float = typer.Option(0.1, help="fraction of games held out for agreement"),
+    seed: int = 0,
+):
+    """Behavior-clone a practicum into a MaskablePPO model.zip (requires the [ml] extra)."""
+    if epochs < 1:
+        raise typer.BadParameter("epochs must be >= 1")
+    if not 0.0 <= val_frac < 1.0:
+        raise typer.BadParameter("val-frac must be in [0, 1)")
+    try:
+        from locma.envs.distill import behavior_clone  # noqa: PLC0415 — optional [ml] dep
+
+        info = behavior_clone(
+            data=data,
+            out=out,
+            epochs=epochs,
+            batch=batch,
+            lr=lr,
+            val_frac=val_frac,
+            seed=seed,
+        )
+    except ImportError as e:
+        raise typer.BadParameter("distill requires the [ml] extra: uv sync --extra ml") from e
+    console.print(
+        f"saved {info['out']}  val_agreement={info['val_agreement']:.3f} "
+        f"(train={info['n_train']}, val={info['n_val']})"
+    )
+
+
 @app.command()
 def serve(
     host: str = "127.0.0.1",
