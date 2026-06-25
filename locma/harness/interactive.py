@@ -106,7 +106,7 @@ class InteractiveGame:
             while gs.current == turn_owner and gs.phase == Phase.BATTLE:
                 seat = gs.current
                 legal = battlemod.battle_legal(gs)
-                action = self.ai.battle_action(make_battle_view(gs), legal)
+                action = self.ai.battle_action(make_battle_view(gs), legal, gs)
                 mark = len(self._slice)
                 self.rec.on_pre_step(seat, action, gs)
                 battlemod.apply_battle(gs, action, emit=self._emit)

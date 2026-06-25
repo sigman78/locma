@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from locma.harness.tournament import run_tournament
-from locma.policies.random_policy import RandomPolicy
-from locma.policies.scripted import ScriptedPolicy
+from locma.policies.battles import RandomBattlePolicy, ScriptedBattlePolicy
+from locma.policies.composer import Composer
+from locma.policies.drafts import RandomDraftPolicy
 from locma.stats.ratings import elo_update
+
+
+def _random(name):
+    return Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name=name)
 
 
 def test_elo_winner_gains():
@@ -12,7 +17,10 @@ def test_elo_winner_gains():
 
 
 def test_tournament_structure():
-    pols = [RandomPolicy("r"), ScriptedPolicy("s")]
+    pols = [
+        _random("r"),
+        Composer(ScriptedBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="s"),
+    ]
     res = run_tournament(pols, games=6, seed=0, reference="r")
     assert ("r", "s") in res.win_matrix
     assert set(res.ratings) == {"r", "s"}

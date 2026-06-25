@@ -255,14 +255,30 @@ def train(
     out: str = "model.zip",
     opponent: str = "random",
     seed: int = 0,
+    n_envs: int = typer.Option(1, help="parallel envs (CPU speedup)"),
+    checkpoints: str = typer.Option(
+        None, help="comma-separated step marks to save checkpoints at (one trajectory)"
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
         raise typer.BadParameter("steps must be >= 1")
+    if n_envs < 1:
+        raise typer.BadParameter("n_envs must be >= 1")
+    marks = None
+    if checkpoints:
+        try:
+            marks = [int(x) for x in checkpoints.split(",")]
+        except ValueError as e:
+            raise typer.BadParameter("checkpoints must be comma-separated integers") from e
+    # `opponent` is passed as a spec string: the trainer rebuilds it per env.
+    make_policy(opponent)  # validate the spec up front for a friendly error
     try:
         from locma.envs.training import train_agent  # noqa: PLC0415 — optional [ml] dep
 
-        saved = train_agent(make_policy(opponent), steps=steps, out=out, seed=seed)
+        saved = train_agent(
+            opponent, steps=steps, out=out, seed=seed, n_envs=n_envs, checkpoints=marks
+        )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
     console.print(f"saved {saved}")

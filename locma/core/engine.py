@@ -130,7 +130,7 @@ def run_game(
             seat = gs.current
             legal = battlemod.battle_legal(gs)
             view = make_battle_view(gs)
-            action = pols[gs.current].battle_action(view, legal)
+            action = pols[gs.current].battle_action(view, legal, gs)
             if on_pre_step is not None:
                 # Decision point: the game state as the acting seat sees it, BEFORE
                 # apply_battle runs (a turn-ending Pass calls end_turn here, which
