@@ -4,8 +4,14 @@ import pytest
 
 from locma.core.engine import run_game
 from locma.harness.replay_stream import StreamRecorder, build_replay, build_replay_from_log_row
-from locma.policies.random_policy import RandomPolicy
+from locma.policies.battles import RandomBattlePolicy
+from locma.policies.composer import Composer
+from locma.policies.drafts import RandomDraftPolicy
 from locma.policies.registry import make_policy
+
+
+def _random(name):
+    return Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name=name)
 
 
 def test_make_policy_known():
@@ -21,8 +27,8 @@ def test_make_policy_unknown():
 def _record(seed=1):
     rec = StreamRecorder()
     result = run_game(
-        RandomPolicy("a"),
-        RandomPolicy("b"),
+        _random("a"),
+        _random("b"),
         seed=seed,
         on_step=rec.on_step,
         on_snapshot=rec.on_snapshot,
@@ -89,7 +95,7 @@ def test_turn_numbers_are_monotonic_one_per_ply():
 
 def test_build_replay_structure_and_hash():
     rep = build_replay(
-        RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="2026-06-23T00:00:00Z"
+        _random("a"), _random("b"), seed=5, created_at="2026-06-23T00:00:00Z"
     )
     h = rep["header"]
     assert h["format"] == "locma-replay/2"
@@ -105,7 +111,7 @@ def test_build_replay_structure_and_hash():
 def test_build_replay_captures_closing_final_board():
     """The closing snapshot is the final board after the game-ending action, so a
     viewer can show the last move's result (no later step carries it)."""
-    rep = build_replay(RandomPolicy("a"), RandomPolicy("b"), seed=5, created_at="t")
+    rep = build_replay(_random("a"), _random("b"), seed=5, created_at="t")
     closing = rep["battle"]["closing"]
     assert closing is not None, "a game that ends normally should record a closing board"
     loser = 1 - rep["result"]["winner"]
@@ -113,8 +119,8 @@ def test_build_replay_captures_closing_final_board():
 
 
 def test_build_replay_winner_matches_run_game():
-    rep = build_replay(RandomPolicy("a"), RandomPolicy("b"), seed=9, created_at="t")
-    gr = run_game(RandomPolicy("a"), RandomPolicy("b"), seed=9)
+    rep = build_replay(_random("a"), _random("b"), seed=9, created_at="t")
+    gr = run_game(_random("a"), _random("b"), seed=9)
     assert rep["result"]["winner"] == gr.winner and rep["result"]["turns"] == gr.turns
 
 

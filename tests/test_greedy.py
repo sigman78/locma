@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from locma.core.views import CardView, DraftView
 from locma.harness.match import run_match
-from locma.policies.greedy import GreedyPolicy
-from locma.policies.random_policy import RandomPolicy
+from locma.policies.battles import GreedyBattlePolicy, RandomBattlePolicy
+from locma.policies.composer import Composer
+from locma.policies.drafts import GreedyDraftPolicy, RandomDraftPolicy
+
+
+def _random(name):
+    return Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name=name)
 
 
 def test_greedy_prefers_stronger_card():
@@ -11,9 +16,14 @@ def test_greedy_prefers_stronger_card():
     strong = CardView(-1, 2, 0, 2, 4, 4, "------")
     mid = CardView(-1, 3, 0, 2, 2, 2, "------")
     view = DraftView(0, (weak, strong, mid))
-    assert GreedyPolicy("g").draft_action(view, [0, 1, 2]) == 1
+    assert GreedyDraftPolicy("g").draft_action(view, [0, 1, 2]) == 1
 
 
 def test_greedy_beats_random_over_many_games():
-    res = run_match(GreedyPolicy("g"), RandomPolicy("r"), games=60, seed=0)
+    res = run_match(
+        Composer(GreedyBattlePolicy(), GreedyDraftPolicy(), name="g"),
+        _random("r"),
+        games=60,
+        seed=0,
+    )
     assert res.win_rate_a > 0.5

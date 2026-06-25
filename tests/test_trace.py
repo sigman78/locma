@@ -7,11 +7,17 @@ from locma.harness.trace import (
     trace_hash,
     write_game_log,
 )
-from locma.policies.greedy import GreedyPolicy
+from locma.policies.battles import GreedyBattlePolicy
+from locma.policies.composer import Composer
+from locma.policies.drafts import GreedyDraftPolicy
+
+
+def _greedy():
+    return Composer(GreedyBattlePolicy(), GreedyDraftPolicy(), name="greedy")
 
 
 def test_record_game_returns_trace():
-    result, trace = record_game(GreedyPolicy(), GreedyPolicy(), seed=3)
+    result, trace = record_game(_greedy(), _greedy(), seed=3)
     assert result.winner in (0, 1)
     assert len(trace) > 0
     seat, action = trace[0]
@@ -20,13 +26,13 @@ def test_record_game_returns_trace():
 
 
 def test_hash_is_deterministic():
-    r1, t1 = record_game(GreedyPolicy(), GreedyPolicy(), seed=7)
-    r2, t2 = record_game(GreedyPolicy(), GreedyPolicy(), seed=7)
+    r1, t1 = record_game(_greedy(), _greedy(), seed=7)
+    r2, t2 = record_game(_greedy(), _greedy(), seed=7)
     assert trace_hash(t1, r1.winner, r1.turns) == trace_hash(t2, r2.winner, r2.turns)
 
 
 def test_hash_changes_with_outcome():
-    r, t = record_game(GreedyPolicy(), GreedyPolicy(), seed=7)
+    r, t = record_game(_greedy(), _greedy(), seed=7)
     h = trace_hash(t, r.winner, r.turns)
     assert h != trace_hash(t, 1 - r.winner, r.turns)
 
@@ -36,7 +42,7 @@ def test_canonical_json_is_sorted_compact():
 
 
 def test_serialize_trace_encodes_draft_and_battle():
-    _, trace = record_game(GreedyPolicy(), GreedyPolicy(), seed=1)
+    _, trace = record_game(_greedy(), _greedy(), seed=1)
     ser = serialize_trace(trace)
     tags = {entry[1]["t"] for entry in ser}
     assert "draft" in tags

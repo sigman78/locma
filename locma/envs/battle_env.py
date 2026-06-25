@@ -42,7 +42,9 @@ class BattleEnv(gym.Env):
     ----------
     opponent:
         A policy object with ``draft_action(view, legal)`` and
-        ``battle_action(view, legal)`` methods.
+        ``battle_action(view, legal, state=None)`` methods. The optional
+        ``state`` forward model is not passed by BattleEnv (training opponents
+        are heuristic for now); search opponents are deferred.
     seed:
         Base seed for reproducible episode sequences.
     agent_seat:

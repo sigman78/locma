@@ -8,11 +8,14 @@ import numpy as np  # noqa: E402
 
 from locma.envs.battle_env import BattleEnv  # noqa: E402
 from locma.envs.encode import OBS_SIZE, encode_battle  # noqa: E402
-from locma.policies.random_policy import RandomPolicy  # noqa: E402
+from locma.policies.battles import RandomBattlePolicy  # noqa: E402
+from locma.policies.composer import Composer  # noqa: E402
+from locma.policies.drafts import RandomDraftPolicy  # noqa: E402
 
 
 def test_env_reset_step():
-    env = BattleEnv(opponent=RandomPolicy("opp"), seed=0)
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    env = BattleEnv(opponent=opp, seed=0)
     obs, info = env.reset()
     assert obs.shape[0] == env.observation_space.shape[0]
     mask = env.action_masks()
