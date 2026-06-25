@@ -51,6 +51,11 @@
   }
   $: selecting = selectedAttacker !== null || selectedItem !== null
 
+  // a hand card is playable right now if any legal action uses it (mana/board permitting)
+  function isPlayable(c: CardState): boolean {
+    return canSummon(legal, c.iid) || itemTargets(legal, c.iid).length > 0
+  }
+
   function clickHand(c: CardState) {
     if (selectedItem === c.iid) {
       selectedItem = null // re-clicking the chosen item cancels targeting
@@ -148,7 +153,8 @@
 
   <div class="hand mine">
     {#each view.me.hand as c (c.iid)}
-      <button class="slot" class:selected={selectedItem === c.iid} on:click={() => clickHand(c)}>
+      <button class="slot" class:selected={selectedItem === c.iid} class:playable={isPlayable(c)}
+        on:click={() => clickHand(c)}>
         <CardView card={c} showAuras={false} />
       </button>
     {/each}
@@ -157,6 +163,7 @@
   <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
 
   <div class="controls">
+    <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
       {#if selectedAttacker !== null}Pick a target (or opponent face) — Esc to cancel.{:else if selectedItem !== null}Pick an item target — Esc to cancel.{:else}Your turn — summon, attack, or end turn.{/if}
     </span>
@@ -178,9 +185,14 @@
   .hand.backs { opacity: 0.85; }
   .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; }
   .slot:hover { border-color: #4a4f6a; }
-  .slot.selected { border-color: #ffd23d; }
+  /* hand cards you can play right now */
+  .slot.playable { border-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
+  .slot.selected { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
   .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
+  .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
+    background: rgba(255, 210, 61, 0.12); border: 1px solid #ffd23d55;
+    border-radius: 10px; padding: 2px 10px; }
   .hint { color: #aaa; font-size: 14px; }
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
     border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
