@@ -22,7 +22,7 @@ class GreedyPolicy:
         scores = [_score(cv) for cv in view.offered]
         return max(legal, key=lambda i: scores[i])
 
-    def battle_action(self, view, legal):
+    def battle_action(self, view, legal, state=None):
         attacks = [a for a in legal if isinstance(a, Attack)]
         face = [a for a in attacks if a.target_id == -1]
 

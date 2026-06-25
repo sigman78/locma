@@ -12,7 +12,7 @@ class RandomPolicy:
     def draft_action(self, view, legal):
         return self._r.choice(legal)
 
-    def battle_action(self, view, legal):
+    def battle_action(self, view, legal, state=None):
         return self._r.choice(legal)
 
     def reset(self, seed=None):
