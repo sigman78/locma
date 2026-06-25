@@ -43,18 +43,20 @@
     }
   }
 
-  // auto-draft every remaining round with random picks (one server round-trip each)
+  // auto-draft every remaining round with random picks (one server round-trip each).
+  // We DON'T commit snap per pick: re-rendering the draft 30× would remount the card
+  // images each round and the browser would cancel the still-in-flight /api/art
+  // requests, which uvicorn logs as (harmless) WinError 10054 resets. Commit once at end.
   async function autoDraft() {
     if (!gameId) return
     try {
-      let s = snap
-      while (s && s.pending && s.pending.phase === 'draft') {
-        const r = await submitDraft(gameId, Math.floor(Math.random() * 3))
-        events = r.slice.events
-        fxToken++
-        s = { status: r.status, pending: r.pending, result: r.result }
-        snap = s
+      let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
+      while (r.pending && r.pending.phase === 'draft') {
+        r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       }
+      events = r.slice.events
+      fxToken++
+      snap = { status: r.status, pending: r.pending, result: r.result }
     } catch (e) {
       error = String(e)
     }
