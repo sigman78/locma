@@ -7,13 +7,13 @@
     canSummon,
     cardDamage,
     itemTargets,
-    lungeDirFor,
     splashesFor,
     type BattlePending,
     type PlayStep,
   } from '../../lib/play'
   import { computeFx } from '../../lib/fx'
-  import { popIn } from '../../lib/motion'
+  import { spring, dealIn, deathFx } from '../../lib/motion'
+  import { mergeDisplayBoard, planStepFx, type RectOf } from '../../lib/stepfx'
   import { nearestTarget, type AimTarget } from '../../lib/aim'
   import { dock } from '../../lib/dock'
   import CardView from '../ReplayViewer/CardView.svelte'
@@ -30,6 +30,10 @@
 
   const dispatch = createEventDispatcher<{ act: ActionDict }>()
 
+  const CROSS_MS = 300 // red cross shows this long, then the unit is dropped (removal plays)
+  const HOLD_MS = 850 // matches Play's per-step hold
+  const FORWARD = 46 // fallback vertical slide when a target rect is unavailable
+
   $: view = liveStep ? liveStep.view : pending.view
   $: legal = pending.legal
   $: meSeat = you
@@ -45,7 +49,7 @@
     dispatch('act', a)
   }
 
-  // --- target anchor registry: board slots + opponent face register their DOM node ---
+  // --- anchor registry: board slots + opponent face register their DOM node ---
   const anchors = new Map<number | 'face', HTMLElement>()
   function anchor(node: HTMLElement, id: number | 'face') {
     anchors.set(id, node)
@@ -59,8 +63,76 @@
     const r = el.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
   }
+  const rectOf: RectOf = (key) => {
+    const el = anchors.get(key)
+    if (!el) return null
+    const c = centerOf(el)
+    return { cx: c.x, cy: c.y }
+  }
 
-  // --- drag-to-aim state ---
+  // --- FX director state ---
+  let displayMe: CardState[] = []
+  let displayOp: CardState[] = []
+  const retained = new Map<number, { seat: number; card: CardState }>()
+  let dyingSet = new Set<number>()
+  let slideMap = new Map<number, { dx: number; dy: number }>()
+  let flashSet = new Set<number | 'face'>()
+  let lastToken = -1
+
+  function syncDisplay() {
+    const retMe = [...retained.values()].filter((r) => r.seat === meSeat).map((r) => r.card)
+    const retOp = [...retained.values()].filter((r) => r.seat === opSeat).map((r) => r.card)
+    displayMe = mergeDisplayBoard(view.me.board, retMe)
+    displayOp = mergeDisplayBoard(view.op.board, retOp)
+  }
+
+  function onStep() {
+    // measure on the still-current DOM (the new board has not rendered yet)
+    const fwd = actSeat === you ? -FORWARD : FORWARD
+    const plan = planStepFx(currentAction, events, rectOf, fwd)
+    slideMap = new Map(plan.slides.map((s) => [s.iid, { dx: s.dx, dy: s.dy }]))
+    flashSet = new Set(plan.flashes)
+    // retain dying units (pull their CardState from what is currently shown)
+    const stepDying: number[] = []
+    for (const d of plan.dying) {
+      const board = d.seat === meSeat ? displayMe : displayOp
+      const src = board.find((c) => c.iid === d.iid)
+      if (src) {
+        retained.set(d.iid, { seat: d.seat, card: src })
+        dyingSet.add(d.iid)
+        stepDying.push(d.iid)
+      }
+    }
+    dyingSet = dyingSet
+    syncDisplay()
+    // after the cross phase, drop each dying unit → its out:deathFx removal plays
+    for (const id of stepDying) {
+      setTimeout(() => {
+        retained.delete(id)
+        dyingSet.delete(id)
+        dyingSet = dyingSet
+        syncDisplay()
+      }, CROSS_MS)
+    }
+    // clear the transient slide/flash after the hold
+    setTimeout(() => {
+      slideMap = new Map()
+      flashSet = new Set()
+    }, HOLD_MS)
+  }
+
+  // run the director once per step (fxToken bump)
+  $: if (fxToken !== lastToken) {
+    lastToken = fxToken
+    onStep()
+  }
+  // keep the display synced to the view while fully idle (initial render, resync)
+  $: if (view && retained.size === 0 && slideMap.size === 0) {
+    displayMe = view.me.board
+    displayOp = view.op.board
+  }
+
+  // --- drag-to-aim state (unchanged from Slice B) ---
   type Drag = { kind: 'attack' | 'use'; src: number; from: { x: number; y: number } }
   let drag: Drag | null = null
   let cursor = { x: 0, y: 0 }
@@ -69,7 +141,6 @@
   function legalIdsFor(d: Drag): number[] {
     return d.kind === 'attack' ? attackTargets(legal, d.src) : itemTargets(legal, d.src)
   }
-  // ids legal for the current drag, mapped to anchor keys (-1 → 'face')
   $: legalKeys = drag
     ? new Set<number | 'face'>(legalIdsFor(drag).map((id) => (id === -1 ? 'face' : id)))
     : new Set<number | 'face'>()
@@ -90,17 +161,16 @@
   function startAttack(e: MouseEvent, c: CardState) {
     if (!interactive) return
     if (attackTargets(legal, c.iid).length === 0) return
-    e.preventDefault() // suppress native text-selection / focus during the drag
+    e.preventDefault()
     drag = { kind: 'attack', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
     cursor = { x: e.clientX, y: e.clientY }
     snapId = null
   }
-  // hand mousedown: targeted items start a drag; summon / no-target handled on click
   function downHand(e: MouseEvent, c: CardState) {
     if (!interactive) return
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 0) return
-    if (ts.length === 1 && ts[0] === -1) return // no-target item → click handles it
+    if (ts.length === 1 && ts[0] === -1) return
     e.preventDefault()
     drag = { kind: 'use', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
     cursor = { x: e.clientX, y: e.clientY }
@@ -115,7 +185,6 @@
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 1 && ts[0] === -1) send({ t: 'use', item: c.iid, target: -1 })
   }
-
   function onMove(e: MouseEvent) {
     if (!drag) return
     cursor = { x: e.clientX, y: e.clientY }
@@ -128,7 +197,7 @@
     const sid = snapId
     drag = null
     snapId = null
-    if (sid === null) return // released on empty → cancel, no action
+    if (sid === null) return
     const target = sid === 'face' ? -1 : sid
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
     else send({ t: 'use', item: d.src, target })
@@ -139,8 +208,6 @@
       snapId = null
     }
   }
-
-  // line endpoint: snap to the highlighted target's center, else follow the cursor
   $: lineTo = drag
     ? snapId !== null && anchors.get(snapId)
       ? centerOf(anchors.get(snapId) as HTMLElement)
@@ -150,6 +217,8 @@
   function isPlayable(c: CardState): boolean {
     return interactive && (canSummon(legal, c.iid) || itemTargets(legal, c.iid).length > 0)
   }
+  const slideX = (iid: number) => slideMap.get(iid)?.dx ?? 0
+  const slideY = (iid: number) => slideMap.get(iid)?.dy ?? 0
 
   $: mePlayer = {
     health: view.me.health, mana: view.me.mana, max_mana: view.me.max_mana,
@@ -176,6 +245,7 @@
     class="face op"
     class:legaltarget={legalKeys.has('face')}
     class:snapped={snapId === 'face'}
+    class:flashing={flashSet.has('face')}
     use:anchor={'face'}
     title="opponent (drag a unit here to attack)">🎯 face</button>
 
@@ -184,10 +254,12 @@
   </div>
 
   <div class="field top">
-    {#each view.op.board as c (c.iid)}
+    {#each displayOp as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
-        use:anchor={c.iid} in:popIn>
-        <CardView card={c} facing="down" lunge={lungeDirFor(fx, you, opSeat, c.iid)}
+        use:anchor={c.iid} in:spring out:deathFx>
+        <CardView card={c} facing="down"
+          slideX={slideX(c.iid)} slideY={slideY(c.iid)}
+          flash={flashSet.has(c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
           damage={cardDamage(splashes, opSeat, c.iid)} {fxToken} />
       </button>
     {/each}
@@ -196,21 +268,22 @@
   <hr />
 
   <div class="field bottom">
-    {#each view.me.board as c (c.iid)}
+    {#each displayMe as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
-        class:armed={drag?.src === c.iid} use:anchor={c.iid} in:popIn
+        class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
         on:mousedown={(e) => startAttack(e, c)}>
         <CardView card={c} facing="up" dim={c.can_attack === false}
-          lunge={lungeDirFor(fx, you, meSeat, c.iid)}
+          slideX={slideX(c.iid)} slideY={slideY(c.iid)}
+          flash={flashSet.has(c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
           damage={cardDamage(splashes, meSeat, c.iid)} {fxToken} />
       </button>
     {/each}
   </div>
 
-  <div class="hand mine" use:dock={{ enabled: interactive && !drag }}>
+  <div class="hand mine" use:dock={{ enabled: interactive && !drag, target: '.card' }}>
     {#each view.me.hand as c (c.iid)}
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
-        in:popIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
+        in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} showAuras={false} />
       </button>
     {/each}
@@ -241,15 +314,14 @@
     background: #20212b; border: 1px solid #313445; border-radius: 8px;
     width: calc(var(--hand-cols) * var(--card-w) + (var(--hand-cols) - 1) * var(--gap) + 16px);
     min-height: calc(var(--card-h) + 12px); }
+  /* perspective so the dealIn rotateY flip reads in 3D */
+  .hand.mine { perspective: 900px; }
   .hand.backs { opacity: 0.85; }
-  /* slots are <button>s (keyboard-focusable, matching the Slice A a11y fix) reset to bare wrappers */
   .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px;
     cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .slot:hover { border-color: #4a4f6a; }
   .slot.playable { border-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  /* the unit/item currently being dragged */
   .slot.armed { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
-  /* a legal target during an active drag, brighter when the line is snapped to it */
   .slot.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
   .slot.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
@@ -265,4 +337,6 @@
     border-radius: 4px; padding: 4px 12px; cursor: pointer; transition: box-shadow 0.12s ease; }
   .face.op.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
   .face.op.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
+  /* cast flash on the opponent face — reuse the existing brightness/scale pulse */
+  .face.op.flashing { animation: locma-cast 250ms ease-out; }
 </style>

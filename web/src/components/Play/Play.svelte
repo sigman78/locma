@@ -55,7 +55,7 @@
           fire(s.events, s.action)
         },
         {
-          holdMs: 650,
+          holdMs: 850,
           onDone: () => {
             playing = false
             seq = null
