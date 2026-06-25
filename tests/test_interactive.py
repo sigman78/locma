@@ -140,3 +140,44 @@ def test_session_store_create_and_get():
     assert g.human_seat in (0, 1)
     assert store.get(g.game_id) is g
     assert store.get("nope") is None
+
+
+def _drive_to_battle(g):
+    while g.pending()["phase"] == "draft":
+        g.submit_draft(0)
+    return g
+
+
+def test_pass_returns_human_step_then_ai_steps():
+    g = _drive_to_battle(make_game(human_seat=0, seed=3))
+    resp = g.submit_action({"t": "pass"})
+    steps = resp["steps"]
+    assert steps, "pass should produce at least the human's own step"
+    assert steps[0]["seat"] == 0
+    assert steps[0]["action"] == {"t": "pass"}
+    ai_steps = steps[1:]
+    # after the human passes turn 1, the AI (seat 1) resolves its whole turn
+    assert ai_steps, "AI should take at least one step"
+    assert all(s["seat"] == 1 for s in ai_steps)
+    # every step carries a perspective view (me == human seat 0), op hand hidden
+    for s in steps:
+        assert "me" in s["view"] and "op" in s["view"]
+        assert "hand" not in s["view"]["op"]
+
+
+def test_steps_events_concatenate_to_flat_slice():
+    g = _drive_to_battle(make_game(human_seat=0, seed=3))
+    resp = g.submit_action({"t": "pass"})
+    flat = [e for s in resp["steps"] for e in s["events"]]
+    assert flat == resp["slice"]["events"]
+
+
+def test_non_pass_move_returns_single_step():
+    g = _drive_to_battle(make_game(human_seat=0, seed=3))
+    summon = next((a for a in g.pending()["legal"] if a["t"] == "summon"), None)
+    if summon is None:
+        pytest.skip("no legal summon at this decision point")
+    resp = g.submit_action(summon)
+    assert len(resp["steps"]) == 1
+    assert resp["steps"][0]["seat"] == 0
+    assert resp["steps"][0]["action"] == summon
