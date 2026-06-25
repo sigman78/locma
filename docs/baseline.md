@@ -26,6 +26,91 @@ order — so read the matrix, not just the ordinal.
 
 ---
 
+# Baselines — 2026-06-25: MCTS distillation (practicum → BC)
+
+_Date: 2026-06-25_
+
+Can a **fast reactive net** distill the strength of the slow **cheating**
+`mcts:100` search? We recorded a *practicum* — 45,590 `(observation, expert
+action, mask)` examples from `mcts:100` playing both seats vs each baseline
+(156 games/opponent × 2 seats, 1,556 games, 0 dropped/failed) — and
+behavior-cloned it into a `MaskablePPO` net via masked cross-entropy
+(`record-practicum` → `distill`). The student sees only the imperfect
+`BattleView` obs; the teacher cheats (perfect information). Pipeline and
+commands are reproducible; the practicum/model artifacts live in gitignored
+`runs/`.
+
+## Result 1 — top-1 agreement plateaus at ~0.25 (information gap, not underfit)
+
+Held-out **game-level** split (10% of games). The net's masked argmax matches
+`mcts:100` on only **~25%** of decisions (random over ~21 legal actions ≈ 5%, so
+it learns *something*, but it is nowhere near greedy's 0.78 in the same
+pipeline). This is the **teacher–student information gap**: raising the learning
+rate and quadrupling epochs drives the **training** loss down (1.74 → 1.61) while
+**val agreement stays flat at 0.25** — the student's observation simply does not
+determine a perfect-information searcher's move (the teacher acts on the
+opponent's hidden hand and deep lookahead the obs never exposes).
+
+| distill config        | train loss (final) | val top-1 agreement |
+|-----------------------|--------------------|---------------------|
+| 10 epochs, lr 3e-4    | 1.712              | 0.255               |
+| 40 epochs, lr 1e-3    | 1.609              | 0.250               |
+
+## Result 2 — the distilled net plays at *from-scratch-PPO* level, not teacher level
+
+Win rate of the distilled net (10-epoch model) vs each baseline (100 games/cell,
+mirrored, `--seed 0`), beside the from-scratch PPO (100k vs `greedy`) row from the
+section below and the cheating teacher:
+
+| vs →            | random | greedy | scripted | max-guard | max-attack |
+|-----------------|--------|--------|----------|-----------|------------|
+| **distilled** (BC) | 0.960 | 0.480 | 0.340 | 0.285 | 0.250 |
+| from-scratch PPO   | 0.974 | 0.504 | 0.292 | 0.275 | 0.228 |
+| `mcts:100` (teacher) | ~0.98 | **~0.79** | strong | strong | strong |
+
+The distilled profile is **the from-scratch-PPO profile** — crushes `random`,
+even-ish with `greedy`, **loses 0.25–0.34 to the ground baselines**. It inherits
+**none** of the teacher's 0.79-vs-`greedy` edge. Worse, **more training hurts
+strength**: the 40-epoch model drops to greedy 0.41 / scripted 0.225 / max-guard
+0.195 / max-attack 0.17 — extra epochs overfit the *marginal* action distribution
+(imitating common moves) rather than learning to win.
+
+## Result 3 — speed is the only thing that transferred (and it's moot)
+
+The distilled net is **~58× faster** than the teacher (`mcts:100` ≈ 7.2 s/game vs
+distilled ≈ 0.13 s/game). But a fast net that plays at PPO strength is just
+PPO — the speed buys nothing the baselines didn't already have.
+
+## Verdict
+
+**You cannot distill a cheating, perfect-information search into an
+imperfect-information reactive net by behavior cloning.** The bottleneck is the
+**observation**, not the training method: the student is blind to exactly the
+information (opponent's hidden hand + lookahead) that makes `mcts:100` strong, so
+its best imitation collapses to the generic PPO policy. This reinforces the PPO
+study's conclusion — the ceiling is **structural** (observation / reward /
+battle-only training), not a matter of training effort or a better teacher. The
+practicum/distill machinery works and is reusable; the next lever is a **richer
+observation or reward**, or distilling a **non-cheating** search (one limited to
+the same `BattleView` the student sees) whose decisions the student *can* learn.
+
+### Reproduce
+
+```bash
+# generate (per-opponent shards, concurrent) then merge -> runs/practicum.npz
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma record-practicum --teacher mcts:100 --opponents $OPP \
+    --games 156 --out runs/practicum-$OPP.npz --seed 0 &
+done; wait   # then concatenate shards (offset game_id, set opponent_id)
+uv run locma distill --data runs/practicum.npz --out runs/distilled.zip \
+  --epochs 10 --batch 256 --lr 3e-4 --val-frac 0.1 --seed 0
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma play ppo:runs/distilled.zip $OPP --games 100 --seed 0
+done
+```
+
+---
+
 # Baselines — 2026-06-25 (cont.): PPO budget × opponent study
 
 _Date: 2026-06-25_
