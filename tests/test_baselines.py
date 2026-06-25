@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from locma.core.actions import Attack, Pass, Summon
 from locma.core.views import CardView, DraftView
-from locma.policies.baselines import (
-    GroundBattlePolicy,
-    MaxAttackDraftPolicy,
-    MaxGuardDraftPolicy,
-)
+from locma.policies.battles import GroundBattlePolicy
+from locma.policies.drafts import MaxAttackDraftPolicy, MaxGuardDraftPolicy
 from locma.policies.registry import make_policy
 
 # --- helpers ---------------------------------------------------------------
@@ -81,7 +78,9 @@ def test_max_attack_draft_prefers_creature_over_higher_attack_item():
 
 
 def test_max_attack_uses_ground_battle():
-    p = MaxAttackDraftPolicy("ma")
+    # In the split architecture, battle behaviour lives in the Composer's battle half.
+    # The max-attack preset pairs MaxAttackDraftPolicy with GroundBattlePolicy.
+    p = make_policy("max-attack")
     legal = [Pass(), Summon(1), Attack(2, -1)]
     assert p.battle_action(None, legal) == Attack(2, -1)
 
@@ -92,5 +91,5 @@ def test_max_attack_uses_ground_battle():
 def test_registry_resolves_baselines():
     assert make_policy("max-guard").name == "max-guard"
     assert make_policy("max-attack").name == "max-attack"
-    assert isinstance(make_policy("max-guard"), MaxGuardDraftPolicy)
-    assert isinstance(make_policy("max-attack"), MaxAttackDraftPolicy)
+    assert isinstance(make_policy("max-guard").draft, MaxGuardDraftPolicy)
+    assert isinstance(make_policy("max-attack").draft, MaxAttackDraftPolicy)
