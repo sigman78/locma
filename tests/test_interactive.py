@@ -1,3 +1,4 @@
+import random
 import tempfile
 
 import pytest
@@ -6,6 +7,7 @@ from locma.data.cards_db import load_cards
 from locma.harness.interactive import IllegalMove, InteractiveGame, WrongPhase
 from locma.harness.replay_store import get_replay, write_replay
 from locma.policies.registry import make_policy
+from locma.server.session_store import SessionStore
 
 CARDS = load_cards()
 
@@ -119,12 +121,8 @@ def test_determinism_same_inputs_same_replay():
 
 
 def test_session_store_create_and_get():
-    import random as _r
-
-    from locma.server.session_store import SessionStore
-
     store = SessionStore()
-    g = store.create(ai_policy=make_policy("random"), seed=5, cards=CARDS, rng=_r.Random(0))
+    g = store.create(ai_policy=make_policy("random"), seed=5, cards=CARDS, rng=random.Random(0))
     assert g.game_id.startswith("g_")
     assert g.human_seat in (0, 1)
     assert store.get(g.game_id) is g
