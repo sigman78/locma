@@ -350,6 +350,19 @@ code {
   background: radial-gradient(circle at 50% 50%, rgba(150, 235, 255, 0.95), rgba(120, 200, 255, 0.35) 55%, transparent 75%);
   animation: locma-flash 250ms ease-out;
 }
+/* combat damage: brief red overlay over a minion that lost HP (attacker + defender) */
+@keyframes locma-hit {
+  0% { opacity: 0; }
+  28% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+.hit-flash {
+  position: absolute; inset: 0; border-radius: 6px; pointer-events: none; z-index: 4;
+  background: rgba(255, 40, 40, 0.6);
+  animation: locma-hit 340ms ease-out;
+}
+/* sync the red flash with the damage number landing after the slide */
+.hit-flash.delayed { animation-delay: 200ms; animation-fill-mode: both; }
 /* death: red cross popped over the card face (removal scale/fade is deathFx) */
 @keyframes locma-crosspop { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: scale(1); } }
 .death-cross {

@@ -231,6 +231,9 @@
   }
   const slideX = (iid: number) => slideMap.get(iid)?.dx ?? 0
   const slideY = (iid: number) => slideMap.get(iid)?.dy ?? 0
+  // a minion that actually lost HP this step (combat: both attacker and defender)
+  const tookDamage = (seat: number, iid: number) =>
+    splashes.some((s) => s.seat === seat && s.target === iid && s.amount > 0)
 
   $: mePlayer = {
     health: view.me.health, mana: view.me.mana, max_mana: view.me.max_mana,
@@ -273,7 +276,8 @@
         use:anchor={c.iid} in:spring out:deathFx>
         <CardView card={c} facing="down"
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
-          flash={flashSet.has(c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
+          flash={flashSet.has(c.iid)} hit={tookDamage(opSeat, c.iid)}
+          dying={dyingSet.has(c.iid)} dmgDelay
           damage={cardDamage(splashes, opSeat, c.iid)} {fxToken} />
       </button>
     {/each}
@@ -288,7 +292,8 @@
         on:mousedown={(e) => startAttack(e, c)}>
         <CardView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
-          flash={flashSet.has(c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
+          flash={flashSet.has(c.iid)} hit={tookDamage(meSeat, c.iid)}
+          dying={dyingSet.has(c.iid)} dmgDelay
           damage={cardDamage(splashes, meSeat, c.iid)} {fxToken} />
       </button>
     {/each}

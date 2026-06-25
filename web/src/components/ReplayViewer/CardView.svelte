@@ -16,6 +16,7 @@
   export let slideX = 0 // px toward an attack target (Play only); 0 = no slide
   export let slideY = 0
   export let flash = false // cast/use flash over this card
+  export let hit = false // brief red overlay when this card takes combat damage
   export let dying = false // red cross then removal
   export let dmgDelay = false // delay the damage number so it lands after the slide
 
@@ -90,6 +91,7 @@
       </div>
       {#key fxToken}
         {#if flash}<div class="flash-blob"></div>{/if}
+        {#if hit}<div class="hit-flash" class:delayed={dmgDelay}></div>{/if}
         {#if damage != null}<div class="locma-dmg" class:delayed={dmgDelay}>-{damage}</div>{/if}
       {/key}
       {#if dying}<div class="death-cross">✕</div>{/if}
