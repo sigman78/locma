@@ -19,9 +19,10 @@ def test_collector_records_only_teacher_seat_and_skips_forced(monkeypatch):
     # auto-restores them so later tests run against the real functions.
     state = {"legal": [Attack(1, -1), Pass()]}
     monkeypatch.setattr(P, "battle_legal", lambda gs: state["legal"])
-    monkeypatch.setattr(P, "make_battle_view", lambda gs: None)
+    monkeypatch.setattr(P, "make_battle_view", lambda gs: object())
     monkeypatch.setattr(P, "encode_battle", lambda view: np.zeros(OBS_SIZE, dtype=np.float32))
-    monkeypatch.setattr(P, "action_mask", lambda legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "action_mask", lambda view, legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "sem_index", lambda view, a: 0)
 
     c = _Collector(teacher_seat=0)
     c(1, Pass(), object())  # wrong seat -> ignored
@@ -33,22 +34,19 @@ def test_collector_records_only_teacher_seat_and_skips_forced(monkeypatch):
     assert c.action == [0]
 
 
-def test_collector_drops_overflow_action(monkeypatch):
+def test_collector_drops_unmappable_action(monkeypatch):
     import locma.envs.practicum as P  # noqa: PLC0415
     from locma.core.actions import Attack  # noqa: PLC0415
 
-    # Build a legal list longer than ACTION_SIZE so the last element overflows.
-    long_legal = [Attack(i, -1) for i in range(ACTION_SIZE + 2)]
-    monkeypatch.setattr(P, "battle_legal", lambda gs: long_legal)
-    monkeypatch.setattr(P, "make_battle_view", lambda gs: None)
+    monkeypatch.setattr(P, "battle_legal", lambda gs: [Attack(1, -1), Attack(2, -1)])
+    monkeypatch.setattr(P, "make_battle_view", lambda gs: object())
     monkeypatch.setattr(P, "encode_battle", lambda view: np.zeros(OBS_SIZE, dtype=np.float32))
-    monkeypatch.setattr(P, "action_mask", lambda legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "action_mask", lambda view, legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "sem_index", lambda view, a: None)  # unmappable
 
     c = _Collector(teacher_seat=0)
-    # Use the last element whose index (ACTION_SIZE + 1) exceeds ACTION_SIZE.
-    overflow_action = long_legal[-1]
-    c(0, overflow_action, object())
-    assert c.action == [], "overflow action must not be recorded"
+    c(0, Attack(1, -1), object())
+    assert c.action == []
     assert c.dropped == 1
 
 
@@ -57,9 +55,10 @@ def test_collector_skips_illegal_action(monkeypatch):
     from locma.core.actions import Attack, Pass  # noqa: PLC0415
 
     monkeypatch.setattr(P, "battle_legal", lambda gs: [Attack(1, -1), Pass()])
-    monkeypatch.setattr(P, "make_battle_view", lambda gs: None)
+    monkeypatch.setattr(P, "make_battle_view", lambda gs: object())
     monkeypatch.setattr(P, "encode_battle", lambda view: np.zeros(OBS_SIZE, dtype=np.float32))
-    monkeypatch.setattr(P, "action_mask", lambda legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "action_mask", lambda view, legal: np.zeros(ACTION_SIZE, dtype=bool))
+    monkeypatch.setattr(P, "sem_index", lambda view, a: 0)
 
     c = _Collector(teacher_seat=0)
     # Pass an action not in the legal list — should return silently, not raise.

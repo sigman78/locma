@@ -114,7 +114,7 @@ class BattleEnv(gym.Env):
 
     def action_masks(self) -> np.ndarray:
         """Return a boolean mask of valid action indices for the current state."""
-        return action_mask(battlemod.battle_legal(self.gs))
+        return action_mask(make_battle_view(self.gs), battlemod.battle_legal(self.gs))
 
     def step(self, idx):
         """Apply agent action and advance until the next agent decision point.
@@ -129,7 +129,8 @@ class BattleEnv(gym.Env):
         obs, reward, terminated, truncated, info
         """
         legal = battlemod.battle_legal(self.gs)
-        battlemod.apply_battle(self.gs, index_to_action(int(idx), legal))
+        view = make_battle_view(self.gs)
+        battlemod.apply_battle(self.gs, index_to_action(view, legal, int(idx)))
 
         if self.gs.phase != Phase.ENDED:
             self._opp_play_until_agent()

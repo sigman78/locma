@@ -49,6 +49,7 @@ def train_agent(
     verbose: int = 1,
     n_envs: int = 1,
     checkpoints=None,
+    ent_coef: float = 0.02,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -68,7 +69,7 @@ def train_agent(
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
     env = _build_env(opponent_spec, seed, n_envs)
-    model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed)
+    model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
 
     if checkpoints:
         marks = sorted({int(m) for m in checkpoints})

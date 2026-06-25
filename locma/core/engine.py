@@ -27,6 +27,8 @@ def _cv(inst, hide_id: bool = False) -> CardView:
         attack=inst.attack,
         defense=inst.defense,
         abilities=inst.abilities,
+        can_attack=inst.can_attack,
+        has_attacked=inst.has_attacked,
     )
 
 

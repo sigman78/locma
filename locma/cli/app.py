@@ -259,6 +259,7 @@ def train(
     checkpoints: str = typer.Option(
         None, help="comma-separated step marks to save checkpoints at (one trajectory)"
     ),
+    ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -277,7 +278,13 @@ def train(
         from locma.envs.training import train_agent  # noqa: PLC0415 — optional [ml] dep
 
         saved = train_agent(
-            opponent, steps=steps, out=out, seed=seed, n_envs=n_envs, checkpoints=marks
+            opponent,
+            steps=steps,
+            out=out,
+            seed=seed,
+            n_envs=n_envs,
+            checkpoints=marks,
+            ent_coef=ent_coef,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
