@@ -72,12 +72,20 @@
     const steps = r.steps ?? []
     if (paced && steps.length) {
       await playSequence(steps)
+      // playback finished — drop the live step + its lunge so the board settles on pending
+      liveStep = null
+      currentAction = null
     } else if (steps.length) {
+      // a human move: render its result instantly. Keep currentAction set on THIS flush
+      // so the attacker's lunge renders — resetting it here would batch to null before
+      // Svelte flushes and the lunge would never play (spec §5).
       const s = steps[steps.length - 1]
+      liveStep = null
       fire(s.events, s.action)
+    } else {
+      liveStep = null
+      currentAction = null
     }
-    liveStep = null
-    currentAction = null
     snap = { status: r.status, pending: r.pending, result: r.result }
   }
 
