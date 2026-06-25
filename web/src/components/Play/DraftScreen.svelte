@@ -6,7 +6,7 @@
   import CardView from '../ReplayViewer/CardView.svelte'
 
   export let pending: DraftPending
-  const dispatch = createEventDispatcher<{ pick: number }>()
+  const dispatch = createEventDispatcher<{ pick: number; auto: void }>()
 
   function toCard(cardId: number, i: number): CardState {
     const m = cardMeta(cardId)
@@ -27,18 +27,28 @@
   <div class="row">
     {#each cards as c, i (i)}
       <button class="pick" on:click={() => dispatch('pick', i)}>
-        <CardView card={c} />
+        <CardView card={c} tipDir="below" />
       </button>
     {/each}
   </div>
-  <p class="count">Cards drafted: {pending.my_picks}</p>
+  <div class="foot">
+    <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>
+    <button class="auto" on:click={() => dispatch('auto')}>Pick rest for me</button>
+  </div>
 </div>
 
 <style>
-  .draft { --card-w: 140px; --card-h: 195px; color: #ddd; }
-  .row { display: flex; gap: 20px; padding: 16px 0; }
+  .draft { --card-w: 140px; --card-h: 195px; color: #ddd;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 24px; }
+  h2 { margin: 0; }
+  .row { display: flex; gap: 20px; padding: 16px 0; justify-content: center; }
   .pick { background: none; border: 2px solid transparent; border-radius: 8px;
     padding: 4px; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
-  .pick:hover { border-color: #ffd23d; transform: translateY(-4px); }
+  /* lift the hovered card (and its tooltip) above its row neighbours */
+  .pick:hover { border-color: #ffd23d; transform: translateY(-4px); position: relative; z-index: 50; }
+  .foot { display: flex; align-items: center; gap: 16px; }
   .count { color: #aaa; }
+  .auto { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
+    padding: 6px 14px; cursor: pointer; font-weight: 600; }
+  .auto:hover { background: #2a2a44; }
 </style>

@@ -29,7 +29,7 @@
 
 <div class="board">
   <Player player={p1} name={nameB} seat={1} active={snapshot.current === 1} {fx} {fxToken} />
-  <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} />
+  <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} tipDir="below" />
   <div class="battlefield">
     <div class="field top" class:active={snapshot.current === 1}>
       {#each p1.board as c (c.iid)}
@@ -49,7 +49,7 @@
       {/each}
     </div>
   </div>
-  <Hand cards={p0.hand} faceUp={true} active={snapshot.current === 0} />
+  <Hand cards={p0.hand} faceUp={true} active={snapshot.current === 0} tipDir="above" />
   <Player player={p0} name={nameA} seat={0} active={snapshot.current === 0} {fx} {fxToken} />
 </div>
 

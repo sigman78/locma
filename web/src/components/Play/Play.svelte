@@ -43,6 +43,23 @@
     }
   }
 
+  // auto-draft every remaining round with random picks (one server round-trip each)
+  async function autoDraft() {
+    if (!gameId) return
+    try {
+      let s = snap
+      while (s && s.pending && s.pending.phase === 'draft') {
+        const r = await submitDraft(gameId, Math.floor(Math.random() * 3))
+        events = r.slice.events
+        fxToken++
+        s = { status: r.status, pending: r.pending, result: r.result }
+        snap = s
+      }
+    } catch (e) {
+      error = String(e)
+    }
+  }
+
   async function act(a: ActionDict) {
     if (!gameId) return
     try {
@@ -75,7 +92,7 @@
   {:else if snap.result}
     <EndOverlay result={snap.result} on:again={again} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
-    <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} />
+    <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} on:auto={autoDraft} />
   {:else if snap.pending && snap.pending.phase === 'battle'}
     <BattleScreen pending={snap.pending as BattlePending} {you} {events} {fxToken} on:act={(e) => act(e.detail)} />
   {/if}

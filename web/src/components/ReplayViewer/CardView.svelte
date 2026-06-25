@@ -12,6 +12,7 @@
   export let dim = false
   export let showAuras = true
   export let facing: 'up' | 'down' | null = null // direction toward the opponent
+  export let tipDir: 'above' | 'below' | null = null // hover-tooltip placement override
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -27,6 +28,9 @@
   $: ward = hasAura(card.abilities, 'W')
   $: lethal = hasAura(card.abilities, 'L')
   $: lungeCls = lunge ? `lunge-${lunge}` : null
+  // tooltip sits above the card by default, below for opponent (top-row) cards,
+  // so it never covers a horizontal neighbour; callers can override via tipDir.
+  $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
 
   // red / green / blue item typing (creatures have no item kind)
   const ITEM = {
@@ -60,6 +64,7 @@
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
       {#if showAuras && ward}<div class="ward-tint"></div>{/if}
+      {#if meta}<div class="cost" title="mana cost">◆ {meta.cost}</div>{/if}
       <div class="stats">
         <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
         {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
@@ -81,7 +86,7 @@
 
     {#if dim && !card.has_attacked}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
 
-    <div class="tooltip">
+    <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>
       <div class="tt-head">
         <span class="tt-name">{meta?.name ?? name}</span>
         {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
@@ -106,7 +111,12 @@
 
 <style>
   .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px); }
-  .cardwrap:hover { z-index: 40; }
+  .cardwrap:hover { z-index: 50; }
+  /* mana cost — top-left gem (printed cost) */
+  .cost { position: absolute; top: 3px; left: 3px; z-index: 2;
+    min-width: 20px; text-align: center; font-size: 13px; line-height: 18px;
+    font-weight: 700; color: #cfe6ff; background: rgba(8, 12, 24, 0.85);
+    border: 1.5px solid #5a7fd0; border-radius: 4px; padding: 0 3px; }
   /* sleeping (summoning-sick) indicator — sits above the dimmed card */
   .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     font-size: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 3px #000); }
@@ -158,15 +168,17 @@
   .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
     box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
 
-  /* hover detail tooltip */
-  .tooltip { position: absolute; left: calc(100% + 8px); top: 0; z-index: 30;
+  /* hover detail tooltip — centred above (or below) the card, never over a horizontal neighbour */
+  .tooltip { position: absolute; left: 50%; z-index: 100;
     width: 220px; padding: 8px 10px; border-radius: 8px;
     background: #0d0f16; border: 1px solid #3a3f55;
     box-shadow: 0 8px 24px rgba(0,0,0,0.6); color: #ddd;
     font-size: 12px; line-height: 1.4; text-align: left;
-    opacity: 0; visibility: hidden; transform: translateY(4px);
+    opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(4px);
     transition: opacity 0.12s ease, transform 0.12s ease; pointer-events: none; }
-  .cardwrap:hover .tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
+  .tooltip.tip-above { bottom: calc(100% + 8px); }
+  .tooltip.tip-below { top: calc(100% + 8px); }
+  .cardwrap:hover .tooltip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
   .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .tt-name { font-weight: 700; font-size: 13px; color: #fff; }
   .tt-cost { color: #6bb8ff; font-weight: 700; white-space: nowrap; }
