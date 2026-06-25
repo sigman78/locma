@@ -30,6 +30,8 @@
 
   const dispatch = createEventDispatcher<{ act: ActionDict }>()
 
+  // Timing is load-bearing and must stay in sync with Play.svelte: pulse(700) keeps the
+  // animate window open past CROSS_MS so out:deathFx plays; HOLD_MS matches playSequence's holdMs.
   const CROSS_MS = 300 // red cross shows this long, then the unit is dropped (removal plays)
   const HOLD_MS = 850 // matches Play's per-step hold
   const FORWARD = 46 // fallback vertical slide when a target rect is unavailable

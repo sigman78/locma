@@ -41,15 +41,6 @@ export function deathFx(_node: HTMLElement) {
   }
 }
 
-/** Enter transition for a freshly-arrived card (summon/draw) — only inside the window. */
-export function popIn(_node: HTMLElement) {
-  if (!get(animate)) return { duration: 0 }
-  return {
-    duration: 240,
-    css: (t: number) => `opacity:${t}; transform:scale(${0.7 + 0.3 * t});`,
-  }
-}
-
 /** Summon: overshoot spring into the slot — only inside the forward window. */
 export function spring(_node: HTMLElement) {
   if (!get(animate)) return { duration: 0 }
