@@ -173,15 +173,21 @@
 </div>
 
 <style>
-  .battle { --card-w: 100px; --card-h: 140px; --gap: 8px;
+  .battle { --card-w: 100px; --card-h: 140px; --gap: 8px; --hand-cols: 8;
     display: flex; flex-direction: column; gap: 8px; align-items: center;
+    /* shrink-wrap the panel to its widest row (the 8-card hand) and centre it,
+       same bounding as the replay viewer's board */
+    width: max-content; max-width: 100%; margin: 0 auto;
     background: #15151b; border-radius: 8px; padding: 14px; color: #ddd; }
   .field { display: flex; gap: var(--gap); align-items: center; justify-content: center;
     min-height: calc(var(--card-h) + 12px); padding: 6px;
     background: rgba(255, 255, 255, 0.02); border-radius: 6px;
     width: calc(6 * var(--card-w) + 5 * var(--gap) + 16px); }
-  .hand { display: flex; gap: var(--gap); justify-content: center; padding: 6px;
-    background: #20212b; border: 1px solid #313445; border-radius: 8px; min-height: calc(var(--card-h) + 12px); }
+  /* fixed 8-card-wide subpanel; fewer cards stay centred within it */
+  .hand { display: flex; gap: var(--gap); justify-content: center; align-items: center; padding: 6px;
+    background: #20212b; border: 1px solid #313445; border-radius: 8px;
+    width: calc(var(--hand-cols) * var(--card-w) + (var(--hand-cols) - 1) * var(--gap) + 16px);
+    min-height: calc(var(--card-h) + 12px); }
   .hand.backs { opacity: 0.85; }
   .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; }
   .slot:hover { border-color: #4a4f6a; }
