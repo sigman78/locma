@@ -37,8 +37,8 @@ def _manifest_path(out: str) -> str:
 class _Collector:
     """on_pre_step callback: capture (obs, index, mask) for the teacher seat.
 
-    Skips forced decisions (a single legal action carries no signal) and overflow
-    decisions whose legal index falls outside the ACTION_SIZE-wide mask.
+    Skips forced decisions (a single legal action carries no signal) and any
+    action the semantic action space cannot represent (sem_index is None).
     """
 
     def __init__(self, teacher_seat: int) -> None:

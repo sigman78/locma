@@ -1,5 +1,5 @@
 from locma.core import battle as battlemod
-from locma.core.actions import Pass
+from locma.core.actions import Attack, Pass, Summon, Use
 from locma.core.engine import make_battle_view, run_game
 from locma.data.cards_db import load_cards
 from locma.envs.encode import (
@@ -42,6 +42,9 @@ def test_semantic_action_roundtrip_and_mask():
         "roundtrip_fail": 0,
         "mask_illegal": 0,
         "max_idx": -1,
+        "n_summon": 0,
+        "n_use": 0,
+        "n_attack": 0,
     }
 
     def cb(seat, action, gs):
@@ -51,6 +54,12 @@ def test_semantic_action_roundtrip_and_mask():
         stats["legal"] += len(legal)
         seen = {}
         for a in legal:
+            if isinstance(a, Summon):
+                stats["n_summon"] += 1
+            elif isinstance(a, Use):
+                stats["n_use"] += 1
+            elif isinstance(a, Attack):
+                stats["n_attack"] += 1
             idx = sem_index(view, a)
             if idx is None:
                 stats["unmappable"] += 1
@@ -76,6 +85,11 @@ def test_semantic_action_roundtrip_and_mask():
     assert stats["roundtrip_fail"] == 0
     assert stats["mask_illegal"] == 0
     assert stats["max_idx"] < ACTION_SIZE
+    # lock in coverage: all three non-Pass action kinds were actually exercised
+    # (so the zero-collision/zero-unmappable guarantee spans Summon/Use/Attack)
+    assert stats["n_summon"] > 0
+    assert stats["n_use"] > 0
+    assert stats["n_attack"] > 0
 
 
 def test_index_to_action_out_of_range_is_pass():

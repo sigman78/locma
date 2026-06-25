@@ -63,6 +63,9 @@ def encode_battle(view) -> np.ndarray:
 
     vec += pad(view.my_hand, MAX_HAND, on_board=False)
     vec += pad(view.my_board, MAX_BOARD, on_board=True)
+    # op_board readiness reflects the opponent's last turn (it only refreshes on
+    # their start_turn), so the "ready" bit here means "didn't attack last turn"
+    # rather than anything actionable — kept for layout symmetry, low signal.
     vec += pad(view.op_board, MAX_BOARD, on_board=True)
     arr = np.asarray(vec, dtype=np.float32)
     assert len(arr) == OBS_SIZE, f"encode_battle length {len(arr)} != {OBS_SIZE}"
