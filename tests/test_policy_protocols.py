@@ -1,4 +1,4 @@
-from locma.policies.base import BattlePolicy, DraftPolicy, Policy
+from locma.policies.base import BattlePolicy, DraftPolicy
 
 
 class _Draft:

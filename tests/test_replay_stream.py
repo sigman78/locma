@@ -94,9 +94,7 @@ def test_turn_numbers_are_monotonic_one_per_ply():
 
 
 def test_build_replay_structure_and_hash():
-    rep = build_replay(
-        _random("a"), _random("b"), seed=5, created_at="2026-06-23T00:00:00Z"
-    )
+    rep = build_replay(_random("a"), _random("b"), seed=5, created_at="2026-06-23T00:00:00Z")
     h = rep["header"]
     assert h["format"] == "locma-replay/2"
     assert h["policy_a"] == "a" and h["policy_b"] == "b" and h["seed"] == 5

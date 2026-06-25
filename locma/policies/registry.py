@@ -38,7 +38,9 @@ def _max_attack(params, spec):
 
 
 def _mcts(params, spec):
-    from locma.policies.mcts import MCTSBattlePolicy  # core-only; import here to keep registry light
+    from locma.policies.mcts import (  # noqa: PLC0415
+        MCTSBattlePolicy,
+    )
 
     iters = int(params[0]) if len(params) > 0 else 100
     c = float(params[1]) if len(params) > 1 else math.sqrt(2)
@@ -49,7 +51,9 @@ def _mcts(params, spec):
 
 
 def _ppo(params, spec):
-    from locma.policies.ppo import MaskablePPOBattlePolicy  # imports encode (numpy core), not sb3
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
 
     model_path = params[0] if params else "model.zip"
     return Composer(MaskablePPOBattlePolicy(model_path=model_path), GreedyDraftPolicy(), name=spec)

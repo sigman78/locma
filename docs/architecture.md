@@ -4,6 +4,25 @@
 Pure rules engine at the center; policies, Gym/SB3, stats, and CLI are layers
 around it. ML deps stay behind the `[ml]` extra and never enter core.
 
+## Policies
+
+A **Policy** is the engine-facing decision-maker for one seat (`draft_action` +
+`battle_action` + `reset` + `name`). Policies are authored as two halves — a
+**DraftPolicy** and a **BattlePolicy** — recombined by a **Composer**. Battle is
+the mandatory half (every game mode has a battle); draft is optional and absent
+under future Constructed play.
+
+`battle_action(view, legal, state=None)` takes an optional **forward model**: the
+engine's live `GameState`, passed by `run_game` and the interactive harness.
+Search policies (MCTS) deep-copy it and simulate; all other policies ignore it.
+The view is imperfect-information, so the forward model is a perfect-information
+"cheat" — acceptable for a baseline. See `docs/adr/0002`.
+
+Built-in policies are named presets resolved by `policies/registry.py`. Spec
+strings are `base[:p1,p2,...]` with positional, comma-separated parameters
+(`mcts:200,1.4,0`); they are a frozen persistence format — stored game logs carry
+them and `replay` reconstructs via `make_policy`. See `docs/adr/0001`.
+
 ## Battle rules (LOCM 1.5)
 
 The engine follows the LOCM **1.5** battle rules (runes removed). Verified

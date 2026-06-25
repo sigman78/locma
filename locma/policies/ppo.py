@@ -13,7 +13,9 @@ class MaskablePPOBattlePolicy:
     the ``[ml]`` stack. ``deterministic`` stays True for byte-identical replay.
     """
 
-    def __init__(self, model_path: str = "model.zip", name: str = "ppo", deterministic: bool = True):
+    def __init__(
+        self, model_path: str = "model.zip", name: str = "ppo", deterministic: bool = True
+    ):
         self.model_path = model_path
         self.name = name
         self.deterministic = deterministic
