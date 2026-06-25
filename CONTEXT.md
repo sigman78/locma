@@ -65,7 +65,11 @@ _Avoid_: Default policy, playout policy.
 A dataset of recorded expert decisions used to teach a policy by imitation. One
 entry pairs the *student's* observation with the (cheating) MCTS expert's chosen
 action and legal mask, plus provenance (winner, seat, opponent, game). Coupled to
-the current observation/action encoding (ADR-0004).
+the current observation/action encoding (ADR-0004): fixed semantic 155-action
+slot-indexed space (Pass / Summon hand-slot / Use hand-slot×target / Attack
+board-slot×target) and 308-d observation. Any practicum generated under the old
+positional layout (`action_size=64` / `obs_size=146`) is stale. See
+`docs/ppo-review.md` for why the action representation was the bottleneck.
 _Avoid_: log (that is the game-log/trace), replay, sample, demo.
 
 **Distillation**:
