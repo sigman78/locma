@@ -59,6 +59,18 @@ def _ppo(params, spec):
     return Composer(MaskablePPOBattlePolicy(model_path=model_path), GreedyDraftPolicy(), name=spec)
 
 
+# The pool of baseline opponents a `mixed` training opponent draws from.
+_MIXED_POOL = ("random", "scripted", "greedy", "max-guard", "max-attack")
+
+
+def _mixed(params, spec):
+    from locma.policies.mixed import MixedOpponentPolicy  # noqa: PLC0415
+
+    seed = int(params[0]) if params else 0
+    pool = [make_policy(b) for b in _MIXED_POOL]
+    return MixedOpponentPolicy(pool, name=spec, seed=seed)
+
+
 # Registration order matters: drives policy_names() and table/tournament order.
 _FACTORIES = {
     "random": _random,
@@ -68,11 +80,13 @@ _FACTORIES = {
     "max-attack": _max_attack,
     "mcts": _mcts,
     "ppo": _ppo,
+    "mixed": _mixed,
 }
 
-# ppo needs a model artifact + the [ml] extra, so it is not offered as a bare
-# selectable name (e.g. in the server dropdown); use `ppo:path` explicitly.
-_HIDDEN = {"ppo"}
+# Not offered as bare selectable names (e.g. in the server dropdown):
+# `ppo` needs a model artifact + the [ml] extra (use `ppo:path`); `mixed` is a
+# non-stationary training opponent, not a baseline to rank.
+_HIDDEN = {"ppo", "mixed"}
 
 
 def policy_names() -> list[str]:
