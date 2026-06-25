@@ -1,4 +1,6 @@
 import type { Replay, ReplayHeader } from './replay'
+import type { ActionDict } from './replay'
+import type { CreatedGame, GameSnapshot, SubmitResponse } from './play'
 
 export interface CardMeta {
   id: number; name: string; type: string; cost: number; attack: number
@@ -29,3 +31,20 @@ export const importReplay = (body: { path: string; row: number }) =>
   }).then(j<ReplayHeader>)
 
 export const artUrl = (cardId: number) => `/api/art/${cardId}`
+
+export const createGame = (body: { opponent: string; seed?: number }) =>
+  fetch('/api/games', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(j<CreatedGame>)
+
+export const getGame = (id: string) => fetch(`/api/games/${id}`).then(j<GameSnapshot>)
+
+export const submitDraft = (id: string, pick: number) =>
+  fetch(`/api/games/${id}/draft`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pick }),
+  }).then(j<SubmitResponse>)
+
+export const submitAction = (id: string, action: ActionDict) =>
+  fetch(`/api/games/${id}/action`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }),
+  }).then(j<SubmitResponse>)
