@@ -1,7 +1,7 @@
 <!-- web/src/components/ReplayViewer/ReplayViewer.svelte -->
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte'
-  import { Playback, type Replay } from '../../lib/replay'
+  import { Playback, type CardState, type EventDict, type Replay, type Snapshot } from '../../lib/replay'
   import { computeFx, type Fx } from '../../lib/fx'
   import { animate, pulse } from '../../lib/motion'
   import ActionLog from './ActionLog.svelte'
@@ -19,12 +19,28 @@
   let timer: ReturnType<typeof setInterval> | null = null
   let fx: Fx | null = null
   let fxToken = 0
+  // dying minions retained for the cross/removal animation: their pre-death CardState
+  // (read from the previous frame, where they were still on the board) + slot index.
+  let dyingCards: { seat: number; card: CardState; index: number }[] = []
 
   $: nameA = replay.header.a_seat === 0 ? replay.header.policy_a : replay.header.policy_b
   $: nameB = replay.header.a_seat === 0 ? replay.header.policy_b : replay.header.policy_a
   $: snapshot = pb.frames[cursor]?.snapshot
 
-  function clearFx() { fx = null; animate.set(false) }
+  function clearFx() { fx = null; dyingCards = []; animate.set(false) }
+
+  /** Cards that died this step, read from `prev` (where they were still on the board)
+   *  so the replay can show a death cross before the unit leaves its slot. */
+  function dyingFrom(events: EventDict[], prev: Snapshot): typeof dyingCards {
+    const out: typeof dyingCards = []
+    for (const e of events) {
+      if (e.t !== 'unit_died') continue
+      const board = prev.players[e.seat]?.board ?? []
+      const index = board.findIndex((c) => c.iid === e.iid)
+      if (index >= 0) out.push({ seat: e.seat, card: board[index], index })
+    }
+    return out
+  }
 
   /** Advance by one frame, computing fx for the forward transition. */
   function advance() {
@@ -33,6 +49,7 @@
     const next = pb.current
     if (next.index === prev.index + 1 && next.seat !== null) {
       fx = computeFx(next.events, next.action, next.seat)
+      dyingCards = dyingFrom(next.events, prev.snapshot)
       fxToken++
       pulse()
     } else {
@@ -77,7 +94,7 @@
     <div class="battle">
       <div class="gutter"></div>
       <div class="stage">
-        <Board {snapshot} {nameA} {nameB} {fx} {fxToken} />
+        <Board {snapshot} {nameA} {nameB} {fx} {fxToken} dying={dyingCards} />
         <Timeline {cursor} length={pb.frames.length} {playing}
           on:seek={(e) => seek(e.detail)} on:step={(e) => step(e.detail)}
           on:turn={(e) => turn(e.detail)} on:toggle={toggle} />

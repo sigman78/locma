@@ -16,16 +16,25 @@
   $: casting = fx?.cast?.seat === seat
   $: acting = fx?.lunge?.seat === seat || fx?.cast?.seat === seat
   $: faceDmg = fx?.splashes.find((s) => s.target === 'face' && s.seat === seat)?.amount ?? null
+  // red wash over the panel when this face takes damage (mirrors the minion hit flash)
+  $: faceHit = faceDmg != null && faceDmg > 0
+  // the defeated player (health depleted) gets a skull over their avatar
+  $: dead = player.health <= 0
 </script>
 
 <div class="player">
+  {#key fxToken}
+    {#if faceHit}<div class="face-hit"></div>{/if}
+  {/key}
   <div
     class="avatar"
     class:acting
+    class:dead
     style={`background: hsl(${hue} 50% 35%)`}
     use:restartAnim={{ cls: casting ? 'cast-pulse' : null, token: fxToken }}
   >
     {name[0]?.toUpperCase() ?? '?'}
+    {#if dead}<span class="dead-skull">💀</span>{/if}
   </div>
   <div class="info">
     <div class="name">
@@ -52,12 +61,20 @@
 </div>
 
 <style>
-  .player { display: flex; gap: 12px; align-items: center; padding: 6px 10px;
-    text-align: left; }
+  .player { position: relative; display: flex; gap: 12px; align-items: center;
+    padding: 6px 10px; text-align: left; }
+  /* combat damage to the face: brief red wash over the panel (reuses locma-hit) */
+  .face-hit { position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+    z-index: 3; background: rgba(255, 40, 40, 0.6); animation: locma-hit 340ms ease-out; }
   .info { text-align: left; }
-  .avatar { width: 56px; height: 56px; border-radius: 50%; display: grid;
-    place-items: center; font-weight: 700; color: #fff; font-size: 26px;
+  .avatar { position: relative; width: 56px; height: 56px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 26px;
     transition: box-shadow 0.15s; }
+  /* defeated: desaturate the avatar and stamp a skull over the initial */
+  .avatar.dead { filter: grayscale(0.7) brightness(0.7); }
+  .dead-skull { position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 38px; pointer-events: none;
+    filter: drop-shadow(0 1px 2px #000); }
   /* transient action pop (the actual move being played) */
   .avatar.acting { box-shadow: 0 0 0 3px #ffd23d, 0 0 16px 3px rgba(255, 210, 61, 0.9); }
   .name { font-weight: 600; font-size: 20px; text-align: left; }

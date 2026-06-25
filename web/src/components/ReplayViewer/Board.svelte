@@ -1,8 +1,10 @@
 <!-- web/src/components/ReplayViewer/Board.svelte -->
 <script lang="ts">
-  import type { Snapshot } from '../../lib/replay'
+  import { onDestroy } from 'svelte'
+  import type { CardState, Snapshot } from '../../lib/replay'
   import type { Fx } from '../../lib/fx'
   import { deathFx } from '../../lib/motion'
+  import { mergeDisplayBoard } from '../../lib/stepfx'
   import CardView from './CardView.svelte'
   import Hand from './Hand.svelte'
   import Player from './Player.svelte'
@@ -12,13 +14,59 @@
   export let nameB: string // seat 1
   export let fx: Fx | null = null
   export let fxToken = 0
+  // minions that died this step, retained so the cross shows before the unit leaves.
+  export let dying: { seat: number; card: CardState; index: number }[] = []
   $: p0 = snapshot.players[0]
   $: p1 = snapshot.players[1]
+
+  // how long a dead unit lingers (showing the red cross) before its removal plays.
+  const CROSS_MS = 300
+
+  // --- death retention ---
+  let retained: { seat: number; card: CardState; index: number }[] = []
+  let dyingSet = new Set<number>()
+  let timers: ReturnType<typeof setTimeout>[] = []
+
+  // a fresh `dying` array (new ref each forward step; [] on seek/back) drives the cross:
+  // retain the units, then drop each after CROSS_MS so its out:deathFx removal plays.
+  function retain(d: typeof dying) {
+    timers.forEach(clearTimeout)
+    timers = []
+    retained = d.map((x) => ({ ...x }))
+    dyingSet = new Set(d.map((x) => x.card.iid))
+    for (const x of d) {
+      const id = x.card.iid
+      timers.push(
+        setTimeout(() => {
+          retained = retained.filter((r) => r.card.iid !== id)
+          dyingSet.delete(id)
+          dyingSet = dyingSet
+        }, CROSS_MS),
+      )
+    }
+  }
+  $: retain(dying)
+  onDestroy(() => timers.forEach(clearTimeout))
+
+  // board to render = the settled snapshot board with retained dying units re-inserted
+  // at their original slots (so a mid-row death doesn't shuffle survivors).
+  // `retained` is referenced directly here so Svelte re-runs these when it changes.
+  $: display0 = mergeDisplayBoard(
+    p0.board,
+    retained.filter((r) => r.seat === 0).map((r) => ({ card: r.card, index: r.index })),
+  )
+  $: display1 = mergeDisplayBoard(
+    p1.board,
+    retained.filter((r) => r.seat === 1).map((r) => ({ card: r.card, index: r.index })),
+  )
 
   function dmg(seat: number, iid: number): number | null {
     const s = fx?.splashes.find((x) => x.seat === seat && x.target === iid && !x.fatal)
     return s ? s.amount : null
   }
+  // brief red overlay on any minion that lost HP this step (combat: attacker + defender)
+  const hitFlash = (seat: number, iid: number): boolean =>
+    !!fx?.splashes.some((x) => x.seat === seat && x.target === iid && x.amount > 0)
   function lungeDir(seat: number, iid: number): 'up' | 'down' | null {
     if (fx?.lunge && fx.lunge.seat === seat && fx.lunge.iid === iid) {
       return seat === 0 ? 'up' : 'down'
@@ -32,18 +80,20 @@
   <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} tipDir="below" />
   <div class="battlefield">
     <div class="field top" class:active={snapshot.current === 1}>
-      {#each p1.board as c (c.iid)}
+      {#each display1 as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
+            hit={hitFlash(1, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="down" {fxToken} />
         </div>
       {/each}
     </div>
     <hr />
     <div class="field bottom" class:active={snapshot.current === 0}>
-      {#each p0.board as c (c.iid)}
+      {#each display0 as c (c.iid)}
         <div out:deathFx>
           <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
+            hit={hitFlash(0, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="up" {fxToken} />
         </div>
       {/each}
