@@ -82,10 +82,6 @@
 </script>
 
 <main>
-  {#if error}
-    <p class="error">Error: {error}</p>
-    <button on:click={() => (error = null)}>dismiss</button>
-  {/if}
   {#if !ready}
     <p>loading cards…</p>
   {:else if !snap || !gameId}
@@ -98,11 +94,37 @@
   {:else if snap.pending && snap.pending.phase === 'battle'}
     <BattleScreen pending={snap.pending as BattlePending} {you} {events} {fxToken} on:act={(e) => act(e.detail)} />
   {/if}
+
+  <!-- blocking error overlay: a failed request leaves the game state unknown,
+       so cover the UI and force a deliberate dismiss/reload rather than letting
+       the user keep clicking a possibly-desynced board -->
+  {#if error}
+    <div class="error-overlay" role="alertdialog" aria-modal="true" aria-label="Connection error">
+      <div class="error-box">
+        <h2>Connection error</h2>
+        <p>{error}</p>
+        <div class="error-actions">
+          <button on:click={() => (error = null)}>Dismiss</button>
+          <button class="reload" on:click={() => location.reload()}>Reload</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </main>
 
 <style>
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
   main { padding: 16px; color: #ddd; }
   h1 { font-size: 20px; }
-  .error { color: #ff6b6b; }
+  /* blocking modal: fixed full-viewport backdrop catches all clicks */
+  .error-overlay { position: fixed; inset: 0; z-index: 1000;
+    display: grid; place-items: center; background: rgba(0, 0, 0, 0.72); }
+  .error-box { background: #1b1320; border: 1px solid #6a3a4f; border-radius: 10px;
+    padding: 24px 28px; max-width: 460px; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.7); }
+  .error-box h2 { margin: 0 0 8px; color: #ff8a8a; font-size: 20px; }
+  .error-box p { margin: 0; color: #e8c8c8; word-break: break-word; }
+  .error-actions { display: flex; gap: 12px; margin-top: 18px; }
+  .error-actions button { border-radius: 4px; padding: 8px 18px; cursor: pointer;
+    font-weight: 600; background: #2a2230; color: #ddd; border: 1px solid #5a4250; }
+  .error-actions .reload { background: #2a2a44; color: #fff; border-color: #4a4f6a; }
 </style>
