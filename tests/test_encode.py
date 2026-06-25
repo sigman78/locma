@@ -1,10 +1,14 @@
-import numpy as np
 from locma.core import battle as battlemod
 from locma.core.actions import Pass
 from locma.core.engine import make_battle_view, run_game
 from locma.data.cards_db import load_cards
 from locma.envs.encode import (
-    ACTION_SIZE, OBS_SIZE, action_mask, encode_battle, index_to_action, sem_index,
+    ACTION_SIZE,
+    OBS_SIZE,
+    action_mask,
+    encode_battle,
+    index_to_action,
+    sem_index,
 )
 from locma.policies.registry import make_policy
 
@@ -21,6 +25,7 @@ def test_encode_length():
     def cb(seat, action, gs):
         view = make_battle_view(gs)
         seen.append(encode_battle(view).shape[0])
+
     run_game(make_policy("greedy"), make_policy("greedy"), seed=0, cards=cards, on_pre_step=cb)
     assert seen and all(n == OBS_SIZE for n in seen)
 
@@ -29,8 +34,15 @@ def test_semantic_action_roundtrip_and_mask():
     """Every legal action maps to a unique in-range index that inverts back, and
     the mask flags exactly the legal indices."""
     cards = load_cards()
-    stats = {"decisions": 0, "legal": 0, "unmappable": 0, "collision": 0,
-             "roundtrip_fail": 0, "mask_illegal": 0, "max_idx": -1}
+    stats = {
+        "decisions": 0,
+        "legal": 0,
+        "unmappable": 0,
+        "collision": 0,
+        "roundtrip_fail": 0,
+        "mask_illegal": 0,
+        "max_idx": -1,
+    }
 
     def cb(seat, action, gs):
         legal = battlemod.battle_legal(gs)
@@ -73,5 +85,6 @@ def test_index_to_action_out_of_range_is_pass():
     def cb(seat, action, gs):
         holder["view"] = make_battle_view(gs)
         holder["legal"] = battlemod.battle_legal(gs)
+
     run_game(make_policy("greedy"), make_policy("greedy"), seed=1, cards=cards, on_pre_step=cb)
     assert index_to_action(holder["view"], holder["legal"], 999) == Pass()

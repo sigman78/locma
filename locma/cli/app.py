@@ -278,7 +278,12 @@ def train(
         from locma.envs.training import train_agent  # noqa: PLC0415 — optional [ml] dep
 
         saved = train_agent(
-            opponent, steps=steps, out=out, seed=seed, n_envs=n_envs, checkpoints=marks,
+            opponent,
+            steps=steps,
+            out=out,
+            seed=seed,
+            n_envs=n_envs,
+            checkpoints=marks,
             ent_coef=ent_coef,
         )
     except ImportError as e:
