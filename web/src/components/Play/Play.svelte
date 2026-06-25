@@ -105,7 +105,6 @@
         <p>{error}</p>
         <div class="error-actions">
           <button on:click={() => (error = null)}>Dismiss</button>
-          <button class="reload" on:click={() => location.reload()}>Reload</button>
         </div>
       </div>
     </div>
@@ -125,6 +124,5 @@
   .error-box p { margin: 0; color: #e8c8c8; word-break: break-word; }
   .error-actions { display: flex; gap: 12px; margin-top: 18px; }
   .error-actions button { border-radius: 4px; padding: 8px 18px; cursor: pointer;
-    font-weight: 600; background: #2a2230; color: #ddd; border: 1px solid #5a4250; }
-  .error-actions .reload { background: #2a2a44; color: #fff; border-color: #4a4f6a; }
+    font-weight: 600; background: #2a2a44; color: #fff; border: 1px solid #4a4f6a; }
 </style>
