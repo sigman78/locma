@@ -84,6 +84,7 @@ class InteractiveGame:
 
     def _battle_loop_until_human_or_end(self):
         gs = self.gs
+        # per-segment backstop mirroring run_game; MAX_TURNS is the real bound on total turns
         safety = 0
         while gs.phase == Phase.BATTLE and gs.turn <= MAX_TURNS:
             if gs.current == self.human_seat:

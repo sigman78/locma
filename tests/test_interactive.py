@@ -98,6 +98,19 @@ def test_battle_pending_is_human_perspective_seat1():
     assert me_hand == {c.instance_id for c in g.gs.players[1].hand}
 
 
+def test_battle_pending_hides_opponent_hand():
+    g = make_game(human_seat=0, seed=3)
+    while g.pending()["phase"] == "draft":
+        g.submit_draft(0)
+    p = g.pending()
+    assert p["phase"] == "battle"
+    op = p["view"]["op"]
+    # opponent hand is COUNT only — contents must never be serialized
+    assert "hand_count" in op
+    assert "hand" not in op
+    assert isinstance(op["hand_count"], int)
+
+
 def test_illegal_action_rejected():
     g = make_game(human_seat=0, seed=3)
     while g.pending()["phase"] == "draft":
