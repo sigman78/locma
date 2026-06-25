@@ -1,4 +1,4 @@
-import { computeFx, type Splash } from './fx'
+import { computeFx, type Fx, type Splash } from './fx'
 import type { ActionDict, CardState, EventDict } from './replay'
 
 export interface PlayView {
@@ -62,8 +62,16 @@ export interface CreatedGame extends GameSnapshot {
   you: number
 }
 
+export interface PlayStep {
+  seat: number
+  action: ActionDict | null
+  events: EventDict[]
+  view: PlayView
+}
+
 export interface SubmitResponse extends GameSnapshot {
   slice: Slice
+  steps: PlayStep[]
 }
 
 // --- legal-action predicates (drive what is clickable) ---
@@ -94,4 +102,18 @@ export const cardDamage = (sp: Splash[], seat: number, iid: number): number | nu
 export const faceDamage = (sp: Splash[], seat: number): number | null => {
   const s = sp.find((x) => x.target === 'face' && x.seat === seat)
   return s ? s.amount : null
+}
+
+// which direction a lunging card moves in the perspective board:
+// the human's cards sit at the bottom and lunge up; the opponent's lunge down.
+export function lungeDirFor(
+  fx: Fx | null,
+  you: number,
+  seat: number,
+  iid: number,
+): 'up' | 'down' | null {
+  if (fx?.lunge && fx.lunge.seat === seat && fx.lunge.iid === iid) {
+    return seat === you ? 'up' : 'down'
+  }
+  return null
 }
