@@ -12,6 +12,8 @@ class CardView:
     attack: int
     defense: int
     abilities: str
+    can_attack: bool = False
+    has_attacked: bool = False
 
 
 @dataclass(frozen=True)
