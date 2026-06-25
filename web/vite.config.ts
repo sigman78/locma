@@ -3,6 +3,14 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [svelte()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        game: 'game.html',
+      },
+    },
+  },
   server: {
     proxy: { '/api': 'http://127.0.0.1:8000' },
   },
