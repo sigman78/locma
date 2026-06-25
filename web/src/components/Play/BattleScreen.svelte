@@ -10,7 +10,6 @@
     splashesFor,
     type BattlePending,
   } from '../../lib/play'
-  import { card as cardMeta } from '../../lib/cards'
   import CardView from '../ReplayViewer/CardView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
 
@@ -40,11 +39,6 @@
     selectedAttacker = null
     selectedItem = null
     dispatch('act', a)
-  }
-
-  function isCreature(cardId: number): boolean {
-    const m = cardMeta(cardId)
-    return !!m && m.type === 'creature'
   }
 
   function clickHand(c: CardState) {
