@@ -39,3 +39,12 @@ export function deathFx(_node: HTMLElement) {
       `filter:saturate(${t}) brightness(${1 + (1 - t) * 1.5});`,
   }
 }
+
+/** Enter transition for a freshly-arrived card (summon/draw) — only inside the window. */
+export function popIn(_node: HTMLElement) {
+  if (!get(animate)) return { duration: 0 }
+  return {
+    duration: 240,
+    css: (t: number) => `opacity:${t}; transform:scale(${0.7 + 0.3 * t});`,
+  }
+}

@@ -1,9 +1,19 @@
 <!-- web/src/components/Play/Play.svelte -->
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { createGame, submitAction, submitDraft } from '../../lib/api'
   import { loadCards } from '../../lib/cards'
   import type { ActionDict, EventDict } from '../../lib/replay'
-  import type { BattlePending, CreatedGame, DraftPending, GameSnapshot } from '../../lib/play'
+  import type {
+    BattlePending,
+    CreatedGame,
+    DraftPending,
+    GameSnapshot,
+    PlayStep,
+    SubmitResponse,
+  } from '../../lib/play'
+  import { playFrames, type Sequencer } from '../../lib/playback'
+  import { pulse } from '../../lib/motion'
   import BattleScreen from './BattleScreen.svelte'
   import DraftScreen from './DraftScreen.svelte'
   import EndOverlay from './EndOverlay.svelte'
@@ -15,9 +25,61 @@
   let you = 0
   let snap: GameSnapshot | null = null
   let events: EventDict[] = []
+  let currentAction: ActionDict | null = null
   let fxToken = 0
+  let liveStep: PlayStep | null = null
+  let playing = false
+  let seq: Sequencer | null = null
 
-  loadCards().then(() => (ready = true)).catch((e) => (error = String(e)))
+  loadCards()
+    .then(() => (ready = true))
+    .catch((e) => (error = String(e)))
+
+  onDestroy(() => seq?.cancel())
+
+  function fire(evs: EventDict[], action: ActionDict | null) {
+    events = evs
+    currentAction = action
+    fxToken++
+    pulse(700)
+  }
+
+  // Animate the AI's ordered steps, then resolve. Locks input while playing.
+  function playSequence(steps: PlayStep[]): Promise<void> {
+    return new Promise((resolve) => {
+      playing = true
+      seq = playFrames(
+        steps,
+        (s) => {
+          liveStep = s
+          fire(s.events, s.action)
+        },
+        {
+          holdMs: 650,
+          onDone: () => {
+            playing = false
+            seq = null
+            resolve()
+          },
+        },
+      )
+    })
+  }
+
+  // `paced` (End Turn / draft→battle) animates the AI steps; a human battle move
+  // renders its single resulting step instantly.
+  async function applyResponse(r: SubmitResponse, paced: boolean) {
+    const steps = r.steps ?? []
+    if (paced && steps.length) {
+      await playSequence(steps)
+    } else if (steps.length) {
+      const s = steps[steps.length - 1]
+      fire(s.events, s.action)
+    }
+    liveStep = null
+    currentAction = null
+    snap = { status: r.status, pending: r.pending, result: r.result }
+  }
 
   async function start(detail: { opponent: string; seed?: number }) {
     try {
@@ -26,58 +88,53 @@
       you = g.you
       snap = { status: g.status, pending: g.pending, result: g.result }
       events = []
+      currentAction = null
     } catch (e) {
       error = String(e)
     }
   }
 
   async function pick(p: number) {
-    if (!gameId) return
+    if (!gameId || playing) return
     try {
-      const r = await submitDraft(gameId, p)
-      events = r.slice.events
-      fxToken++
-      snap = { status: r.status, pending: r.pending, result: r.result }
+      await applyResponse(await submitDraft(gameId, p), true)
     } catch (e) {
       error = String(e)
     }
   }
 
-  // auto-draft every remaining round with random picks (one server round-trip each).
-  // We DON'T commit snap per pick: re-rendering the draft 30× would remount the card
-  // images each round and the browser would cancel the still-in-flight /api/art
-  // requests, which uvicorn logs as (harmless) WinError 10054 resets. Commit once at end.
+  // Auto-draft every remaining round with random picks; commit once at the end.
   async function autoDraft() {
-    if (!gameId) return
+    if (!gameId || playing) return
     try {
       let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       while (r.pending && r.pending.phase === 'draft') {
         r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       }
-      events = r.slice.events
-      fxToken++
-      snap = { status: r.status, pending: r.pending, result: r.result }
+      await applyResponse(r, true)
     } catch (e) {
       error = String(e)
     }
   }
 
   async function act(a: ActionDict) {
-    if (!gameId) return
+    if (!gameId || playing) return
     try {
-      const r = await submitAction(gameId, a)
-      events = r.slice.events
-      fxToken++
-      snap = { status: r.status, pending: r.pending, result: r.result }
+      await applyResponse(await submitAction(gameId, a), a.t === 'pass')
     } catch (e) {
       error = String(e)
     }
   }
 
   function again() {
+    seq?.cancel()
+    seq = null
+    playing = false
+    liveStep = null
     gameId = null
     snap = null
     events = []
+    currentAction = null
   }
 </script>
 
@@ -92,7 +149,16 @@
   {:else if snap.pending && snap.pending.phase === 'draft'}
     <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} on:auto={autoDraft} />
   {:else if snap.pending && snap.pending.phase === 'battle'}
-    <BattleScreen pending={snap.pending as BattlePending} {you} {events} {fxToken} on:act={(e) => act(e.detail)} />
+    <BattleScreen
+      pending={snap.pending as BattlePending}
+      {you}
+      {events}
+      {currentAction}
+      {fxToken}
+      {liveStep}
+      {playing}
+      on:act={(e) => act(e.detail)}
+    />
   {/if}
 
   <!-- blocking error overlay: a failed request leaves the game state unknown,
