@@ -60,3 +60,15 @@ Forward model (e.g. MCTS) rather than by a fixed heuristic.
 The fast battle policy a Search Policy uses to play a simulated game out to a
 result during evaluation.
 _Avoid_: Default policy, playout policy.
+
+**Practicum**:
+A dataset of recorded expert decisions used to teach a policy by imitation. One
+entry pairs the *student's* observation with the (cheating) MCTS expert's chosen
+action and legal mask, plus provenance (winner, seat, opponent, game). Coupled to
+the current observation/action encoding (ADR-0004).
+_Avoid_: log (that is the game-log/trace), replay, sample, demo.
+
+**Distillation**:
+Behavior-cloning the practicum into the deployable policy net — supervised masked
+cross-entropy that yields a fast reactive model imitating the search expert.
+_Avoid_: "training" unqualified (that is the PPO/RL loop in training.py).
