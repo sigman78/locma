@@ -1,24 +1,163 @@
 # Current baseline
 
-The canonical pair-score matrix for the five built-in policies — row's win rate
-vs column, `locma tournament random scripted greedy max-guard max-attack
---games 500 --seed 0 --matrix` (1000 games per pair, mirrored, `--seed 0`,
-deterministic). This is the living reference; dated sections below are frozen
-snapshots of past states.
+The canonical pair-score matrix for the five built-in baseline policies — row's
+win rate vs column, `locma tournament random scripted greedy max-guard
+max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
+`--seed 0`). This is the living reference; dated sections below are frozen
+snapshots. Refreshed 2026-06-25 after the policy-split refactor, which gave the
+stochastic baselines (`random`, `scripted`) independent per-half RNGs (ADR 0003)
+and shifted their cells by 1–3 points; the deterministic baselines are
+byte-identical to before. The search (`mcts`) and learned (`ppo`) policies live
+in the **2026-06-25** section below.
 
 |            | random | scripted | greedy | max-guard | max-attack |
 |------------|--------|----------|--------|-----------|------------|
-| random     | —      | 0.01     | 0.01   | 0.01      | 0.01       |
-| scripted   | 0.99   | —        | 0.55   | 0.47      | 0.56       |
-| greedy     | 0.99   | 0.45     | —      | 0.43      | 0.32       |
-| max-guard  | 0.99   | 0.53     | 0.57   | —         | 0.57       |
-| max-attack | 0.99   | 0.45     | 0.68   | 0.43      | —          |
+| random     | —      | 0.01     | 0.02   | 0.01      | 0.02       |
+| scripted   | 0.99   | —        | 0.55   | 0.48      | 0.59       |
+| greedy     | 0.98   | 0.45     | —      | 0.43      | 0.32       |
+| max-guard  | 0.99   | 0.52     | 0.57   | —         | 0.57       |
+| max-attack | 0.98   | 0.41     | 0.68   | 0.43      | —          |
 
-Ranking by rating (openskill ordinal / Elo): `max-attack` (61.81 / 2846) >
-`max-guard` (31.00 / 1976) > `greedy` (2.27 / 1253) > `scripted` (-15.75 / 886) >
-`random` (-41.21 / 539). Note the pool is **non-transitive** — `max-guard` beats
+Ranking by rating (openskill ordinal / Elo): `max-attack` (59.20 / 2843) >
+`max-guard` (28.37 / 1973) > `greedy` (-0.65 / 1249) > `scripted` (-18.41 / 894) >
+`random` (-44.11 / 541). Note the pool is **non-transitive** — `max-guard` beats
 `max-attack` and `scripted` beats `greedy` head-to-head, against the rating
 order — so read the matrix, not just the ordinal.
+
+---
+
+# Baselines — 2026-06-25: MCTS + PPO (post-split refresh)
+
+_Date: 2026-06-25_
+
+Adds two new policy families — a search policy (`mcts`) and a learned policy
+(`ppo`) — on top of the policy-split refactor (draft/battle halves recombined by
+a `Composer`; see `CONTEXT.md` and `docs/adr/`). The refactor gave the two
+**stochastic** baselines (`random`, `scripted`) independent per-half RNGs (ADR
+0003), shifting their win rates 1–3 points; the deterministic baselines
+(`greedy`, `max-guard`, `max-attack`) are byte-identical to before. The 5-policy
+matrix at the top of this file is the refreshed reference. All runs `--seed 0`.
+
+## New policies
+
+- **`mcts:iterations,c,seed`** — cheating perfect-information MCTS (UCT) battle
+  policy paired with a greedy draft. Uses the engine as a forward model
+  (deep-copy + simulate ahead); random rollouts to terminal. `mcts:100` = 100
+  simulations per decision. ~7 s/game, so it is evaluated at smaller n than the
+  deterministic baselines.
+- **`ppo:model_path`** — MaskablePPO battle policy paired with a greedy draft.
+  Battle-only training (the opponent drafts both decks). Trained models are
+  gitignored (`runs/`); the numbers below need a local `locma train` (and the
+  `[ml]` extra) to reproduce.
+
+## MCTS (`mcts:100`, greedy draft)
+
+`locma play mcts:100 <opp> --games 50 --seed 0` (100 games):
+
+| Matchup            | Win rate | 95% CI      | n   |
+|--------------------|----------|-------------|-----|
+| mcts:100 vs random | 1.000    | 0.963–1.000 | 100 |
+| mcts:100 vs greedy | 0.790    | 0.700–0.858 | 100 |
+
+`mcts:100` is the **strongest battle policy in the kit**: perfect vs `random`,
+beats `greedy` 79%. Search depth is load-bearing — a shallow `mcts:30` is much
+weaker. Both sides draft greedily here, so this isolates battle strength.
+
+## PPO (100k steps vs `greedy`)
+
+`ppo:runs/ppo-greedy-100k.zip`, `locma play ppo <opp> --games 500 --seed 0`
+(1000 games):
+
+| Matchup           | Win rate | 95% CI      | binomial p |
+|-------------------|----------|-------------|------------|
+| ppo vs random     | 0.974    | 0.962–0.982 | 3.4e-250   |
+| ppo vs greedy     | 0.504    | 0.473–0.535 | 0.82       |
+| ppo vs scripted   | 0.292    | 0.265–0.321 | 1.7e-40    |
+| ppo vs max-guard  | 0.275    | 0.248–0.303 | 2.3e-47    |
+| ppo vs max-attack | 0.228    | 0.203–0.255 | 1.1e-69    |
+
+Trained against `greedy`, PPO learned to **match greedy** (0.50) and **crush
+random** (0.97), but **overfit to its trainer**: it loses to every other style.
+
+**Rating caveat (read the matrix).** In a 6-policy tournament including PPO, the
+openskill/Elo models rank PPO **#1** (openskill 60.3, Elo 2956) — yet PPO loses
+head-to-head to three of the five baselines. The rating models are fooled by
+PPO's profile (annihilates `random`, even with `greedy`); the pair-score matrix
+is the truth. Same non-transitivity caveat as the 5-policy pool, amplified.
+
+## PPO checkpoint study — does the training opponent matter?
+
+Five PPO checkpoints, one per baseline opponent (100k steps each), each
+evaluated against all five baselines.
+`locma play ppo:runs/ppo-<train>-100k.zip <eval> --games 100 --seed 0`
+(200 games/cell, CI half-width ≈ ±0.07; cell = PPO win rate):
+
+| train \ eval | random | scripted | greedy | max-guard | max-attack |
+|--------------|--------|----------|--------|-----------|------------|
+| random       | 0.975  | 0.310    | 0.475  | 0.325     | 0.220      |
+| scripted     | 0.945  | 0.225    | 0.340  | 0.240     | 0.150      |
+| greedy       | 0.980  | 0.275    | 0.480  | 0.285     | 0.240      |
+| max-guard    | 0.975  | 0.295    | 0.455  | 0.285     | 0.220      |
+| max-attack   | 0.975  | 0.330    | 0.470  | 0.305     | 0.230      |
+
+**The training opponent barely matters at this budget.** Three patterns:
+
+1. **Eval opponent dominates, not training opponent.** Every checkpoint crushes
+   `random` (~0.95–0.98) and loses to `scripted`/`max-guard`/`max-attack`
+   (~0.15–0.33) regardless of who it trained against — the rows are nearly
+   identical, the columns vary.
+2. **No exploitation on the diagonal.** Training against X does *not* make PPO
+   beat X — `scripted`-trained vs `scripted` = 0.225 (its worst cell),
+   `max-attack`-trained vs `max-attack` = 0.230. The agent trained against a
+   strong opponent mostly just gets crushed and learns little transferable.
+3. **Best generalists are marginal.** Averaged over the four non-`random`
+   baselines: `max-attack`-trained (0.334) ≈ `random`-trained (0.333) >
+   `greedy` (0.320) > `max-guard` (0.314) > `scripted`-trained (0.239) — spread
+   within the n=200 noise.
+
+**Takeaway.** Per-opponent training does not produce specialists here; the
+bottleneck is the *learning* (100k steps, flat MLP obs, sparse win/loss reward,
+battle-only env), not opponent diversity. A mixed-opponent pool or self-play
+might raise the floor, but more steps, a shaped reward, or a richer observation
+are the likelier levers. (Self-play is deferred — see the plan.)
+
+## Reproduce
+
+```bash
+# MCTS (cheating perfect-info; ~7 s/game at 100 sims)
+uv run locma play mcts:100 random --games 50 --seed 0
+uv run locma play mcts:100 greedy --games 50 --seed 0
+
+# PPO — train (requires the [ml] extra); models land in gitignored runs/
+uv sync --extra ml
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma train --steps 100000 --opponent $OPP --out runs/ppo-$OPP-100k.zip --seed 0
+done
+
+# PPO single (greedy checkpoint) + 6-policy tournament
+uv run locma play ppo:runs/ppo-greedy-100k.zip greedy --games 500 --seed 0
+uv run locma tournament random scripted greedy max-guard max-attack \
+  ppo:runs/ppo-greedy-100k.zip --games 500 --seed 0 --matrix
+
+# PPO checkpoint train×eval matrix (200 games/cell)
+for TR in random scripted greedy max-guard max-attack; do
+  for EV in random scripted greedy max-guard max-attack; do
+    uv run locma play ppo:runs/ppo-$TR-100k.zip $EV --games 100 --seed 0
+  done
+done
+```
+
+## Takeaways
+
+- **`mcts:100` is the new strongest policy** — beats `greedy` 0.79, perfect vs
+  `random`. Cheating perfect-info + enough search wins; shallow search does not.
+- **PPO (100k vs greedy) is a `greedy`/`random` specialist** — matches its
+  trainer, crushes random, loses to the ground baselines.
+- **Training opponent ≈ irrelevant at this budget** — the five PPO checkpoints
+  are nearly interchangeable; the learning setup, not opponent choice, is the
+  limit.
+- **Ratings mislead for PPO** — it rates #1 while losing to 3/5 baselines; the
+  pair-score matrix is authoritative.
 
 ---
 
