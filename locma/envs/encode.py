@@ -1,44 +1,42 @@
 """Action/observation encoding for the Gymnasium BattleEnv.
 
-Observation layout (OBS_SIZE = 146 floats):
-  - 6 scalar features: turn, me_health, me_mana, op_health, op_hand_count, (reserved 0.0)
-  - 6 * 7 = 42 floats for my_board  (6 slots, 7 features each)
-  - 6 * 7 = 42 floats for op_board  (6 slots, 7 features each)
-  - 8 * 7 = 56 floats for my_hand   (8 slots, 7 features each)
-  Total: 6 + 42 + 42 + 56 = 146
-
-Per-card 7-feature block:
-  [present, cost, attack, defense, hasGuard, hasLethal, hasWard]
+Fixed SEMANTIC action space (slot-indexed, ACTION_SIZE=155): each index has a
+stable meaning and the mask flags which concrete actions are legal. Observation
+(OBS_SIZE=308): 8 scalars + 20 card slots (hand 8 + my board 6 + op board 6) x 15
+features each.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from locma.core.actions import Pass
+from locma.core.actions import Attack, Pass, Summon, Use
 
-ACTION_SIZE: int = 64  # max canonical legal actions considered per decision
-OBS_SIZE: int = 6 + 6 * 7 + 6 * 7 + 8 * 7  # 6 + 42 + 42 + 56 = 146
+MAX_HAND = 8
+MAX_BOARD = 6
+N_ABILITY = 6  # BCDGLW
+CARD_FEATS = 5 + 3 + N_ABILITY + 1  # 15
+N_SCALARS = 8
+
+ACTION_SIZE: int = 1 + MAX_HAND + MAX_HAND * 13 + MAX_BOARD * 7  # 155
+OBS_SIZE: int = N_SCALARS + (MAX_HAND + MAX_BOARD + MAX_BOARD) * CARD_FEATS  # 308
 
 
-def _card_feats(seq, n: int) -> list[float]:
-    """Encode `n` card slots from `seq`; missing slots are zero-padded."""
-    out: list[float] = []
-    for i in range(n):
-        if i < len(seq):
-            c = seq[i]
-            out += [
-                1.0,
-                float(c.cost),
-                float(c.attack),
-                float(c.defense),
-                float("G" in c.abilities),
-                float("L" in c.abilities),
-                float("W" in c.abilities),
-            ]
-        else:
-            out += [0.0] * 7
-    return out
+def _card_block(c, *, on_board: bool) -> list[float]:
+    t = c.type
+    ab = c.abilities
+    return [
+        1.0,
+        float(t == 0),  # creature
+        float(t == 1),  # green item
+        float(t == 2),  # red item
+        float(t == 3),  # blue item
+        float(c.cost),
+        float(c.attack),
+        float(c.defense),
+        *(float(ab[i] != "-") for i in range(N_ABILITY)),
+        float(on_board and c.can_attack and not c.has_attacked),
+    ]
 
 
 def encode_battle(view) -> np.ndarray:
@@ -49,25 +47,95 @@ def encode_battle(view) -> np.ndarray:
         float(view.me_mana),
         float(view.op_health),
         float(view.op_hand_count),
-        0.0,  # reserved padding to reach 6 scalars
+        float(len(view.my_board)),
+        float(len(view.op_board)),
+        float(len(view.my_hand)),
     ]
-    vec += _card_feats(view.my_board, 6)
-    vec += _card_feats(view.op_board, 6)
-    vec += _card_feats(view.my_hand, 8)
+
+    def pad(seq, n, *, on_board):
+        out: list[float] = []
+        for i in range(n):
+            if i < len(seq):
+                out += _card_block(seq[i], on_board=on_board)
+            else:
+                out += [0.0] * CARD_FEATS
+        return out
+
+    vec += pad(view.my_hand, MAX_HAND, on_board=False)
+    vec += pad(view.my_board, MAX_BOARD, on_board=True)
+    vec += pad(view.op_board, MAX_BOARD, on_board=True)
     arr = np.asarray(vec, dtype=np.float32)
-    assert len(arr) == OBS_SIZE, f"encode_battle length mismatch: {len(arr)} != {OBS_SIZE}"
+    assert len(arr) == OBS_SIZE, f"encode_battle length {len(arr)} != {OBS_SIZE}"
     return arr
 
 
-def action_mask(legal) -> np.ndarray:
-    """Return a boolean mask of length ACTION_SIZE; first len(legal) entries are True."""
-    m = np.zeros(ACTION_SIZE, dtype=bool)
-    m[: min(len(legal), ACTION_SIZE)] = True
+def _slot(seq, iid):
+    for i, c in enumerate(seq):
+        if c.instance_id == iid:
+            return i
+    return None
+
+
+def _use_target_code(view, target_id):
+    if target_id == -1:
+        return 12
+    j = _slot(view.my_board, target_id)
+    if j is not None:
+        return j
+    j = _slot(view.op_board, target_id)
+    if j is not None:
+        return 6 + j
+    return None
+
+
+def _attack_target_code(view, target_id):
+    if target_id == -1:
+        return 6
+    j = _slot(view.op_board, target_id)
+    if j is not None:
+        return j
+    return None
+
+
+def sem_index(view, action):
+    """Map a concrete Action to its fixed semantic slot index (or None)."""
+    if isinstance(action, Pass):
+        return 0
+    if isinstance(action, Summon):
+        s = _slot(view.my_hand, action.card_instance_id)
+        return 1 + s if s is not None and s < MAX_HAND else None
+    if isinstance(action, Use):
+        s = _slot(view.my_hand, action.item_instance_id)
+        if s is None or s >= MAX_HAND:
+            return None
+        tc = _use_target_code(view, action.target_id)
+        return 9 + s * 13 + tc if tc is not None else None
+    if isinstance(action, Attack):
+        a = _slot(view.my_board, action.attacker_id)
+        if a is None or a >= MAX_BOARD:
+            return None
+        tc = _attack_target_code(view, action.target_id)
+        return 113 + a * 7 + tc if tc is not None else None
+    return None
+
+
+def _action_map(view, legal):
+    m = {}
+    for a in legal:
+        idx = sem_index(view, a)
+        if idx is not None:
+            m[idx] = a
     return m
 
 
-def index_to_action(idx: int, legal):
-    """Map a discrete index to a legal action; out-of-range returns Pass()."""
-    if 0 <= idx < len(legal):
-        return legal[idx]
-    return Pass()
+def action_mask(view, legal) -> np.ndarray:
+    """Boolean mask of length ACTION_SIZE; True exactly at legal semantic indices."""
+    mask = np.zeros(ACTION_SIZE, dtype=bool)
+    for idx in _action_map(view, legal):
+        mask[idx] = True
+    return mask
+
+
+def index_to_action(view, legal, idx):
+    """Map a semantic index back to a concrete legal Action; unknown -> Pass()."""
+    return _action_map(view, legal).get(int(idx), Pass())
