@@ -36,14 +36,14 @@ def load_practicum(path: str) -> tuple[dict, dict]:
 
 def split_by_game(game_id, val_frac: float, seed: int) -> tuple[list[int], list[int]]:
     """Split row indices so no game appears in both train and val."""
-    game_id = np.asarray(game_id)
-    uniq = sorted({int(g) for g in game_id.tolist()})
+    ids = np.asarray(game_id).tolist()
+    uniq = sorted({int(g) for g in ids})
     rng = random.Random(seed)
     rng.shuffle(uniq)
     n_val = int(len(uniq) * val_frac) if len(uniq) > 1 else 0
     val_games = set(uniq[:n_val])
-    train_idx = [i for i, g in enumerate(game_id.tolist()) if int(g) not in val_games]
-    val_idx = [i for i, g in enumerate(game_id.tolist()) if int(g) in val_games]
+    train_idx = [i for i, g in enumerate(ids) if int(g) not in val_games]
+    val_idx = [i for i, g in enumerate(ids) if int(g) in val_games]
     return train_idx, val_idx
 
 

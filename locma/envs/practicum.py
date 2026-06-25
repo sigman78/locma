@@ -54,6 +54,8 @@ class _Collector:
         legal = battle_legal(gs)
         if len(legal) <= 1:
             return
+        if action not in legal:
+            return  # defensive: a well-behaved policy always returns a legal action
         idx = legal.index(action)
         if idx >= ACTION_SIZE:
             self.dropped += 1
@@ -85,6 +87,7 @@ def record_practicum(
     opp_all: list = []
     gid_all: list = []
     dropped = 0
+    failed_games = 0
     gid = 0
 
     for opp_id, opp_spec in enumerate(opponents):
@@ -95,7 +98,12 @@ def record_practicum(
                 opp_pol = make_policy(opp_spec)
                 p0, p1 = (teacher_pol, opp_pol) if teacher_seat == 0 else (opp_pol, teacher_pol)
                 col = _Collector(teacher_seat)
-                result = run_game(p0, p1, s, on_pre_step=col)
+                try:
+                    result = run_game(p0, p1, s, on_pre_step=col)
+                except Exception:
+                    failed_games += 1
+                    gid += 1
+                    continue
                 k = len(col.action)
                 if k:
                     obs_all.extend(col.obs)
@@ -129,6 +137,7 @@ def record_practicum(
         "seed": seed,
         "n_examples": n,
         "n_dropped_overflow": dropped,
+        "failed_games": failed_games,
         "engine_version": _engine_version(),
     }
     with open(_manifest_path(out), "w", encoding="utf-8") as f:
