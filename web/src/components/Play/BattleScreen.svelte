@@ -252,14 +252,16 @@
 <PointerLine from={drag ? drag.from : null} to={lineTo} />
 
 <div class="battle" class:playing>
-  <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
-  <button
-    class="face op"
+  <!-- the opponent's whole player panel is the targetable face (drag a unit onto it) -->
+  <div
+    class="faceplate op"
     class:legaltarget={legalKeys.has('face')}
     class:snapped={snapId === 'face'}
     class:flashing={flashSet.has('face')}
     use:anchor={'face'}
-    title="opponent (drag a unit here to attack)">🎯 face</button>
+    title="opponent — drag a unit here to attack">
+    <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
+  </div>
 
   <div class="hand backs">
     {#each oppBacks as _b, i (i)}<CardView card={back} faceUp={false} />{/each}
@@ -301,7 +303,8 @@
     {/each}
   </div>
 
-  <div class="myface" use:anchor={'face-me'}>
+  <!-- the human's own player panel is the bottom face (the AI's attack target) -->
+  <div class="faceplate me" use:anchor={'face-me'}>
     <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
   </div>
 
@@ -347,10 +350,13 @@
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
     border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
   .endturn:disabled { opacity: 0.5; cursor: default; }
-  .face.op { background: #2b1a1a; color: #ffb4b4; border: 1px solid #5a3a3a;
-    border-radius: 4px; padding: 4px 12px; cursor: pointer; transition: box-shadow 0.12s ease; }
-  .face.op.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
-  .face.op.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
-  /* cast flash on the opponent face — reuse the existing brightness/scale pulse */
-  .face.op.flashing { animation: locma-cast 250ms ease-out; }
+  /* a player panel acting as the face hit-area */
+  .faceplate { border: 2px solid transparent; border-radius: 8px; padding: 2px 6px;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+  /* a legal target during a drag, brighter when the line is snapped to it */
+  .faceplate.legaltarget { background: rgba(90, 169, 255, 0.18); border-color: #5aa9ff; }
+  .faceplate.snapped { background: rgba(255, 93, 93, 0.28); border-color: #ff5d5d;
+    box-shadow: 0 0 16px rgba(255, 93, 93, 0.55); }
+  /* cast flash on the face — reuse the existing brightness/scale pulse */
+  .faceplate.flashing { animation: locma-cast 250ms ease-out; }
 </style>
