@@ -54,7 +54,7 @@ def _realistic_replay(rid="r_test001", created="2026-06-24T12:00:00Z"):
         "replay_id": rid,
         "created_at": created,
         "source": "test",
-        "format": "locma-replay/1",
+        "format": "locma-replay/2",
         "engine_version": "0+test",
         "policy_a": "random",
         "policy_b": "random",
@@ -76,21 +76,23 @@ def _realistic_replay(rid="r_test001", created="2026-06-24T12:00:00Z"):
     }
     steps = [
         # turn 1, seat 0 — single action
-        {"seat": 0, "turn": 1, "action": {"t": "pass"}, "state": _snap(0)},
+        {"seat": 0, "turn": 1, "action": {"t": "pass"}, "state": _snap(0), "events": []},
         # turn 2, seat 1 — single action
-        {"seat": 1, "turn": 2, "action": {"t": "pass"}, "state": _snap(1)},
+        {"seat": 1, "turn": 2, "action": {"t": "pass"}, "state": _snap(1), "events": []},
         # turn 2, seat 0 — TWO consecutive actions sharing (seat=0, turn=2)
         {
             "seat": 0,
             "turn": 2,
             "action": {"t": "summon", "iid": 10},
             "state": _snap(0),
+            "events": [],
         },
         {
             "seat": 0,
             "turn": 2,
             "action": {"t": "attack", "attacker": 10, "target": -1},
             "state": _snap(0),
+            "events": [],
         },
     ]
     battle = {"opening": _snap(0), "steps": steps, "closing": _snap(1)}
@@ -214,6 +216,34 @@ def test_no_closing_roundtrip(tmp_path):
     assert got == original
 
 
+def _make_replay_with_steps(steps, rid="r_evtest", created="2026-06-24T12:00:00Z"):
+    """Thin wrapper around _realistic_replay that overrides battle steps."""
+    rep = _realistic_replay(rid, created)
+    rep["battle"]["steps"] = steps
+    rep["header"]["step_count"] = len(steps)
+    return rep
+
+
+def test_events_roundtrip(tmp_path):
+    rep = _make_replay_with_steps(
+        [
+            {
+                "seat": 0,
+                "turn": 1,
+                "action": {"t": "pass"},
+                "state": _snap(0),
+                "events": [
+                    {"t": "turn_ended", "seat": 0},
+                    {"t": "turn_started", "seat": 1, "draws": [10]},
+                ],
+            }
+        ]
+    )
+    write_replay(str(tmp_path), rep)
+    got = get_replay(str(tmp_path), rep["header"]["replay_id"])
+    assert got["battle"]["steps"][0]["events"] == rep["battle"]["steps"][0]["events"]
+
+
 def test_nonconsecutive_same_seat_turn_preserved(tmp_path):
     """Steps with the same (seat, turn) key that are NON-CONSECUTIVE must be
     stored as separate turn runs and round-trip in their original order.
@@ -226,13 +256,14 @@ def test_nonconsecutive_same_seat_turn_preserved(tmp_path):
     # Override steps: (seat=0,turn=1), (seat=1,turn=1), (seat=0,turn=1) — same
     # key for steps 0 and 2 but they are separated by step 1.
     original["battle"]["steps"] = [
-        {"seat": 0, "turn": 1, "action": {"t": "pass"}, "state": _snap(0)},
-        {"seat": 1, "turn": 1, "action": {"t": "pass"}, "state": _snap(1)},
+        {"seat": 0, "turn": 1, "action": {"t": "pass"}, "state": _snap(0), "events": []},
+        {"seat": 1, "turn": 1, "action": {"t": "pass"}, "state": _snap(1), "events": []},
         {
             "seat": 0,
             "turn": 1,
             "action": {"t": "attack", "attacker": 5, "target": -1},
             "state": _snap(0),
+            "events": [],
         },
     ]
     write_replay(str(tmp_path), original)

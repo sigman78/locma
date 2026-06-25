@@ -67,6 +67,7 @@ class StreamRecorder:
         self.steps: list[dict] = []
         self.closing: dict | None = None
         self._pre: tuple[int, dict] | None = None
+        self._pending: list[dict] = []
 
     def on_pre_step(self, seat: int, action, gs) -> None:
         # Capture the acting seat's (turn, state) BEFORE apply_battle runs. For a
@@ -82,16 +83,30 @@ class StreamRecorder:
             self.draft_picks.append(
                 {"round": len(self.draft_picks) // 2, "seat": seat, "pick": action}
             )
-        else:  # battle action — record the decision-point (pre-apply) state
+        else:  # battle action — record decision-point state + bucketed events
             turn, state = self._pre or (gs.turn, snapshot(gs))
             self.steps.append(
-                {"seat": seat, "turn": turn, "action": action_to_dict(action), "state": state}
+                {
+                    "seat": seat,
+                    "turn": turn,
+                    "action": action_to_dict(action),
+                    "state": state,
+                    "events": self._pending,
+                }
             )
             self._pre = None
+            self._pending = []
             # The game-ending action's result has no later decision point to carry
             # it; record the final board so viewers can show the last move's effect.
             if gs.phase == Phase.ENDED:
                 self.closing = snapshot(gs)
+
+    def on_event(self, ev: dict) -> None:
+        # Bucket only while a decision point is open; events emitted before the
+        # first pre_step (start_battle's opening start_turn) are ignored — the
+        # opening snapshot already shows the drawn hands.
+        if self._pre is not None:
+            self._pending.append(ev)
 
     def on_snapshot(self, gs) -> None:
         self.opening = snapshot(gs)
@@ -114,6 +129,7 @@ def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) 
         on_step=rec.on_step,
         on_snapshot=rec.on_snapshot,
         on_pre_step=rec.on_pre_step,
+        on_event=rec.on_event,
     )
     h = trace_hash(rec.trace, result.winner, result.turns)
     created_at = created_at or datetime.now(UTC).isoformat()
@@ -121,7 +137,7 @@ def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) 
         "replay_id": "r_" + h.split(":")[1][:12],
         "created_at": created_at,
         "source": source,
-        "format": "locma-replay/1",
+        "format": "locma-replay/2",
         "engine_version": _engine_version(),
         "policy_a": p_a.name,
         "policy_b": p_b.name,

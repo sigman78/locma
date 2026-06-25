@@ -6,19 +6,21 @@ from locma.core.actions import Attack, Pass, Summon, Use
 
 
 def _action_summary(action) -> str:
-    if isinstance(action, int):
-        return f"draft pick {action}"
-    if isinstance(action, Summon):
-        return f"summon #{action.card_instance_id}"
-    if isinstance(action, Attack):
-        tgt = "face" if action.target_id == -1 else f"#{action.target_id}"
-        return f"attack #{action.attacker_id} -> {tgt}"
-    if isinstance(action, Use):
-        tgt = "face/none" if action.target_id == -1 else f"#{action.target_id}"
-        return f"use #{action.item_instance_id} -> {tgt}"
-    if isinstance(action, Pass):
-        return "pass"
-    return repr(action)
+    match action:
+        case int():
+            return f"draft pick {action}"
+        case Summon(card_instance_id=iid):
+            return f"summon #{iid}"
+        case Attack(attacker_id=aid, target_id=tid):
+            tgt = "face" if tid == -1 else f"#{tid}"
+            return f"attack #{aid} -> {tgt}"
+        case Use(item_instance_id=iid, target_id=tid):
+            tgt = "face/none" if tid == -1 else f"#{tid}"
+            return f"use #{iid} -> {tgt}"
+        case Pass():
+            return "pass"
+        case _:
+            return repr(action)
 
 
 class GameRenderer:

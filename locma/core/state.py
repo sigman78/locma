@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import random
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -46,18 +45,3 @@ class GameState:
 
     def opponent(self, player_idx: int) -> int:
         return 1 - player_idx
-
-    def clone(self) -> GameState:
-        new_rng = random.Random()
-        new_rng.setstate(self.rng.getstate())
-        return GameState(
-            rng=new_rng,
-            phase=self.phase,
-            turn=self.turn,
-            current=self.current,
-            players=copy.deepcopy(self.players),
-            draft_pool=list(self.draft_pool),
-            draft_round=self.draft_round,
-            picks=copy.deepcopy(self.picks),
-            winner=self.winner,
-        )

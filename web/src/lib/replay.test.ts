@@ -13,10 +13,10 @@ const replay: Replay = {
   battle: {
     opening: snap(0),
     steps: [
-      { seat: 0, turn: 1, action: { t: 'summon', id: 10 }, state: snap(0) },
-      { seat: 0, turn: 1, action: { t: 'pass' }, state: snap(0) },
-      { seat: 1, turn: 2, action: { t: 'pass' }, state: snap(1) },
-      { seat: 0, turn: 3, action: { t: 'pass' }, state: snap(0) },
+      { seat: 0, turn: 1, action: { t: 'summon', id: 10 }, state: snap(0), events: [] },
+      { seat: 0, turn: 1, action: { t: 'pass' }, state: snap(0), events: [] },
+      { seat: 1, turn: 2, action: { t: 'pass' }, state: snap(1), events: [] },
+      { seat: 0, turn: 3, action: { t: 'pass' }, state: snap(0), events: [] },
     ],
     closing: snap(1),
   },
@@ -91,7 +91,7 @@ describe('Playback', () => {
       draft: { pool: [], picks: [] },
       battle: {
         opening: withCard(58, 48),
-        steps: [{ seat: 0, turn: 1, action: { t: 'pass' }, state: withCard(58, 48) }],
+        steps: [{ seat: 0, turn: 1, action: { t: 'pass' }, state: withCard(58, 48), events: [] }],
       },
       result: { winner: 0, turns: 1 },
     }

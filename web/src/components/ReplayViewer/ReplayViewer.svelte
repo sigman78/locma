@@ -32,7 +32,7 @@
     pb.next()
     const next = pb.current
     if (next.index === prev.index + 1 && next.seat !== null) {
-      fx = computeFx(prev.snapshot, next.snapshot, next.action, next.seat)
+      fx = computeFx(next.events, next.action, next.seat)
       fxToken++
       pulse()
     } else {

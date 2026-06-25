@@ -67,6 +67,7 @@ def run_game(
     on_step=None,
     on_snapshot=None,
     on_pre_step=None,
+    on_event=None,
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
 
@@ -88,6 +89,8 @@ def run_game(
         perspective (gs.current == seat) — the natural state to record, since a
         Pass's apply_battle runs end_turn() and the post-apply state belongs to
         the opponent.
+      - on_event(ev): fired for each atomic engine event (damage, unit_died,
+        turn_ended, turn_started). None = no emission.
       - on_step(seat, action, gs): fired AFTER each draft/battle action.
 
     Safety caps:
@@ -115,7 +118,7 @@ def run_game(
             on_step(seat, pick, gs)
 
     # --- Battle phase ---
-    battlemod.start_battle(gs)
+    battlemod.start_battle(gs, emit=on_event)
     if on_snapshot is not None:
         on_snapshot(gs)
     safety = 0
@@ -134,12 +137,12 @@ def run_game(
                 # flips gs.current and draws for the opponent — so post-apply state
                 # no longer belongs to `seat`).
                 on_pre_step(seat, action, gs)
-            battlemod.apply_battle(gs, action)
+            battlemod.apply_battle(gs, action, emit=on_event)
             if on_step is not None:
                 on_step(seat, action, gs)
             per_turn += 1
             if per_turn > 100:
-                battlemod.end_turn(gs)
+                battlemod.end_turn(gs, emit=on_event)
                 break
         safety += 1
         if safety > 1000:

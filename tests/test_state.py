@@ -1,7 +1,5 @@
-import random
-
 from locma.core.actions import Attack, Pass
-from locma.core.state import GameState, PlayerState
+from locma.core.state import PlayerState
 
 
 def test_player_defaults():
@@ -14,10 +12,3 @@ def test_actions_face_sentinel():
     a = Attack(attacker_id=5, target_id=-1)
     assert a.target_id == -1
     assert isinstance(Pass(), Pass)
-
-
-def test_clone_is_independent():
-    gs = GameState.new(random.Random(0))
-    gs2 = gs.clone()
-    gs2.players[0].health = 1
-    assert gs.players[0].health == 30

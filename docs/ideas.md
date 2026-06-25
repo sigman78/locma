@@ -88,6 +88,17 @@ mid-effect, diff-based sync) or when we want the engine to be replayable/undoabl
 as a first-class capability. Until then, decision-point snapshots are the cheaper
 90%.
 
+**Status (shipped 2026-06-24).** Idea #2 landed in the *augment* form: the engine
+emits `damage` / `unit_died` / `turn_ended` / `turn_started(draws)` per step
+(`core/battle.py`, via a threaded `emit` callable), recorded in `locma-replay/2`,
+and the web `fx` layer folds them instead of diffing snapshots. The
+`ActionApplied(seat, action)` event from the vocabulary above was implemented and
+then **dropped as redundant**: in the augment design every recorded step already
+carries its own `action` field, so nothing consumed `action_applied`. Reintroduce
+it with idea #3 (event-sourced fold), where the `events` stream becomes the source
+of truth and needs an explicit per-action anchor that no longer duplicates
+`step.action`.
+
 ## 3. Don't store snapshots at all — derive them
 
 **Observation.** The game is deterministic from `seed + actions`

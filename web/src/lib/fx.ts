@@ -1,68 +1,64 @@
-import type { ActionDict, CardState, Snapshot } from './replay'
+import type { ActionDict, EventDict } from "./replay";
 
 export interface Splash {
-  seat: number
-  target: number | 'face' // minion iid, or 'face'
-  amount: number
-  fatal: boolean
+  seat: number;
+  target: number | "face";
+  amount: number;
+  fatal: boolean;
 }
 
 export interface Lunge {
-  seat: number
-  iid: number
-  toward: 'face' | { seat: number; iid: number }
+  seat: number;
+  iid: number;
+  toward: "face" | { seat: number; iid: number };
 }
 
 export interface Cast {
-  seat: number
+  seat: number;
 }
 
 export interface Fx {
-  lunge: Lunge | null
-  cast: Cast | null
-  splashes: Splash[]
-}
-
-function boardSplashes(seat: number, before: CardState[], after: CardState[]): Splash[] {
-  const out: Splash[] = []
-  const byIid = new Map(after.map((c) => [c.iid, c]))
-  for (const c of before) {
-    const now = byIid.get(c.iid)
-    if (!now) out.push({ seat, target: c.iid, amount: 0, fatal: true })
-    else if (now.def < c.def) {
-      out.push({ seat, target: c.iid, amount: c.def - now.def, fatal: false })
-    }
-  }
-  return out
+  lunge: Lunge | null;
+  cast: Cast | null;
+  splashes: Splash[];
 }
 
 export function computeFx(
-  prev: Snapshot,
-  next: Snapshot,
+  events: EventDict[],
   action: ActionDict | null,
   seat: number,
 ): Fx {
-  const splashes: Splash[] = []
-  for (let s = 0; s < 2; s++) {
-    splashes.push(...boardSplashes(s, prev.players[s].board, next.players[s].board))
-    const lost = prev.players[s].health - next.players[s].health
-    if (lost > 0) splashes.push({ seat: s, target: 'face', amount: lost, fatal: false })
-  }
-
-  let lunge: Lunge | null = null
-  let cast: Cast | null = null
-  if (action?.t === 'attack') {
-    const attacker = prev.players[seat].board.find((c) => c.iid === action.a)
-    if (attacker) {
-      lunge = {
-        seat,
-        iid: attacker.iid,
-        toward: action.target === -1 ? 'face' : { seat: 1 - seat, iid: action.target },
-      }
+  const splashes: Splash[] = [];
+  const damaged = new Set<number>();
+  for (const e of events) {
+    if (e.t === "damage") {
+      splashes.push({
+        seat: e.seat,
+        target: e.target,
+        amount: e.amount,
+        fatal: e.fatal,
+      });
+      if (typeof e.target === "number") damaged.add(e.target);
     }
-  } else if (action?.t === 'use') {
-    cast = { seat }
+  }
+  // Units removed without a damage event (e.g. red/blue item kills) still animate death.
+  for (const e of events) {
+    if (e.t === "unit_died" && !damaged.has(e.iid)) {
+      splashes.push({ seat: e.seat, target: e.iid, amount: 0, fatal: true });
+    }
   }
 
-  return { lunge, cast, splashes }
+  let lunge: Lunge | null = null;
+  let cast: Cast | null = null;
+  if (action?.t === "attack") {
+    lunge = {
+      seat,
+      iid: action.a,
+      toward:
+        action.target === -1 ? "face" : { seat: 1 - seat, iid: action.target },
+    };
+  } else if (action?.t === "use") {
+    cast = { seat };
+  }
+  return { lunge, cast, splashes };
 }
