@@ -119,6 +119,48 @@ def _engine_version() -> str:
         return "0+unknown"
 
 
+def assemble_replay(
+    rec,
+    *,
+    winner: int,
+    turns: int,
+    policy_a: str,
+    policy_b: str,
+    seed: int,
+    a_seat: int,
+    source: str,
+    created_at: str | None = None,
+) -> dict:
+    """Build a locma-replay/2 dict from an already-populated StreamRecorder.
+
+    Used by build_replay (after run_game) and by the interactive session driver
+    (which drives the recorder's hooks live during a human game).
+    """
+    h = trace_hash(rec.trace, winner, turns)
+    created_at = created_at or datetime.now(UTC).isoformat()
+    header = {
+        "replay_id": "r_" + h.split(":")[1][:12],
+        "created_at": created_at,
+        "source": source,
+        "format": "locma-replay/2",
+        "engine_version": _engine_version(),
+        "policy_a": policy_a,
+        "policy_b": policy_b,
+        "seed": seed,
+        "a_seat": a_seat,
+        "winner": winner,
+        "turns": turns,
+        "step_count": len(rec.steps),
+        "hash": h,
+    }
+    return {
+        "header": header,
+        "draft": {"pool": rec.draft_pool, "picks": rec.draft_picks},
+        "battle": {"opening": rec.opening, "steps": rec.steps, "closing": rec.closing},
+        "result": {"winner": winner, "turns": turns},
+    }
+
+
 def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) -> dict:
     p0, p1 = (p_a, p_b) if a_seat == 0 else (p_b, p_a)
     rec = StreamRecorder()
@@ -131,29 +173,17 @@ def build_replay(p_a, p_b, seed, *, a_seat=0, source="ad-hoc", created_at=None) 
         on_pre_step=rec.on_pre_step,
         on_event=rec.on_event,
     )
-    h = trace_hash(rec.trace, result.winner, result.turns)
-    created_at = created_at or datetime.now(UTC).isoformat()
-    header = {
-        "replay_id": "r_" + h.split(":")[1][:12],
-        "created_at": created_at,
-        "source": source,
-        "format": "locma-replay/2",
-        "engine_version": _engine_version(),
-        "policy_a": p_a.name,
-        "policy_b": p_b.name,
-        "seed": seed,
-        "a_seat": a_seat,
-        "winner": result.winner,
-        "turns": result.turns,
-        "step_count": len(rec.steps),
-        "hash": h,
-    }
-    return {
-        "header": header,
-        "draft": {"pool": rec.draft_pool, "picks": rec.draft_picks},
-        "battle": {"opening": rec.opening, "steps": rec.steps, "closing": rec.closing},
-        "result": {"winner": result.winner, "turns": result.turns},
-    }
+    return assemble_replay(
+        rec,
+        winner=result.winner,
+        turns=result.turns,
+        policy_a=p_a.name,
+        policy_b=p_b.name,
+        seed=seed,
+        a_seat=a_seat,
+        source=source,
+        created_at=created_at,
+    )
 
 
 def build_replay_from_log_row(row: dict, *, source: str, make_policy) -> dict:
