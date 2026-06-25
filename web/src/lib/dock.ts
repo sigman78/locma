@@ -9,6 +9,9 @@ export interface DockOpts {
   amp?: number
   radius?: number
   enabled?: boolean
+  /** CSS selector for the element to scale within each child (default: the child itself).
+   *  Use this to scale the card visual while leaving its tooltip un-scaled. */
+  target?: string
 }
 
 /** Svelte action: magnify the hovered child (and taper its neighbours). */
@@ -16,12 +19,15 @@ export function dock(node: HTMLElement, opts: DockOpts = {}) {
   let amp = opts.amp ?? 0.18
   let radius = opts.radius ?? 160
   let enabled = opts.enabled ?? true
+  let target = opts.target
 
   const kids = () => Array.from(node.children) as HTMLElement[]
+  // the element to transform within a child (the card), and the child itself for z-index
+  const visual = (c: HTMLElement): HTMLElement => (target ? (c.querySelector<HTMLElement>(target) ?? c) : c)
 
   function reset() {
     for (const c of kids()) {
-      c.style.transform = ''
+      visual(c).style.transform = ''
       c.style.zIndex = ''
     }
   }
@@ -30,7 +36,7 @@ export function dock(node: HTMLElement, opts: DockOpts = {}) {
     for (const c of kids()) {
       const r = c.getBoundingClientRect()
       const f = dockFalloff(e.clientX - (r.left + r.width / 2), radius)
-      c.style.transform = `scale(${1 + amp * f}) translateY(${-amp * 22 * f}px)`
+      visual(c).style.transform = `scale(${1 + amp * f}) translateY(${-amp * 22 * f}px)`
       c.style.zIndex = f > 0.5 ? '20' : ''
     }
   }
@@ -41,7 +47,8 @@ export function dock(node: HTMLElement, opts: DockOpts = {}) {
     update(next: DockOpts) {
       amp = next.amp ?? amp
       radius = next.radius ?? radius
-      enabled = next.enabled ?? true
+      enabled = next.enabled ?? enabled
+      target = next.target ?? target
       if (!enabled) reset()
     },
     destroy() {
