@@ -45,6 +45,7 @@ class InteractiveGame:
         self.rec = StreamRecorder()
         self._battle_started = False
         self._slice: list[dict] = []
+        self._steps: list[dict] = []
         self.result: dict | None = None
         self._replay: dict | None = None
         draftmod.start_draft(self.gs, cards)
@@ -53,6 +54,17 @@ class InteractiveGame:
     def _emit(self, ev):
         self.rec.on_event(ev)
         self._slice.append(ev)
+
+    # -- capture one animated step: the events since `mark` plus the resulting view --
+    def _mark_step(self, seat: int, action, mark: int) -> None:
+        self._steps.append(
+            {
+                "seat": seat,
+                "action": action_to_dict(action) if action is not None else None,
+                "events": list(self._slice[mark:]),
+                "view": self._play_view(),
+            }
+        )
 
     def start(self):
         self._advance()
@@ -95,12 +107,16 @@ class InteractiveGame:
                 seat = gs.current
                 legal = battlemod.battle_legal(gs)
                 action = self.ai.battle_action(make_battle_view(gs), legal)
+                mark = len(self._slice)
                 self.rec.on_pre_step(seat, action, gs)
                 battlemod.apply_battle(gs, action, emit=self._emit)
                 self.rec.on_step(seat, action, gs)
+                self._mark_step(seat, action, mark)
                 per_turn += 1
                 if per_turn > 100:
+                    end_mark = len(self._slice)
                     battlemod.end_turn(gs, emit=self._emit)
+                    self._mark_step(turn_owner, None, end_mark)
                     break
             safety += 1
             if safety > 1000:
@@ -115,12 +131,15 @@ class InteractiveGame:
         if action not in battlemod.battle_legal(gs):
             raise IllegalMove(f"illegal action: {action_dict!r}")
         self._slice = []
+        self._steps = []
         seat = gs.current
+        mark = len(self._slice)
         self.rec.on_pre_step(seat, action, gs)
         battlemod.apply_battle(gs, action, emit=self._emit)
         self.rec.on_step(seat, action, gs)
+        self._mark_step(seat, action, mark)
         # non-Pass keeps the same turn (gs.current still human → loop returns at once);
-        # Pass flips to the AI, which is then auto-resolved.
+        # Pass flips to the AI, which is then auto-resolved into further steps.
         self._battle_loop_until_human_or_end()
         return self._response()
 
@@ -152,6 +171,7 @@ class InteractiveGame:
         if pick not in (0, 1, 2):
             raise IllegalMove(f"bad pick: {pick!r}")
         self._slice = []
+        self._steps = []
         seat = gs.current
         draftmod.apply_draft_pick(gs, pick)
         self.rec.on_step(seat, pick, gs)
@@ -211,6 +231,7 @@ class InteractiveGame:
         return {
             "status": self.status,
             "slice": {"events": list(self._slice)},
+            "steps": list(self._steps),
             "pending": self.pending(),
             "result": self.result,
         }
