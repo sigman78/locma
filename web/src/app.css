@@ -327,3 +327,33 @@ code {
   text-shadow: 0 2px 4px #000, 0 0 10px #ff2a2a; pointer-events: none; z-index: 6;
   animation: locma-dmg 600ms ease-out forwards;
 }
+
+/* ---- interactive play motion ---- */
+/* attack slide: toward the target (--sx/--sy), peaking at 60% of the vector */
+@keyframes locma-slide {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(calc(var(--sx, 0px) * 0.6), calc(var(--sy, 0px) * 0.6)); }
+  100% { transform: translate(0, 0); }
+}
+.sliding { animation: locma-slide 240ms ease-out; }
+/* damage number delayed so it lands after the slide */
+.locma-dmg.delayed { animation-delay: 200ms; animation-fill-mode: both; }
+/* cast/use flash blob over the target */
+@keyframes locma-flash {
+  0% { opacity: 0; transform: scale(0.6); }
+  40% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+.flash-blob {
+  position: absolute; inset: 0; border-radius: 6px; pointer-events: none; z-index: 5;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle at 50% 50%, rgba(150, 235, 255, 0.95), rgba(120, 200, 255, 0.35) 55%, transparent 75%);
+  animation: locma-flash 250ms ease-out;
+}
+/* death: red cross popped over the card face (removal scale/fade is deathFx) */
+@keyframes locma-crosspop { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: scale(1); } }
+.death-cross {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 7; pointer-events: none;
+  color: #ff3030; font-size: 78px; font-weight: 900; line-height: 1;
+  text-shadow: 0 0 8px #000, 0 2px 4px #000; animation: locma-crosspop 160ms ease-out;
+}

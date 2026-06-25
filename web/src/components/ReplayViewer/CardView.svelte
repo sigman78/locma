@@ -13,6 +13,11 @@
   export let showAuras = true
   export let facing: 'up' | 'down' | null = null // direction toward the opponent
   export let tipDir: 'above' | 'below' | null = null // hover-tooltip placement override
+  export let slideX = 0 // px toward an attack target (Play only); 0 = no slide
+  export let slideY = 0
+  export let flash = false // cast/use flash over this card
+  export let dying = false // red cross then removal
+  export let dmgDelay = false // delay the damage number so it lands after the slide
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -27,7 +32,10 @@
   $: guard = hasAura(card.abilities, 'G')
   $: ward = hasAura(card.abilities, 'W')
   $: lethal = hasAura(card.abilities, 'L')
-  $: lungeCls = lunge ? `lunge-${lunge}` : null
+  // Play uses a measured slide; the ReplayViewer uses up/down lunge. Slide wins when set.
+  $: sliding = slideX !== 0 || slideY !== 0
+  $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
+  $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
@@ -53,10 +61,11 @@
       class:lethal={showAuras && lethal}
       class:face-up={facing === 'up'}
       class:face-down={facing === 'down'}
-      class:attacking={!!lunge}
+      class:attacking={!!lunge || sliding}
       class:attacked={card.has_attacked}
       class:dim
-      use:restartAnim={{ cls: lungeCls, token: fxToken }}
+      style={slideStyle}
+      use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
         <img src={artUrl(card.card_id)} alt={name} on:error={() => (imgOk = false)} />
@@ -80,8 +89,10 @@
         {/each}
       </div>
       {#key fxToken}
-        {#if damage != null}<div class="locma-dmg">-{damage}</div>{/if}
+        {#if flash}<div class="flash-blob"></div>{/if}
+        {#if damage != null}<div class="locma-dmg" class:delayed={dmgDelay}>-{damage}</div>{/if}
       {/key}
+      {#if dying}<div class="death-cross">✕</div>{/if}
     </div>
 
     {#if dim && !card.has_attacked}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
