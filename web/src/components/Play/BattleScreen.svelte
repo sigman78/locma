@@ -41,7 +41,21 @@
     dispatch('act', a)
   }
 
+  // cancel a pending attacker/item selection (re-click, Cancel button, or Esc)
+  function cancel() {
+    selectedAttacker = null
+    selectedItem = null
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') cancel()
+  }
+  $: selecting = selectedAttacker !== null || selectedItem !== null
+
   function clickHand(c: CardState) {
+    if (selectedItem === c.iid) {
+      selectedItem = null // re-clicking the chosen item cancels targeting
+      return
+    }
     if (canSummon(legal, c.iid)) {
       send({ t: 'summon', id: c.iid })
       return
@@ -103,6 +117,8 @@
   $: fx = { lunge: null, cast: null, splashes }
 </script>
 
+<svelte:window on:keydown={onKey} />
+
 <div class="battle">
   <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
   <button class="face op" on:click={clickOpFace} title="attack opponent">🎯 face</button>
@@ -142,8 +158,9 @@
 
   <div class="controls">
     <span class="hint">
-      {#if selectedAttacker !== null}Pick a target (or opponent face).{:else if selectedItem !== null}Pick an item target.{:else}Your turn — summon, attack, or end turn.{/if}
+      {#if selectedAttacker !== null}Pick a target (or opponent face) — Esc to cancel.{:else if selectedItem !== null}Pick an item target — Esc to cancel.{:else}Your turn — summon, attack, or end turn.{/if}
     </span>
+    {#if selecting}<button class="cancel" on:click={cancel}>✕ Cancel</button>{/if}
     <button class="endturn" on:click={() => send({ t: 'pass' })}>End Turn ⏭</button>
   </div>
 </div>
@@ -167,6 +184,9 @@
   .hint { color: #aaa; font-size: 14px; }
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
     border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
+  .cancel { background: #3a2330; color: #ffc4d6; border: 1px solid #6a3a4f;
+    border-radius: 4px; padding: 8px 16px; cursor: pointer; font-weight: 600; }
+  .cancel:hover { background: #4a2c3c; }
   .face.op { background: #2b1a1a; color: #ffb4b4; border: 1px solid #5a3a3a;
     border-radius: 4px; padding: 4px 12px; cursor: pointer; }
 </style>

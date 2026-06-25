@@ -5,10 +5,11 @@
   export let cards: CardState[] = []
   export let faceUp = true
   export let active = false
+  export let tipDir: 'above' | 'below' | null = null
 </script>
 
 <div class="hand" class:active>
-  {#each cards as c (c.iid)}<CardView card={c} {faceUp} showAuras={false} />{/each}
+  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} showAuras={false} />{/each}
 </div>
 
 <style>
