@@ -277,7 +277,30 @@ learnable (EV 0.48–0.63), so neither is a productive lever here.
 
 ---
 
-## 6. Reproduce
+## 6. Outcome — fix implemented and verified
+
+Recommendation #1 (+ #2 obs enrichment, #3 entropy) was implemented on
+`fix/ppo-semantic-action-space`: the production encoder is now a fixed semantic
+155-action space with an enriched 308-d observation, and `train_agent` uses
+`ent_coef=0.02`. End-to-end through the **production** path (`train_agent` →
+semantic `BattleEnv` → the `ppo:` policy), retrained 300k vs `greedy`, evaluated
+mirrored (400 games/cell):
+
+| vs → | random | greedy | scripted | max‑guard | max‑attack | **avg non‑random** |
+|------|--------|--------|----------|-----------|------------|--------------------|
+| before (positional, §3.3) | 0.963 | 0.450 | 0.228 | 0.220 | 0.220 | **0.279** |
+| **after (this fix)** | 0.975 | **0.632** | 0.315 | 0.343 | 0.372 | **0.416** |
+
+**+0.137 avg (+49%)** — from *crushed* by the ground baselines (~0.22) to
+*competitive* (0.31–0.37), and even→winning vs `greedy` (0.45→0.63). As predicted,
+0.416 sits just under the action‑space‑only experiment (sem+current obs = 0.445):
+the bundled observation enrichment is neutral‑to‑slightly‑negative, so essentially
+the entire gain is the action representation. A leaner config (semantic action
+space + the original 146‑d obs, no entropy) is a reasonable follow‑up if the small
+gap matters; closing the rest to actually *beat* the ground baselines is reward
+shaping / longer horizon / both‑seat training (§5 #3–#4).
+
+## 7. Reproduce
 
 The production defects are visible directly in `locma/envs/encode.py`
 (`index_to_action`, `action_mask`, `encode_battle`) against
