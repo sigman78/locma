@@ -16,7 +16,7 @@ import numpy as np
 
 from locma.core.battle import battle_legal
 from locma.core.engine import make_battle_view, run_game
-from locma.envs.encode import ACTION_SIZE, OBS_SIZE, action_mask, encode_battle
+from locma.envs.encode import ACTION_SIZE, OBS_SIZE, action_mask, encode_battle, sem_index
 from locma.policies.registry import make_policy
 
 _DEFAULT_OPPONENTS = ("random", "scripted", "greedy", "max-guard", "max-attack")
@@ -56,13 +56,14 @@ class _Collector:
             return
         if action not in legal:
             return  # defensive: a well-behaved policy always returns a legal action
-        idx = legal.index(action)
-        if idx >= ACTION_SIZE:
+        view = make_battle_view(gs)
+        idx = sem_index(view, action)
+        if idx is None or idx >= ACTION_SIZE:
             self.dropped += 1
             return
-        self.obs.append(encode_battle(make_battle_view(gs)))
+        self.obs.append(encode_battle(view))
         self.action.append(idx)
-        self.mask.append(action_mask(legal))
+        self.mask.append(action_mask(view, legal))
 
 
 def record_practicum(
