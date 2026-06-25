@@ -309,3 +309,32 @@ one‑off probes (greedy self‑play data + a slot‑indexed semantic action spa
 short MaskablePPO runs); the controlling result is §3.3, reproducible by
 training two `MaskablePPO` agents to 300k vs `greedy` that differ only in action
 encoding and evaluating both vs the five baselines.
+
+## 8. Future explorations — ranked levers for the "squeeze"
+
+After the fix, semantic-action PPO reaches ~0.42 avg vs the four ground baselines
+(competitive, but still losing ~0.31–0.38 to `scripted`/`max-guard`/`max-attack`).
+A multi-seed config A/B (2×2 over observation {lean-146, rich-308} × entropy
+{0, 0.02}, 250k × 2 seeds) found **all four configs tied at 0.41–0.43** — so
+**observation richness and the entropy bonus are not levers** (the single-seed
+0.445-vs-0.416 gap was noise). Together with the earlier rule-outs (budget,
+opponent diversity *under the positional space*, normalization, value
+learnability with `explained_variance` 0.48–0.63, the 64-action cap, net size),
+the remaining levers are all **env/training-formulation** changes, not net or
+hyperparameter tuning:
+
+| # | Lever | Impact | Cost | Why |
+|---|-------|--------|------|-----|
+| 1 | **Reward shaping** — sparse ±1 → dense potential-based (health / board-advantage delta) | **High** | Small (env reward) | Battles are 30–60 decisions; terminal-only reward makes credit assignment hard. `explained_variance` 0.48–0.63 says the critic is imperfect — dense signal is the most principled fix. |
+| 2 | **Opponent strategy** — curriculum / `mixed` / self-play | Medium | Small–Large | Curriculum (`train-zoo`) and `mixed` re-tested under the fixed action space (the positional-era "diversity doesn't help" may not hold). Self-play/league is the high-ceiling version (deferred). |
+| 3 | **Both-seat training** | Medium | Small (alternate `agent_seat`) | Agent only trains as seat 0, never learning the second-player coin/bonus-mana mechanic (`battle.py:55-60`), yet eval is mirrored into seat 1 half the time — a real distribution gap. |
+| 4 | **Longer horizon** — `gamma` 0.99 → 0.997 | Low–Med | Trivial (1 param) | `0.99^50 ≈ 0.6` heavily discounts the eventual win; compounds with sparse reward. |
+| 5 | **Draft control** — agent drafts its own deck | Med–High | Large (draft head/env) | Today the opponent drafts both decks; the agent plays a deck it didn't choose. High ceiling but expands scope to draft+battle. |
+| 6 | Net size / `n_steps` / lr sweep | Low | Small | Defaults likely fine for 308 dims; do last. |
+
+**Recommended order:** reward shaping + `gamma=0.997` first (cheap, principled,
+targets the long-horizon credit assignment that caps value learning), then
+both-seat training; defer draft control and self-play until the cheap structural
+levers are spent. The `train-zoo` CLI command (lever #2, curriculum) exists for
+quick experimentation; the opponent set is `ZOO_OPPONENTS` in
+`locma/envs/training.py`.

@@ -291,6 +291,34 @@ def train(
     console.print(f"saved {saved}")
 
 
+@app.command("train-zoo")
+def train_zoo_cmd(
+    steps_per_opponent: int = typer.Option(200_000, help="timesteps per opponent phase"),
+    out: str = "model.zip",
+    seed: int = 0,
+    ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+):
+    """Train one MaskablePPO agent back-to-back against the code-declared opponent
+    zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
+    [ml] extra."""
+    if steps_per_opponent < 1:
+        raise typer.BadParameter("steps-per-opponent must be >= 1")
+    from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
+
+    for o in ZOO_OPPONENTS:
+        make_policy(o)  # validate each declared opponent spec up front
+    console.print(f"zoo curriculum: {' -> '.join(ZOO_OPPONENTS)}")
+    try:
+        from locma.envs.training import train_zoo  # noqa: PLC0415 — optional [ml] dep
+
+        saved = train_zoo(
+            steps_per_opponent=steps_per_opponent, out=out, seed=seed, ent_coef=ent_coef
+        )
+    except ImportError as e:
+        raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
+    console.print(f"saved {saved}")
+
+
 @app.command("record-practicum")
 def record_practicum_cmd(
     teacher: str = typer.Option("mcts:100", help="teacher policy spec to clone"),
