@@ -328,10 +328,11 @@ hyperparameter tuning:
 | **Draft control** | ✅ **done (PR #21)** | §8.1: the gap was mostly the deck. `ppo:` now drafts `balanced` → beats the ground baselines (~0.55) and is ~even with `mcts:100`. |
 | **Reward shaping** (PBS) | ✗ **ruled out** | §8.2: health-only potential is exactly neutral (= sparse 0.554); adding board advantage *hurts* (→0.50). Sparse ±1 is already adequate. |
 | **Self-play / league** | ✗ **ruled out** | §8.3: warm-started league (PPO snapshots + baselines + `mcts:100`, both-seat training) was **flat over 480k**, then slightly down (vs `mcts` 0.24→0.16). A reactive net can't be self-played into planning. |
-| **Both-seat training** | tested (within self-play) | Covered by §8.3's seat-randomized league; no gain. |
+| **Both-seat training** | ✅ **landed (PR #27)** | Now the default (`--both-seat`); +0.06 / 2× efficiency, **same ceiling** (the 2×2 + 800k retrain confirm it's efficiency+correctness, not a higher ceiling). |
 | **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
-| Observation richness / entropy / normalization | ✗ ruled out | §3.4, multi-seed A/B — all neutral. |
-| **Search in the loop** (AlphaZero-style) | **open — the real lever** | Net guides MCTS (priors + leaf value), trained by self-play of the *search*. The only path to MCTS-level *planning*; a bigger build. |
+| Observation richness / entropy / normalization / **net size** | ✗ ruled out | §3.4 multi-seed A/B + the net-size×seat 2×2 (`baseline.md`) — all neutral; bigger net *hurts*. |
+| **Richer board encoding** (tokens + relational + tactical scalars) | **open — substrate** | §8.4A: a *different kind* of obs (relations + computed lookahead), so §3.4's flat-scalar null doesn't apply. Sharpens the reactive net and yields a better policy/value net for ↓. |
+| **Search in the loop** (AlphaZero-lite) | **open — the real lever** | §8.4B: net guides `dmcts`/MCTS (PUCT priors + value leaf), trained by self-play of the *search*. The only path to MCTS-level *planning*; a bigger build. |
 
 **Recommended order (remaining):** every training-method lever is now spent — reward,
 obs, opponent diversity, and **self-play** (§8.3) all flat; only the **deck** ever
@@ -419,3 +420,54 @@ nothing over simply pairing the mixed-trained net with that deck** — the battl
 policy is deck-robust, so the deck at *deployment* is the lever. **Actionable:**
 swap the `ppo:` policy's draft from `greedy` to `max-guard`/`balanced` to turn it
 from losing to winning vs the ground baselines, no retraining.
+
+### 8.4 Future research paths (the two that are actually open)
+
+Everything in the table above except the last row is spent. Two directions remain,
+and they **compose** — one is the substrate, the other the algorithm.
+
+#### A. A better semantic *board* encoding (substrate)
+
+The current obs (`encode.py`) is a **flat 308-d fixed-slot vector**: 8 scalars + 20
+card slots × 15 per-card features. It carries no *relations* and no *derived
+tactics*, so the net must re-infer the entire combat graph and every tactical fact
+from raw positions on every forward pass. Three upgrades, in increasing ambition:
+
+1. **Tokenize the board.** Represent each card as a *token* and use a set/attention
+   (transformer) feature extractor instead of flat fixed slots — permutation-
+   invariant, naturally variable-length, and able to relate cards directly. (SB3
+   takes a custom `features_extractor_class`, so this is a net-side change, not an
+   env rewrite.)
+2. **Add relational objects.** Feed the explicit **attacker × target legality /
+   trade matrix** — for each of my attackers, which enemy targets are legal and what
+   the trade outcome is. This is exactly the structure the flat obs *hides* (it is
+   the root of Defect A: legality depends on relations the vector never encodes).
+3. **Add engineered tactical scalars** — cheap 1-ply facts the net otherwise has to
+   learn to compute: **opponent Guard count, reachable face damage this turn,
+   friendly lethal available, own exposed-to-lethal flag, mana remaining, on-board
+   stat totals**. These are *tactical primitives* — a sliver of shallow lookahead
+   baked into the observation.
+
+**Why this isn't contradicted by §3.4** (where rich-308 ≈ lean-146): that A/B only
+added *more of the same flat scalars*. Relations, a combat matrix, and computed
+lookahead scalars are a **different kind** of information (derived structure, not raw
+features), so the null result doesn't cover them. Expect this to sharpen the reactive
+net's tactics — and, crucially, to make a far better **policy/value net for path B**.
+
+#### B. AlphaZero-lite — search in the loop (the algorithm)
+
+The only route that adds **planning** (the structural gap a reactive net can't
+cross). A policy+value net *guides* MCTS — policy → PUCT priors over the 155 semantic
+slots, value → the leaf evaluation — trained by self-play of the **search**, not the
+raw net. "Lite" = reuse what exists and grow incrementally:
+
+- **Forward model:** the fast `_clone_battle` (≈30× speedup) is the simulator.
+- **Search skeleton:** `dmcts` already does determinized MCTS for the imperfect-info
+  hand; swap its heuristic leaf for the **net's value** and add **net priors** (PUCT).
+- **Targets:** the search's visit distribution + game outcome are the policy/value
+  training targets (the AZ loop); iterate.
+
+This is a bigger build, but every piece (fast clone, semantic action space, a fair
+determinized search, a heuristic leaf to bootstrap the value net) is already in the
+kit. Path A is the substrate that makes B's net stronger and its search cheaper; B is
+the planning that A's reactive net can never represent on its own.

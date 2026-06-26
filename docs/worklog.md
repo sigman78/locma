@@ -187,10 +187,19 @@ baselines, ~even with the *old* weak MCTS). The residual gap to the *strong* MCT
 its **planning**, and the only architecture that gets planning is **search at play
 time** — don't re-run the reactive routes.
 
-## Open levers (next) — see `ppo-review.md` §8
-- **SEARCH in the loop (AlphaZero-style)** — the one remaining lever: a policy+value
-  net that *guides* MCTS (priors + leaf value), trained by self-play of the
-  **search** (not the raw net). The net makes the search cheaper/sharper; the search
-  provides the planning the net can't represent. Bigger build, but it fits
-  everything above. The fast forward model (`_clone_battle`) + `dmcts` (a fair,
-  strong determinized search) are the building blocks.
+## Open levers (next) — see `ppo-review.md` §8.4
+Two paths remain, and they **compose** — substrate then algorithm:
+- **Richer board encoding (substrate)** — the obs is a *flat* 308-d fixed-slot
+  vector with no relations/derived tactics. Upgrade: **tokenize** the board (set/
+  attention extractor), add **relational objects** (attacker × target legality/
+  trade matrix), add **engineered tactical scalars** (opponent Guard count, reachable
+  face damage, friendly lethal available, exposed-to-lethal, mana left). This is a
+  *different kind* of information than §3.4's flat-scalar A/B (relations + shallow
+  lookahead, not more raw scalars), so that null doesn't rule it out. Sharpens the
+  reactive net and — the real payoff — yields a much better policy/value net for ↓.
+- **SEARCH in the loop (AlphaZero-lite, the real lever)** — a policy+value net
+  *guides* MCTS (PUCT priors over the 155 semantic slots + value leaf), trained by
+  self-play of the **search** (not the raw net). The only path to MCTS-level
+  *planning*. Building blocks already exist: fast `_clone_battle` forward model,
+  `dmcts` (a fair determinized search — swap its heuristic leaf for the net value +
+  add priors), the semantic action space, and the heuristic leaf to bootstrap.
