@@ -361,3 +361,13 @@ not built for any coherent plan. **For the residual** (even a good deck only rea
 ~0.50, not dominance): the classic limits bite — sparse reward, fixed (not
 self-play) opponents, and no search/planning (why cheating `mcts:100` beats `greedy`
 0.79: it *plans*; PPO reacts).
+
+**Draft sweep (see `baseline.md`).** A full sweep over seven drafts confirms and
+sharpens this: `greedy` (the shipped draft) is the *worst* partner (0.39 avg vs
+the hard baselines); `max-guard` (0.55) and the new `balanced` heuristic (0.54) are
+best and make the PPO **beat all three ground baselines**, with even a *random*
+draft (0.49) beating `greedy`. And **training the battle net on a given deck adds
+nothing over simply pairing the mixed-trained net with that deck** — the battle
+policy is deck-robust, so the deck at *deployment* is the lever. **Actionable:**
+swap the `ppo:` policy's draft from `greedy` to `max-guard`/`balanced` to turn it
+from losing to winning vs the ground baselines, no retraining.
