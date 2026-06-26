@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from locma.core.cards import Card
+from locma.core.draft_source import DraftSource, ShuffledPoolSource
 from locma.core.instance import CardInstance
 from locma.core.state import GameState, Phase
 
 
-def start_draft(gs: GameState, cards: list[Card], rounds: int = 30) -> None:
-    pool = []
-    for _ in range(rounds):
-        triplet = [cards[gs.rng.randint(0, len(cards) - 1)] for _ in range(3)]
-        pool.append(triplet)
-    gs.draft_pool = pool
+def start_draft(
+    gs: GameState,
+    cards: list[Card],
+    rounds: int = 30,
+    source: DraftSource | None = None,
+) -> None:
+    src = source if source is not None else ShuffledPoolSource()
+    gs.draft_pool = src.build(cards, gs.rng, rounds)
     gs.draft_round = 0
     gs.current = 0
     gs.phase = Phase.DRAFT

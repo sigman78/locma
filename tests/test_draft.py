@@ -1,6 +1,8 @@
 import random
+from collections import Counter
 
 from locma.core.draft import apply_draft_pick, current_triplet, draft_legal, start_draft
+from locma.core.draft_source import ShuffledPoolSource
 from locma.core.state import GameState, Phase
 from locma.data.cards_db import load_cards
 
@@ -25,3 +27,18 @@ def test_draft_is_deterministic():
     b = GameState.new(random.Random(7))
     start_draft(b, load_cards())
     assert [[c.id for c in t] for t in a.draft_pool] == [[c.id for c in t] for t in b.draft_pool]
+
+
+def test_default_source_bounds_duplicates():
+    # the default draft source is ShuffledPoolSource(copies=2)
+    gs = GameState.new(random.Random(3))
+    start_draft(gs, load_cards())
+    counts = Counter(c.id for t in gs.draft_pool for c in t)
+    assert max(counts.values()) <= 2
+
+
+def test_start_draft_accepts_custom_source():
+    gs = GameState.new(random.Random(3))
+    start_draft(gs, load_cards(), source=ShuffledPoolSource(copies=1))
+    ids = [c.id for t in gs.draft_pool for c in t]
+    assert len(ids) == len(set(ids))  # copies=1 deals a single shuffled deck -> distinct
