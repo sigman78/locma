@@ -62,6 +62,17 @@ scannable index. One line per finding.
   this aggressive tempo style — a creature gives recurring board presence + face
   damage; one-shot removal trades 1-for-1 without advancing your clock.
 
+### vs the "final boss" (`mcts:100`, cheating perfect-info search)
+- **The new PPO is competitive with MCTS.** `ppo`(balanced) vs `mcts:100` (as-is,
+  greedy deck) = **0.46** (≈ even); `max-guard` vs `mcts:100` = 0.51 (even). MCTS
+  crushes `greedy` 0.79 but itself drafts the weak `greedy` deck, so against
+  good-deck opponents its lookahead edge is largely cancelled by its deck.
+- **Same-deck (both `balanced`), `ppo` vs `mcts` = 0.39** — MCTS's perfect-info
+  battle is genuinely stronger; the ~0.07 deck handicap explains the as-is
+  near-even. The residual (0.39 → 0.50) is MCTS's *planning* advantage, which is
+  what the next lever (reward shaping / battle sharpness) targets. (Old positional
+  PPO would have been crushed ~0.21 like `greedy`.)
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
