@@ -124,6 +124,13 @@ trained vs `mixed` 400k, evaluated paired with `balanced` (120 games/cell):
   gap, which is what makes the structural conclusion (reactive nets can't plan)
   trustworthy rather than premature.
 
+**Full-budget confirm.** Retraining `mixed` 800k *with* both-seat reaches avg-hard3
+**0.569** vs the seat-0 800k model's **0.554** (160 games/cell, paired `balanced`) —
+marginally better on the ground baselines (max-attack 0.575→0.619), same ceiling, a
+touch noisier vs `mcts` (0.23→0.17, run variance). Both-seat is now the canonical
+`zoo-mixed` model — confirming the 2×2: at full budget the seat-0 model catches up,
+so both-seat's real value is the 2× efficiency + correctness, not a higher ceiling.
+
 ---
 
 # Baselines — 2026-06-25: MCTS heuristic rollout (turn-based, new default)
