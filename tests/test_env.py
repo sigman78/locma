@@ -43,6 +43,20 @@ def test_battle_env_seat_fixed_by_default():
         assert env.agent_seat == 0
 
 
+def test_search_opponent_works_as_training_opponent():
+    """A search opponent (azlite) requires the forward-model ``state``; the env
+    must pass it (mirrors the play harness). Without it azlite raises ValueError."""
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+
+    opp = make_policy("azlite:16")  # low iters: fast, still exercises the search path
+    env = BattleEnv(opponent=opp, seed=0)
+    obs, info = env.reset()  # opponent may take turns here — needs state, must not raise
+    assert obs.shape[0] == env.observation_space.shape[0]
+    mask = env.action_masks()
+    obs, reward, terminated, truncated, info = env.step(int(np.argmax(mask)))
+    assert reward in (-1.0, 0.0, 1.0)
+
+
 def test_obs_size_matches_encode():
     """Verify OBS_SIZE constant matches encode_battle output length."""
     from locma.core.views import BattleView, CardView  # noqa: PLC0415
