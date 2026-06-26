@@ -120,9 +120,19 @@ scannable index. One line per finding.
 - **Implication:** the opponent's hidden hand barely changes the best move in this
   board/tempo game — the cheating MCTS's power is its **search**, not the cheating.
   So a strong, *info-matched* (learnable) teacher now exists. It also reframes the
-  old distillation cap (0.37 agreement) as MCTS **stochasticity**, not the info gap
-  — the fix is a *deterministic* teacher (obs-seeded DMCTS, verified stable given
-  the obs). Distillation re-test in progress.
+  old distillation cap (0.37 agreement) hypothesis as MCTS **stochasticity**.
+- **DMCTS distillation — still ruled out, and it reframes the cap a third time.**
+  A *deterministic, info-matched, strong* teacher distilled to only **0.40**
+  agreement (vs cheating-mcts 0.37 — a marginal bump) and a **PPO-level** net
+  (avg-hard3 0.52, vs mcts **0.21** — the teacher itself gets 0.46). So the cap is
+  NOT the info gap (DMCTS proved it small) and NOT mainly stochasticity (determinism
+  barely helped): a **search policy's move is the output of lookahead, which has no
+  compact reactive (obs→action) form.** Greedy (simple heuristic) clones to 0.95;
+  *any* search policy caps ~0.40. Same wall as self-play — reactive nets can't
+  absorb planning. The only way to get it is **search at play time** (AlphaZero).
+- **Shipped anyway:** `dmcts` is now a registry policy (`dmcts:K,I,seed,turns`,
+  default K15/I30) — a strong, *fair* (non-cheating) search policy, ~as strong as
+  the cheating `mcts:100`. Replay-deterministic (seeded per game).
 
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it

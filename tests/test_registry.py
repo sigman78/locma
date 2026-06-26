@@ -48,6 +48,14 @@ def test_mcts_rollout_turns_param():
     assert make_policy("mcts:50,1.41,0,0").battle.rollout_turns == 0  # legacy terminal
 
 
+def test_dmcts_spec_and_selectable():
+    assert "dmcts" in policy_names()  # selectable like mcts
+    p = make_policy("dmcts:20,40,7")
+    assert p.battle.K == 20 and p.battle.I == 40 and p.battle._seed == 7
+    d = make_policy("dmcts")  # defaults
+    assert d.battle.K == 15 and d.battle.I == 30
+
+
 def test_ppo_default_and_path():
     assert make_policy("ppo").battle.model_path == "model.zip"
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"

@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import math
 import random
+from collections import Counter
 
 from locma.core import battle as battlemod
 from locma.core.engine import make_battle_view
 from locma.core.instance import CardInstance
 from locma.core.state import GameState, Phase
+from locma.data.cards_db import load_cards
 from locma.policies.battles import RandomBattlePolicy
 
 
@@ -213,3 +215,90 @@ class MCTSBattlePolicy:
                 node = node.parent
 
         return max(root.children, key=lambda ch: ch.visits).action
+
+
+_SAMPLED_ID_BASE = 100_000  # sampled opponent cards get ids well above real (0..59)
+
+
+class DMCTSBattlePolicy:
+    """Determinized (NON-cheating) MCTS for imperfect information.
+
+    Unlike ``MCTSBattlePolicy`` (which peeks at the opponent's real hand), DMCTS
+    samples ``determinizations`` plausible opponent hands/decks from the card pool,
+    runs the heuristic MCTS on each "world", and votes — so its move depends only on
+    public information. Empirically ~as strong as the cheating MCTS in this
+    board/tempo game (the hidden hand barely changes the best move), but a fair
+    player. Keeps the agent's own private state real (a player knows their own deck).
+
+    ``deterministic=True`` seeds the sampling + search from the observation each
+    decision, so the move is a stable function of the public ``BattleView`` (used
+    for distillation; default ``False`` for play).
+    """
+
+    def __init__(
+        self,
+        name: str = "dmcts",
+        determinizations: int = 15,
+        iterations: int = 30,
+        c: float = math.sqrt(2),
+        seed: int = 0,
+        rollout_turns: int = 3,
+        deterministic: bool = False,
+    ):
+        self.name = name
+        self.K = determinizations
+        self.I = iterations
+        self.c = c
+        self.rollout_turns = rollout_turns
+        self.deterministic = deterministic
+        self._seed = seed
+        self._r = random.Random(seed)
+        self._cards = load_cards()
+        self._inner = MCTSBattlePolicy(
+            iterations=iterations, c=c, seed=seed, rollout_turns=rollout_turns
+        )
+
+    def reset(self, seed=None):
+        s = self._seed if seed is None else seed
+        self._r = random.Random(s)
+        self._inner.reset(s)
+
+    def _determinize(self, gs, rng):
+        """Clone gs but resample the OPPONENT's hidden hand + deck from the card
+        pool (keep their visible board/health/mana and the agent's real state)."""
+        det = _clone_battle(gs)
+        opp = 1 - det.current
+        p = det.players[opp]
+        nh, nd = len(p.hand), len(p.deck)
+        p.hand = [
+            CardInstance.from_card(rng.choice(self._cards), _SAMPLED_ID_BASE + i) for i in range(nh)
+        ]
+        p.deck = [
+            CardInstance.from_card(rng.choice(self._cards), _SAMPLED_ID_BASE + nh + i)
+            for i in range(nd)
+        ]
+        return det
+
+    def battle_action(self, view, legal, state=None):
+        if state is None:
+            raise ValueError("DMCTSBattlePolicy requires the forward-model `state` argument")
+        if len(legal) == 1:
+            return legal[0]
+        if self.deterministic:
+            import hashlib  # noqa: PLC0415 — only the distillation path needs this
+
+            from locma.envs.encode import encode_battle  # noqa: PLC0415
+
+            obs = encode_battle(view)
+            seed = int.from_bytes(hashlib.blake2b(obs.tobytes(), digest_size=7).digest(), "little")
+            rng = random.Random(seed)
+            inner = MCTSBattlePolicy(
+                iterations=self.I, c=self.c, seed=seed, rollout_turns=self.rollout_turns
+            )
+        else:
+            rng, inner = self._r, self._inner
+        votes: Counter = Counter()
+        for _ in range(self.K):
+            det = self._determinize(state, rng)
+            votes[inner.battle_action(view, legal, det)] += 1
+        return votes.most_common(1)[0][0]
