@@ -84,6 +84,31 @@ scannable index. One line per finding.
   credit assignment. The residual gap to `mcts:100` is its **lookahead**, needing
   self-play or search — not reward shaping. (`ppo-review.md` §8.2.)
 
+### MCTS rebuilt — fast and much stronger (PR #23)
+- Forward model: `copy.deepcopy` → fast battle-only clone (shares immutable cards)
+  = **6.7× faster, byte-identical**. + O(1) `has()` / `__slots__` engine micro-opts.
+- **Heuristic turn-based rollouts** (`rollout_turns=3` default): random-play a few
+  *turn boundaries* (adaptive depth — not a magic ply count), then score the settled
+  position with a board/health heuristic. Far **stronger** than random-to-terminal:
+  `mcts:100` vs greedy 0.79→**0.91**, and it now beats the whole pool incl the PPO
+  (**0.73**). Net `mcts:100` ~7.8 → ~0.2 s/game (**~30×**). Adaptive note: depths
+  6/12/24 ≈ turns 2/3 all ~equal — strength is the heuristic leaf value, not the
+  depth; pure heuristic (no rollout) is weaker (combat-state misjudged).
+
+### Self-play / league (was the top open lever) — RULED OUT
+- Warm-started from zoo-mixed; league pool = past PPO snapshots + ground baselines
+  + `mcts:100` (now cheap as a live opponent). Harness adversarially verified first
+  (caught + fixed two real bugs: seat-locked training, agent-deck coupled to the
+  opponent's draft).
+- **480k steps (6 rounds): flat, then slightly DOWN.** vs max-guard 0.59→0.49,
+  vs `mcts:100` **0.24→0.16**. No upward trend; it didn't even hold warm-start.
+- **Why:** a *reactive policy net cannot match a search policy by playing more
+  games* — self-play improves which move the net reflexively picks but adds no
+  planning. MCTS wins by lookahead the net structurally lacks. Same wall as every
+  training-method lever (budget, opponent diversity, reward shaping — all flat;
+  only the **deck** ever moved the PPO). **To beat MCTS you need search in the
+  loop (AlphaZero-style: a policy+value net guiding MCTS), not more self-play.**
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
@@ -109,9 +134,14 @@ scannable index. One line per finding.
 
 ## Open levers (next, ranked) — see `ppo-review.md` §8
 - **Spent / ruled out:** action space (fixed), draft (balanced, shipped), reward
-  shaping, observation richness, entropy, normalization, opponent-pool diversity.
-- **Self-play / league** (High) — the path to exceed the fixed-opponent ceiling and
-  approach `mcts:100`'s lookahead (the residual same-deck 0.39 gap is planning).
-- **Both-seat training** (Med, cheap) — agent only ever trains seat 0.
-- **Longer horizon** `gamma` 0.99→0.997 (Low, cheap A/B). Inference-time search is
-  the other route to MCTS-level planning.
+  shaping, observation richness, entropy, normalization, opponent-pool diversity,
+  **self-play / league** (flat over 480k, even with both-seat training + MCTS in
+  the pool), and longer horizon.
+- **The remaining lever is SEARCH in the loop** — AlphaZero-style: a policy+value
+  net guiding MCTS (priors + leaf value), trained by self-play of the *search*.
+  The reactive PPO can't be self-played into planning; this is the one architecture
+  that fits everything learned. Bigger build.
+- **Distillation of the (now strong + fast) heuristic MCTS** is the cheap thing to
+  re-try first — the old practicum/distill plateaued at ~0.25 agreement under the
+  *positional* action space; the semantic space lifted greedy-cloning 0.69→0.95, so
+  MCTS-cloning is worth re-measuring.
