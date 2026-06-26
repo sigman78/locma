@@ -13,10 +13,15 @@ Any command that takes a policy name (`play`, `tournament`, `noise-floor`,
 - `greedy` — stat-based draft + greedy battle (lethal/trade heuristic).
 - `max-guard` — draft prefers Guard creatures; aggressive ground battle.
 - `max-attack` — draft prefers highest-attack creatures; aggressive ground battle.
+- `mcts:iters,c,seed,turns` — **cheating** perfect-information MCTS (peeks at the
+  opponent's hand); heuristic turn-bounded rollouts by default. Strongest, slow.
+- `dmcts:K,I,seed,turns` — **determinized (non-cheating)** MCTS: samples `K`
+  opponent hands, runs MCTS (`I` iters) on each, votes. ~as strong as `mcts` but
+  fair (public info only). Slower than the heuristics.
 
 `max-guard` and `max-attack` share a "ground" battle: develop the board and
 swing at the enemy face, falling back to clearing Guards when the face is not a
-legal target.
+legal target. `mcts`/`dmcts` pair their search battle with a greedy draft.
 
 ## play
 `locma play A B [--games N] [--seed S] [--render] [--log FILE]`

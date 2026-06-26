@@ -54,6 +54,21 @@ def _mcts(params, spec):
     )
 
 
+def _dmcts(params, spec):
+    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
+    from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
+
+    k = int(params[0]) if len(params) > 0 else 15  # determinizations (worlds)
+    i = int(params[1]) if len(params) > 1 else 30  # iterations per world
+    seed = int(params[2]) if len(params) > 2 else 0
+    rollout_turns = int(params[3]) if len(params) > 3 else 3
+    return Composer(
+        DMCTSBattlePolicy(determinizations=k, iterations=i, seed=seed, rollout_turns=rollout_turns),
+        GreedyDraftPolicy(),
+        name=spec,
+    )
+
+
 def _ppo(params, spec):
     from locma.policies.ppo import (  # noqa: PLC0415
         MaskablePPOBattlePolicy,
@@ -90,6 +105,7 @@ _FACTORIES = {
     "max-guard": _max_guard,
     "max-attack": _max_attack,
     "mcts": _mcts,
+    "dmcts": _dmcts,
     "ppo": _ppo,
     "mixed": _mixed,
 }

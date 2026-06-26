@@ -109,6 +109,31 @@ scannable index. One line per finding.
   only the **deck** ever moved the PPO). **To beat MCTS you need search in the
   loop (AlphaZero-style: a policy+value net guiding MCTS), not more self-play.**
 
+### Non-cheating MCTS (DMCTS) — the strength is the search, not the peeking
+- **DMCTS** = determinized MCTS: don't peek at the opponent's hand; sample K
+  plausible hands from the card pool, run the fast heuristic MCTS on each world,
+  vote. The move is a function of the **public** obs (info-matched to the student).
+- **DMCTS ≈ the cheating `mcts:100` in strength** (K15/I30, 80 games/cell): vs
+  greedy **0.96** / max-guard 0.85 / max-attack 0.81 / **ppo 0.76**, head-to-head
+  vs cheating mcts **0.463** (even). It beats the pool *harder* than the cheater vs
+  greedy/max-guard/ppo. Speed ~0.84 s/game (K10 0.51, K25 2.2) vs the cheater's 0.19.
+- **Implication:** the opponent's hidden hand barely changes the best move in this
+  board/tempo game — the cheating MCTS's power is its **search**, not the cheating.
+  So a strong, *info-matched* (learnable) teacher now exists. It also reframes the
+  old distillation cap (0.37 agreement) hypothesis as MCTS **stochasticity**.
+- **DMCTS distillation — still ruled out, and it reframes the cap a third time.**
+  A *deterministic, info-matched, strong* teacher distilled to only **0.40**
+  agreement (vs cheating-mcts 0.37 — a marginal bump) and a **PPO-level** net
+  (avg-hard3 0.52, vs mcts **0.21** — the teacher itself gets 0.46). So the cap is
+  NOT the info gap (DMCTS proved it small) and NOT mainly stochasticity (determinism
+  barely helped): a **search policy's move is the output of lookahead, which has no
+  compact reactive (obs→action) form.** Greedy (simple heuristic) clones to 0.95;
+  *any* search policy caps ~0.40. Same wall as self-play — reactive nets can't
+  absorb planning. The only way to get it is **search at play time** (AlphaZero).
+- **Shipped anyway:** `dmcts` is now a registry policy (`dmcts:K,I,seed,turns`,
+  default K15/I30) — a strong, *fair* (non-cheating) search policy, ~as strong as
+  the cheating `mcts:100`. Replay-deterministic (seeded per game).
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
@@ -132,16 +157,29 @@ scannable index. One line per finding.
 - **Reproducibility:** engine is seed-deterministic; eval uses held-out seeds
   (`1_000_000+`) disjoint from training env seeds (`0,1,…`) to avoid leakage.
 
-## Open levers (next, ranked) — see `ppo-review.md` §8
-- **Spent / ruled out:** action space (fixed), draft (balanced, shipped), reward
-  shaping, observation richness, entropy, normalization, opponent-pool diversity,
-  **self-play / league** (flat over 480k, even with both-seat training + MCTS in
-  the pool), and longer horizon.
-- **The remaining lever is SEARCH in the loop** — AlphaZero-style: a policy+value
-  net guiding MCTS (priors + leaf value), trained by self-play of the *search*.
-  The reactive PPO can't be self-played into planning; this is the one architecture
-  that fits everything learned. Bigger build.
-- **Distillation of the (now strong + fast) heuristic MCTS** is the cheap thing to
-  re-try first — the old practicum/distill plateaued at ~0.25 agreement under the
-  *positional* action space; the semantic space lifted greedy-cloning 0.69→0.95, so
-  MCTS-cloning is worth re-measuring.
+## Bottom line — the reactive-net wall (every imitation/training-method path is spent)
+
+The whole investigation converges on one structural fact: **a reactive policy net
+(obs → action, no lookahead) cannot reach the search policies' strength**, and
+*none* of the ways to push it there work — because a search policy's move is the
+output of planning, which has no compact reactive form.
+
+| route | result |
+|-------|--------|
+| RL (budget, opponents, reward shaping, obs, entropy, normalization) | flat — only the **deck** ever moved it |
+| **Self-play / league** (warm-start, both-seat, MCTS in pool) | flat over 480k, then down |
+| **Distillation** of MCTS (cheating *or* DMCTS, positional *or* semantic, stochastic *or* deterministic) | caps ~0.40 agreement → PPO-level net |
+
+Greedy (a simple heuristic) clones to 0.95; *any* search policy caps ~0.40. The
+deck is the lever for the reactive net (shipped: `ppo+balanced` beats the ground
+baselines, ~even with the *old* weak MCTS). The residual gap to the *strong* MCTS is
+its **planning**, and the only architecture that gets planning is **search at play
+time** — don't re-run the reactive routes.
+
+## Open levers (next) — see `ppo-review.md` §8
+- **SEARCH in the loop (AlphaZero-style)** — the one remaining lever: a policy+value
+  net that *guides* MCTS (priors + leaf value), trained by self-play of the
+  **search** (not the raw net). The net makes the search cheaper/sharper; the search
+  provides the planning the net can't represent. Bigger build, but it fits
+  everything above. The fast forward model (`_clone_battle`) + `dmcts` (a fair,
+  strong determinized search) are the building blocks.

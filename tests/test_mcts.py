@@ -104,3 +104,27 @@ def test_mcts_leaf_value_in_range():
     gs = _battle_state(seed=8)
     v = MCTSBattlePolicy()._leaf_value(gs, 0)
     assert -1.0 <= v <= 1.0
+
+
+def test_dmcts_requires_state_and_returns_legal():
+    from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
+
+    with pytest.raises(ValueError):
+        DMCTSBattlePolicy().battle_action(None, [], state=None)
+    gs = _battle_state(seed=4)
+    legal = battlemod.battle_legal(gs)
+    view = make_battle_view(gs)
+    a = DMCTSBattlePolicy(determinizations=4, iterations=4, seed=0).battle_action(
+        view, legal, state=gs
+    )
+    assert a in legal
+
+
+def test_dmcts_deterministic_mode_stable_given_obs():
+    from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
+
+    gs = _battle_state(seed=4)
+    legal = battlemod.battle_legal(gs)
+    view = make_battle_view(gs)
+    p = DMCTSBattlePolicy(determinizations=6, iterations=6, seed=0, deterministic=True)
+    assert p.battle_action(view, legal, state=gs) == p.battle_action(view, legal, state=gs)
