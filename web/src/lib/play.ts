@@ -73,6 +73,7 @@ export interface PlayStep {
 export interface SubmitResponse extends GameSnapshot {
   slice: Slice
   steps: PlayStep[]
+  drafted?: number[]
 }
 
 // --- legal-action predicates (drive what is clickable) ---

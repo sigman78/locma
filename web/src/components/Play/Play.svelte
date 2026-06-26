@@ -15,6 +15,7 @@
   import { playFrames, type Sequencer } from '../../lib/playback'
   import { pulse } from '../../lib/motion'
   import BattleScreen from './BattleScreen.svelte'
+  import DraftComplete from './DraftComplete.svelte'
   import DraftScreen from './DraftScreen.svelte'
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
@@ -36,6 +37,7 @@
   let finalBattle: BattlePending | null = null
   let showEnd = false
   let endTimer: ReturnType<typeof setTimeout> | null = null
+  let staged: { cardIds: number[]; response: SubmitResponse } | null = null
 
   loadCards()
     .then(() => (ready = true))
@@ -127,13 +129,18 @@
   async function pick(p: number) {
     if (!gameId || playing) return
     try {
-      await applyResponse(await submitDraft(gameId, p), true)
+      const r = await submitDraft(gameId, p)
+      if (r.pending && r.pending.phase === 'battle') {
+        staged = { cardIds: r.drafted ?? [], response: r }
+      } else {
+        await applyResponse(r, true)
+      }
     } catch (e) {
       error = String(e)
     }
   }
 
-  // Auto-draft every remaining round with random picks; commit once at the end.
+  // Auto-draft every remaining round with random picks; stage at the end.
   async function autoDraft() {
     if (!gameId || playing) return
     try {
@@ -141,10 +148,17 @@
       while (r.pending && r.pending.phase === 'draft') {
         r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       }
-      await applyResponse(r, true)
+      staged = { cardIds: r.drafted ?? [], response: r }
     } catch (e) {
       error = String(e)
     }
+  }
+
+  async function play() {
+    if (!staged) return
+    const s = staged
+    staged = null
+    await applyResponse(s.response, true)
   }
 
   async function act(a: ActionDict) {
@@ -167,6 +181,7 @@
     currentAction = null
     finalBattle = null
     showEnd = false
+    staged = null
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
 
@@ -181,6 +196,8 @@
   {:else if !snap || !gameId}
     <h1>LOCM — Play vs AI</h1>
     <NewGame on:start={(e) => start(e.detail)} />
+  {:else if staged}
+    <DraftComplete cardIds={staged.cardIds} on:play={play} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
     <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} on:auto={autoDraft} />
   {:else if battlePending}
