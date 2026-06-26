@@ -15,7 +15,6 @@
   import { playFrames, type Sequencer } from '../../lib/playback'
   import { pulse } from '../../lib/motion'
   import BattleScreen from './BattleScreen.svelte'
-  import DraftComplete from './DraftComplete.svelte'
   import DraftScreen from './DraftScreen.svelte'
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
@@ -196,10 +195,14 @@
   {:else if !snap || !gameId}
     <h1>LOCM — Play vs AI</h1>
     <NewGame on:start={(e) => start(e.detail)} />
-  {:else if staged}
-    <DraftComplete cardIds={staged.cardIds} on:play={play} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
-    <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} on:auto={autoDraft} />
+    <DraftScreen
+      pending={snap.pending as DraftPending}
+      done={!!staged}
+      doneCardIds={staged?.cardIds ?? []}
+      on:pick={(e) => pick(e.detail)}
+      on:auto={autoDraft}
+      on:play={play} />
   {:else if battlePending}
     <div class="board-stage">
       <BattleScreen

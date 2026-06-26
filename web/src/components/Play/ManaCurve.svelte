@@ -3,14 +3,14 @@
 
   export let cardIds: number[]
 
-  const LABELS = ['0', '1', '2', '3', '4', '5', '6', '7+']
+  const LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+']
   const BAR_H = 48 // max bar height in px
 
   $: counts = (() => {
-    const c = [0, 0, 0, 0, 0, 0, 0, 0]
+    const c = new Array(LABELS.length).fill(0)
     for (const id of cardIds) {
       const cost = cardMeta(id)?.cost ?? 0
-      c[Math.min(cost, 7)]++
+      c[Math.min(cost, LABELS.length - 1)]++
     }
     return c
   })()
@@ -34,11 +34,11 @@
 <style>
   .mana-curve { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .title { color: #556; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
-  .bars { display: flex; align-items: flex-end; gap: 5px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; }
   .bucket { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .count { font-size: 0.65rem; color: #aaa; min-height: 12px; line-height: 12px; }
   .count.zero { visibility: hidden; }
-  .bar { width: 18px; background: #5aa9ff; border-radius: 2px 2px 0 0;
+  .bar { width: 16px; background: #5aa9ff; border-radius: 2px 2px 0 0;
     transition: height 0.15s ease; }
   .cost-label { font-size: 0.65rem; color: #556; }
 </style>
