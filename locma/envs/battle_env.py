@@ -2,9 +2,11 @@
 
 The environment handles:
   - Episode initialisation: draft (opponent drafts both seats in v1) + battle setup.
-  - Observation: fixed-length float32 vector from encode_battle().
-  - Action: Discrete(ACTION_SIZE) index into the canonical legal-action list.
-  - Action mask: boolean array flagging valid indices (for masked-PPO etc.).
+  - Observation: fixed-length float32 vector (OBS_SIZE) from encode_battle().
+  - Action: Discrete(ACTION_SIZE) — a fixed *semantic* slot index (Pass / Summon /
+    Use / Attack), mapped back to a concrete Action via index_to_action().
+  - Action mask: boolean array flagging *which* semantic actions are legal now
+    (built from the real legal list — for masked-PPO etc.).
   - Reward: +1 agent win, -1 loss, 0 otherwise.
   - Termination: when gs.phase == Phase.ENDED.
 
@@ -113,7 +115,7 @@ class BattleEnv(gym.Env):
         return obs, {}
 
     def action_masks(self) -> np.ndarray:
-        """Return a boolean mask of valid action indices for the current state."""
+        """Return a boolean mask of which semantic actions are legal right now."""
         return action_mask(make_battle_view(self.gs), battlemod.battle_legal(self.gs))
 
     def step(self, idx):
@@ -122,7 +124,8 @@ class BattleEnv(gym.Env):
         Parameters
         ----------
         idx : int
-            Index into the canonical legal-action list.
+            A semantic action-space index (see encode.py); index_to_action maps it
+            to the concrete legal Action.
 
         Returns
         -------
