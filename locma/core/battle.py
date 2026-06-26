@@ -157,6 +157,11 @@ def _apply_item(gs, item, target_id, emit=None):
             tgt.attack = max(0, tgt.attack + item.card.attack)
             tgt.defense += item.card.defense
             tgt.abilities = _merge_abilities(tgt.abilities, item.card.abilities, add=True)
+            if item.card.has("C"):
+                # Gaining Charge removes summoning sickness: a just-summoned creature
+                # can attack this turn. has_attacked still guards against a second
+                # swing if it had already attacked.
+                tgt.can_attack = True
         _change_health(gs, gs.current, -item.card.player_hp, emit=emit)
         _change_health(
             gs, gs.opponent(gs.current), -item.card.enemy_hp, from_opponent=True, emit=emit
