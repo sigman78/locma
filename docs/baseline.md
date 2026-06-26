@@ -97,6 +97,84 @@ uv run locma tournament random scripted greedy max-guard max-attack \
 
 ---
 
+# Baselines — 2026-06-25: PPO × draft sweep (the deck is the lever)
+
+_Date: 2026-06-25_
+
+Follow-up to `docs/ppo-review.md` §8.1 (the gap between PPO and the ground
+baselines is mostly the DECK). This sweep pairs the trained PPO battle net with
+every draft heuristic — including three new ones, `max-defense` / `balanced` /
+`weighted` (`locma/policies/drafts.py`) — and asks two things. **avg-hard3** =
+mean win rate vs the three hard baselines (`scripted` / `max-guard` /
+`max-attack`); 300 games/cell, held-out seeds (`1_000_000+`).
+
+## (B) Pair the mixed-trained PPO battle net with each draft (eval only)
+
+| draft (+ PPO battle) | scripted | max-guard | max-attack | **avg-hard3** |
+|----------------------|----------|-----------|------------|---------------|
+| **max-guard**        | 0.553    | 0.527     | 0.567      | **0.549** |
+| **balanced** (new)   | 0.507    | 0.540     | 0.587      | **0.544** |
+| random               | 0.460    | 0.453     | 0.557      | 0.490 |
+| max-attack           | 0.393    | 0.447     | 0.527      | 0.456 |
+| weighted (new)       | 0.397    | 0.433     | 0.450      | 0.427 |
+| max-defense (new)    | 0.397    | 0.380     | 0.440      | 0.406 |
+| **greedy** (shipped) | 0.347    | 0.410     | 0.423      | **0.393** |
+
+## (C) Train the PPO battle net with the AGENT drafting each heuristic (300k)
+
+| draft | random | greedy | max-guard | max-attack | max-defense | balanced | weighted |
+|-------|--------|--------|-----------|------------|-------------|----------|----------|
+| **(C) trained avg-hard3** | 0.454 | 0.407 | 0.543 | 0.467 | 0.398 | 0.528 | 0.404 |
+| **(B) paired avg-hard3**  | 0.490 | 0.393 | 0.549 | 0.456 | 0.406 | 0.544 | 0.427 |
+
+## Findings
+
+1. **The draft dominates, and `greedy` (the shipped draft) is the *worst* of all
+   seven** (0.393) — even a **random** draft (0.490) beats it. `max-guard` (0.549)
+   and the new `balanced` (0.544) are best, and both make the PPO **beat all three
+   ground baselines** (every cell ≥ 0.50) — purely by swapping the draft, no
+   retraining.
+2. **Training-on-deck ≈ just-pairing** — (C) and (B) match within noise for every
+   draft. The battle net is **deck-robust**: the deck at *deployment* is the
+   lever, not the deck it trained on. So there is no extra gain from retraining
+   per draft; choose the deck.
+3. **New heuristics:** `balanced` ties `max-guard` for best (curve + creature
+   majority + Guard value). `weighted` (0.43) and `max-defense` (0.41) underperform
+   — raw stats / keyword value without the Guard-wall + curve structure don't help.
+
+**Actionable:** pair the `ppo:` policy with a `max-guard` or `balanced` draft
+instead of `greedy` — that alone turns it from losing (~0.39) to **beating** the
+ground baselines (~0.55), with no retraining.
+
+## Spell-aware draft valuation (refinement)
+
+Item cards carry stats applied to the **enemy**: red/blue removal spells have
+**negative** attack/defense (e.g. *Decimate* defense −99 = destroy a minion,
+*Mighty Throwing Axe* defense −7 = 7 damage). The stat-summing heuristics scored
+these by `attack + defense`, valuing *Decimate* at **−99** — the worst card in the
+game. Fixed: `_card_value` (`locma/policies/drafts.py`) now values items by the
+**magnitude** of their effect (`|attack| + |defense|`, capped at 13 so
+destroy-sentinels don't dominate) + keyword value.
+
+But *correct* spell valuation **hurt** the PPO pairing — the learned battle net
+plays creatures far better than spells (`ppo+balanced` 0.544 → 0.487 once it drafted
+removal). Tuning the `balanced` item discount against the PPO net (1.5 → 6 → 12 gave
+0.47 → 0.52 → 0.56 avg vs the hard baselines) settled on a strong creature bias: the
+shipped `balanced` drafts creature-heavy and takes only premium removal, reaching
+**0.556** (scripted 0.520 / max-guard 0.553 / max-attack 0.593 — beats all three),
+the best draft in the sweep. `greedy` is left deliberately naive as the reference
+baseline.
+
+## Reproduce
+
+```bash
+# (B) pair the trained battle net with each draft (eval only)
+#   Composer(MaskablePPOBattlePolicy('runs/zoo-mixed.zip'), <Draft>Policy())  vs baselines
+# (C) train with the agent drafting each heuristic, then eval — see the prototype harness.
+```
+
+---
+
 # Baselines — 2026-06-25: MCTS distillation (practicum → BC)
 
 _Date: 2026-06-25_

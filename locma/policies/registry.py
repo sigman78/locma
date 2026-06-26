@@ -10,6 +10,7 @@ from locma.policies.battles import (
 )
 from locma.policies.composer import Composer
 from locma.policies.drafts import (
+    BalancedDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
     MaxGuardDraftPolicy,
@@ -56,7 +57,14 @@ def _ppo(params, spec):
     )
 
     model_path = params[0] if params else "model.zip"
-    return Composer(MaskablePPOBattlePolicy(model_path=model_path), GreedyDraftPolicy(), name=spec)
+    # Pair the learned battle net with a `balanced` draft, not `greedy`: the draft
+    # sweep (docs/baseline.md "PPO × draft sweep") found the greedy draft is the
+    # WORST partner (0.39 avg vs the ground baselines) while `balanced` (0.54) makes
+    # the same battle net BEAT them. The battle policy is deck-robust, so this needs
+    # no retraining.
+    return Composer(
+        MaskablePPOBattlePolicy(model_path=model_path), BalancedDraftPolicy(), name=spec
+    )
 
 
 # The pool of baseline opponents a `mixed` training opponent draws from.
