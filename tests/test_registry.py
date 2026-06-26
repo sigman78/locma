@@ -47,6 +47,14 @@ def test_ppo_default_and_path():
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"
 
 
+def test_ppo_pairs_balanced_draft():
+    # The draft sweep found `greedy` is the worst partner; `ppo:` now pairs the
+    # learned battle net with `balanced` (docs/baseline.md "PPO × draft sweep").
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+
+    assert isinstance(make_policy("ppo:runs/exp1.zip").draft, BalancedDraftPolicy)
+
+
 def test_unknown_spec_raises():
     with pytest.raises(ValueError):
         make_policy("nope")
