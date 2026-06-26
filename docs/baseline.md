@@ -4,11 +4,43 @@ The canonical pair-score matrix for the five built-in baseline policies — row'
 win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
-snapshots. Refreshed 2026-06-25 after the policy-split refactor, which gave the
-stochastic baselines (`random`, `scripted`) independent per-half RNGs (ADR 0003)
-and shifted their cells by 1–3 points; the deterministic baselines are
-byte-identical to before. The search (`mcts`) and learned (`ppo`) policies live
-in the **2026-06-25** section below.
+snapshots. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+(PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
+`copies=2` (each card offered at most twice), replacing the old
+uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
+of magnitude as the ADR-0003 RNG split — and the **ordering is unchanged**. The
+prior uniform-pool matrix is frozen in the 2026-06-26 snapshot below. The search
+(`mcts`) and learned (`ppo`) policies live in the dated sections further down.
+
+|            | random | scripted | greedy | max-guard | max-attack |
+|------------|--------|----------|--------|-----------|------------|
+| random     | —      | 0.01     | 0.01   | 0.01      | 0.02       |
+| scripted   | 0.99   | —        | 0.55   | 0.51      | 0.61       |
+| greedy     | 0.99   | 0.45     | —      | 0.45      | 0.32       |
+| max-guard  | 0.99   | 0.49     | 0.55   | —         | 0.55       |
+| max-attack | 0.98   | 0.39     | 0.68   | 0.45      | —          |
+
+Ranking by rating (openskill ordinal / Elo): `max-attack` (60.83 / 2845) >
+`max-guard` (29.69 / 1967) > `greedy` (1.04 / 1247) > `scripted` (-16.13 / 902) >
+`random` (-42.27 / 540). Note the pool is **non-transitive** — and more so under
+the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
+(0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
+`max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
+not just the ordinal.
+
+---
+
+# Baselines — 2026-06-26: shuffled draft pool replaced uniform (prior matrix frozen)
+
+_Date: 2026-06-26_
+
+The new `ShuffledPoolSource` (PR #31) became the default draft source, replacing
+the inline uniform-with-replacement sampling in `start_draft`. The pool is now
+the whole 160-card space duplicated `copies=2`, shuffled, and dealt sequentially
+into triplets — every card is offered **at most twice**, an even spread with
+bounded duplicates, versus the old independent-per-slot draws. The top-of-file
+matrix is now the shuffled-pool reference; the **prior uniform-pool** canonical
+matrix (the 2026-06-25 ADR-0003 refresh) is preserved here:
 
 |            | random | scripted | greedy | max-guard | max-attack |
 |------------|--------|----------|--------|-----------|------------|
@@ -18,11 +50,12 @@ in the **2026-06-25** section below.
 | max-guard  | 0.99   | 0.52     | 0.57   | —         | 0.57       |
 | max-attack | 0.98   | 0.41     | 0.68   | 0.43      | —          |
 
-Ranking by rating (openskill ordinal / Elo): `max-attack` (59.20 / 2843) >
-`max-guard` (28.37 / 1973) > `greedy` (-0.65 / 1249) > `scripted` (-18.41 / 894) >
-`random` (-44.11 / 541). Note the pool is **non-transitive** — `max-guard` beats
-`max-attack` and `scripted` beats `greedy` head-to-head, against the rating
-order — so read the matrix, not just the ordinal.
+Ranking (uniform pool): `max-attack` (59.20 / 2843) > `max-guard` (28.37 / 1973)
+> `greedy` (-0.65 / 1249) > `scripted` (-18.41 / 894) > `random` (-44.11 / 541).
+The shift to the shuffled pool moved cells by 1–3 points without changing the
+ordering — the baselines' relative strengths are robust to the draft
+distribution. (The largest single move: `scripted` vs `max-guard` 0.48 → 0.51,
+flipping that head-to-head.)
 
 ---
 
