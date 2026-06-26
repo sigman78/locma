@@ -59,6 +59,36 @@ flipping that head-to-head.)
 
 ---
 
+# Baselines — 2026-06-26: PPO retrained under the shuffled draft pool (beats all ground baselines)
+
+_Date: 2026-06-26_
+
+Retraining the `train-zoo` curriculum (greedy → scripted → max-guard → max-attack,
+200k steps each = 800k, both-seat) under the **new shuffled draft pool** default,
+then evaluating the model paired with the `balanced` draft (the `ppo:` spec) vs each
+baseline (`locma play ppo:runs/ppo-shuffled-pool.zip <opp> --games 500 --seed 0`,
+1000 games/cell):
+
+| policy                                   | random | scripted | greedy | max-guard | max-attack | **avg-hard3** |
+|------------------------------------------|--------|----------|--------|-----------|------------|---------------|
+| **ppo** (shuffled-pool zoo + `balanced`) | 0.995  | 0.596    | 0.674  | 0.577     | 0.592      | **0.588**     |
+
+This is the **strongest PPO in this file** — it **beats all five baselines**, every
+hard cell ≥ 0.577 (avg-hard3 **0.588** vs the prior best 0.569 for the both-seat
+`mixed` 800k model). The `ppo:` spec pairs the battle net with the `balanced` draft,
+the draft sweep's best partner. It is the **bar** for the AlphaZero-lite work.
+
+## Reproduce
+
+```bash
+uv run locma train-zoo --out runs/ppo-shuffled-pool.zip --seed 0
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma play ppo:runs/ppo-shuffled-pool.zip $OPP --games 500 --seed 0
+done
+```
+
+---
+
 # Baselines — 2026-06-25: PPO zoo (semantic action space + opponent strategy)
 
 _Date: 2026-06-25_
