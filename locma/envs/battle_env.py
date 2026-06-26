@@ -44,9 +44,10 @@ class BattleEnv(gym.Env):
     ----------
     opponent:
         A policy object with ``draft_action(view, legal)`` and
-        ``battle_action(view, legal, state=None)`` methods. The optional
-        ``state`` forward model is not passed by BattleEnv (training opponents
-        are heuristic for now); search opponents are deferred.
+        ``battle_action(view, legal, state)`` methods. BattleEnv passes the
+        full forward-model ``state`` (as the play harness does, see
+        ``engine.py``), so search opponents (``mcts``, ``azlite``, ``dmcts``)
+        work as training opponents; heuristic opponents ignore the argument.
     seed:
         Base seed for reproducible episode sequences.
     agent_seat:
@@ -86,7 +87,7 @@ class BattleEnv(gym.Env):
         while self.gs.phase == Phase.BATTLE and self.gs.current != self.agent_seat:
             legal = battlemod.battle_legal(self.gs)
             view = make_battle_view(self.gs)
-            action = self.opponent.battle_action(view, legal)
+            action = self.opponent.battle_action(view, legal, self.gs)
             battlemod.apply_battle(self.gs, action)
 
     # ------------------------------------------------------------------

@@ -35,8 +35,9 @@ not just the ordinal.
 _Date: 2026-06-26_
 
 The whole bunch in one bracket: the five built-in baselines plus all three search
-policies (`mcts:100` cheating perfect-info, `azlite:100` AlphaZero-lite, `dmcts`
-fair determinized MCTS) and the strongest learned policy
+policies (`mcts:100` cheating perfect-info, `azlite:100` AlphaZero-lite — **also
+cheating** (perfect-foresight), see `docs/searchers-fiasco.md` — and `dmcts` the
+one fair determinized MCTS) and the strongest learned policy
 (`ppo:runs/ppo-shuffled-pool.zip`). One round-robin so openskill/Elo rate everyone
 against everyone — `locma tournament … --games 200 --seed 0 --reference random
 --matrix`, 400 games per pair (mirrored), 36 pairs, 14,400 games. This is the
@@ -119,11 +120,15 @@ The three searches all crush the ground baselines far harder than `ppo` does
 the baseline sweep (0.770 vs 0.757) yet *loses* to it head-to-head (0.45) — even
 avg-hard3 doesn't capture that `azlite` is undefeated; only the matrix does.
 
-`dmcts` (fair determinized MCTS — sample `K` hands, run MCTS per world) debuts as a
-**strong, non-cheating** policy: it beats every baseline and `ppo` (0.74) but sits
-below both `mcts` and `azlite`, the weakest of the three searches head-to-head.
-`azlite` — also non-cheating and ~2× faster — dominates it (0.60), reaffirming
-that the PUCT + heuristic-oracle design is the better fair searcher here.
+`dmcts` (determinized MCTS — sample `K` opponent hands, run MCTS per world) debuts
+and is the **only fair searcher in the roster**: it beats every baseline and `ppo`
+(0.74) but sits below both `mcts` and `azlite` head-to-head. That gap is not pure
+search quality — **`mcts` and `azlite` cheat**: both clone the real `GameState`, so
+their search sees the opponent's hidden hand *and* both decks' future draw order
+(perfect foresight), while `dmcts` only samples what it cannot see. So `azlite`
+dominating `dmcts` (0.60) is partly an information advantage, not skill (see
+`docs/searchers-fiasco.md`). The one honest search-vs-reactive number here is
+**`dmcts` vs `ppo` = 0.74**.
 
 Cross-check: `azlite` vs `ppo` (0.76) and vs `mcts` (0.56) reproduce the prior
 azlite section's 0.760 / 0.570 (200-game) within noise; its avg-hard3 0.757 here
@@ -151,6 +156,63 @@ uv run locma tournament random scripted greedy max-guard max-attack \
 (`ppo:` needs the `[ml]` extra and a local `runs/ppo-shuffled-pool.zip`; the
 search policies are self-contained. `dmcts` at ~0.8 s/game is the bottleneck —
 the full bracket is ~80 min.)
+
+---
+
+# Baselines — 2026-06-26: PPO curriculum endpoint vs `azlite` — no movement
+
+_Date: 2026-06-26_
+
+Follow-up to the full-roster result and `docs/ppo-review.md` §8: does adding a
+strong searcher as a **final curriculum phase** lift the PPO? We warm-started the
+strongest zoo model (`runs/ppo-shuffled-pool.zip`, the 800k both-seat zoo) and
+continued it for **+200k steps against `azlite:100`** as the opponent — the new
+search-as-training-opponent path (the `BattleEnv` now passes the forward-model
+state; see `docs/searchers-fiasco.md`). Evaluated paired with the `balanced` draft
+vs the pool, 300 games/cell, `--seed 0`:
+
+| model                          | random | greedy | scripted | max-guard | max-attack | azlite | **avg-hard3** |
+|--------------------------------|--------|--------|----------|-----------|------------|--------|---------------|
+| base (shuffled-pool zoo)       | 0.997  | 0.650  | 0.583    | 0.580     | 0.620      | 0.237  | **0.594**     |
+| **endpoint (+200k vs azlite)** | 0.990  | 0.687  | 0.530    | 0.613     | 0.647      | 0.270  | **0.597**     |
+
+**No movement.** avg-hard3 0.594 → 0.597 (+0.003) is flat; the per-cell shuffle
+(`scripted` −0.05, `max-guard`/`max-attack`/`greedy` +0.03–0.04) nets to zero.
+Versus `azlite` it ticks 0.237 → 0.270, but that is inside the ±0.055 noise at this
+`n` and still a ~73% loss — it did **not** learn to beat `azlite`. (Sanity check:
+base vs `azlite` 0.237 reproduces the full-roster 0.24.)
+
+## Why — and a sharper reason than before
+
+The structural ceiling again (`docs/ppo-review.md` §8): a reactive net can't plan,
+and the training opponent doesn't change that. Two compounding causes — the
+all-loss signal vs a crushing opponent gives almost no gradient toward winning, and
+a reactive policy can't specialize against an **adaptive searcher**. And now the
+sharper reason from `docs/searchers-fiasco.md`: **`azlite` cheats with perfect
+foresight** — it plans knowing every future draw, so "train against `azlite`" is
+training a reactive net to beat an impossible information edge. It cannot, even in
+principle, learn that reactively. A dead end, as predicted.
+
+## Reproduce
+
+```bash
+# Search policies can now be TRAINING opponents (BattleEnv passes the forward-model
+# state). Warm-start the zoo model and continue vs azlite for 200k steps:
+python - <<'PY'
+from sb3_contrib import MaskablePPO
+from locma.envs.training import _build_env
+env = _build_env("azlite:100", 0, 8, both_seat=True)
+m = MaskablePPO.load("runs/ppo-shuffled-pool.zip", env=env, seed=0)
+m.learn(total_timesteps=200_000, reset_num_timesteps=False)
+m.save("runs/ppo-zoo-azlite.zip")
+PY
+for OPP in random greedy scripted max-guard max-attack azlite:100; do
+  uv run locma play ppo:runs/ppo-zoo-azlite.zip $OPP --games 150 --seed 0
+done
+```
+
+(~95 min at ~35 fps for the 200k `azlite` phase — the search opponent is the cost.
+Wrap the training in `if __name__ == "__main__":`; `SubprocVecEnv` uses spawn.)
 
 ---
 
@@ -217,6 +279,14 @@ done
 
 _Date: 2026-06-26_
 
+> **Correction (2026-06-26): `azlite` cheats.** This section originally framed
+> `azlite` as a *non-cheating* breakthrough — that is wrong. `azlite` runs PUCT on
+> the **perfect-information forward model**: it clones the real `GameState`, so its
+> search sees the opponent's hidden hand *and* both decks' future draw order
+> (perfect foresight) — the same class of cheating as `mcts`. The "without
+> cheating" claim below is therefore false. The genuinely fair search is `dmcts`
+> (`dmcts` vs `ppo` = 0.74). Full audit: `docs/searchers-fiasco.md`.
+
 `azlite` is **AlphaZero-lite**: PUCT-guided MCTS on the perfect-information forward
 model, using existing heuristics as the `f(s) -> (policy, value)` oracle instead of a
 self-play-trained net (the `docs/ppo-review.md` §8.4B "search in the loop" path, in
@@ -234,7 +304,8 @@ draft like `ppo:`.
 | **azlite:100** | 1.000  | 0.677    | 0.823  | 0.757     | 0.790      | **0.741**     |
 
 It **beats every baseline** — avg-hard3 **0.741**, versus the strongest PPO's 0.588 —
-the first policy in this kit to do so without cheating *and* without a trained net.
+the first policy in this kit to do so without a trained net. (~~without cheating~~ —
+it cheats; perfect-foresight, see the correction above.)
 
 ## Head-to-head vs the strongest policies
 
