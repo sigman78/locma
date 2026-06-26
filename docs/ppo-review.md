@@ -323,19 +323,41 @@ learnability with `explained_variance` 0.48–0.63, the 64-action cap, net size)
 the remaining levers are all **env/training-formulation** changes, not net or
 hyperparameter tuning:
 
-| # | Lever | Impact | Cost | Why |
-|---|-------|--------|------|-----|
-| 1 | **Draft control** — agent drafts its own deck | **High** | Medium (draft env/head) | See §8.1: the gap to the ground baselines is *mostly the deck*. Battle-only PPO is yoked to a generic `greedy` draft while the baselines win through deck construction. |
-| 2 | **Reward shaping** — sparse ±1 → dense potential-based (health / board-advantage delta) | High | Small (env reward) | Battles are 30–60 decisions; terminal-only reward makes credit assignment hard. `explained_variance` 0.48–0.63 says the critic is imperfect. Addresses the *residual* battle sharpness once the deck is fixed. |
-| 3 | **Opponent strategy** — `mixed` / curriculum / self-play | Medium | Small–Large | `mixed` already best among trained models (`baseline.md`); self-play/league is the high-ceiling version (deferred). |
-| 4 | **Both-seat training** | Medium | Small (alternate `agent_seat`) | Agent only trains as seat 0, never learning the second-player coin/bonus-mana mechanic (`battle.py:55-60`), yet eval is mirrored into seat 1 half the time. |
-| 5 | **Longer horizon** — `gamma` 0.99 → 0.997 | Low–Med | Trivial (1 param) | `0.99^50 ≈ 0.6` heavily discounts the eventual win; compounds with sparse reward. |
-| 6 | Net size / `n_steps` / lr sweep | Low | Small | Defaults likely fine for 308 dims; do last. |
+| Lever | Status | Note |
+|-------|--------|------|
+| **Draft control** | ✅ **done (PR #21)** | §8.1: the gap was mostly the deck. `ppo:` now drafts `balanced` → beats the ground baselines (~0.55) and is ~even with `mcts:100`. |
+| **Reward shaping** (PBS) | ✗ **ruled out** | §8.2: health-only potential is exactly neutral (= sparse 0.554); adding board advantage *hurts* (→0.50). Sparse ±1 is already adequate. |
+| **Self-play / league** | **open — High** | The path to exceed a fixed-opponent ceiling and approach `mcts:100`'s planning edge (the residual 0.39 same-deck gap is *lookahead*). |
+| **Both-seat training** | open — Med | Agent only trains seat 0, never the second-player coin (`battle.py:55-60`), yet eval mirrors into seat 1. Cheap (alternate `agent_seat`). |
+| **Longer horizon** (`gamma` 0.99→0.997) | open — Low–Med | Untested; cheap. |
+| Net size / `n_steps` / lr sweep | open — Low | Defaults likely fine for 308 dims; do last. |
+| Observation richness / entropy / normalization | ✗ ruled out | §3.4, multi-seed A/B — all neutral. |
 
-**Recommended order:** draft control first (§8.1 shows it is where most of the gap
-lives), then reward shaping + `gamma=0.997` for the residual battle sharpness, then
-both-seat training. The `train-zoo` CLI command (lever #3) exists already; its
-opponent set is `ZOO_OPPONENTS` in `locma/envs/training.py`.
+**Recommended order (remaining):** the cheap levers (both-seat, `gamma`) are worth a
+quick A/B, but the residual gap to the cheating searcher is its **planning**, so the
+real lever is **self-play / league** (or inference-time search) — not reward, obs,
+or opponent-pool tweaks, which are now all spent. The `train-zoo` CLI exists for
+opponent-curriculum experiments (`ZOO_OPPONENTS` in `locma/envs/training.py`).
+
+### 8.2 Reward shaping — ruled out
+
+Potential-based shaping (PBS — policy-invariant by Ng et al. 1999, verified
+correct here to machine precision) with potential `Φ = health-lead + w·board-lead`,
+trained vs `mixed` 600k, evaluated paired with `balanced`:
+
+| reward | avg vs hard baselines |
+|--------|-----------------------|
+| sparse ±1 (control) | 0.554 |
+| PBS, health-only (`w=0`) | 0.554 (exactly neutral) |
+| PBS, health + board, coef 0.5 | 0.522 |
+| PBS, health + board, coef 1.0 | 0.500 |
+
+A health-only potential neither helps nor hurts; the **board-advantage** term
+*hurts* (more shaping → monotonically worse) because it discourages the favorable
+face-trades that win this aggressive tempo game. The sparse win/loss signal is
+already adequate — densifying it does not improve credit assignment. So the
+residual gap to `mcts:100` is its **lookahead**, addressable by self-play or
+search, not reward shaping.
 
 ### 8.1 Why the heuristics still win — it's mostly the deck, not the battle
 

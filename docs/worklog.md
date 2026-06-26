@@ -73,6 +73,17 @@ scannable index. One line per finding.
   what the next lever (reward shaping / battle sharpness) targets. (Old positional
   PPO would have been crushed ~0.21 like `greedy`.)
 
+### Reward shaping (was roadmap #1) — RULED OUT
+- Potential-based shaping (PBS, policy-invariant, verified correct to machine
+  precision) with `Φ = health-lead + w·board-lead`, trained vs `mixed` 600k, eval
+  paired with `balanced`: sparse **0.554** = health-only PBS **0.554** (exactly
+  neutral) > health+board coef 0.5 **0.522** > coef 1.0 **0.500**.
+- The **board** term hurts (monotonically with coef) — it discourages the favorable
+  face-trades that win this aggressive tempo game. Health-only is exactly neutral.
+- Conclusion: the sparse ±1 reward is already adequate; shaping doesn't improve
+  credit assignment. The residual gap to `mcts:100` is its **lookahead**, needing
+  self-play or search — not reward shaping. (`ppo-review.md` §8.2.)
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
@@ -97,7 +108,10 @@ scannable index. One line per finding.
   (`1_000_000+`) disjoint from training env seeds (`0,1,…`) to avoid leakage.
 
 ## Open levers (next, ranked) — see `ppo-review.md` §8
-1. **Reward shaping** (sparse ±1 → dense potential-based) — for residual battle
-   sharpness now the deck is handled.
-2. **Both-seat training** (agent only ever trains seat 0).
-3. **Longer horizon** (`gamma` 0.99 → 0.997). Self-play / league = high-ceiling, deferred.
+- **Spent / ruled out:** action space (fixed), draft (balanced, shipped), reward
+  shaping, observation richness, entropy, normalization, opponent-pool diversity.
+- **Self-play / league** (High) — the path to exceed the fixed-opponent ceiling and
+  approach `mcts:100`'s lookahead (the residual same-deck 0.39 gap is planning).
+- **Both-seat training** (Med, cheap) — agent only ever trains seat 0.
+- **Longer horizon** `gamma` 0.99→0.997 (Low, cheap A/B). Inference-time search is
+  the other route to MCTS-level planning.
