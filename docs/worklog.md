@@ -134,6 +134,17 @@ scannable index. One line per finding.
   default K15/I30) — a strong, *fair* (non-cheating) search policy, ~as strong as
   the cheating `mcts:100`. Replay-deterministic (seeded per game).
 
+### PPO ceiling — *not* a bug (net size × seat 2×2)
+- Tested the mundane suspects directly (`baseline.md` "PPO is not under-capacity").
+  **MLP size is not the cap — 256×256×256 < 64×64** (under-trained at 400k; default
+  size is right). **Both-seat training helps the small net +0.06 (0.49→0.55)** —
+  mostly a 2× efficiency win (0.55 ≈ shipped 800k-seat-0 0.556) + correct (eval is
+  mirrored). **Action mapping sound** (BC-of-greedy 0.95). **vs mcts flat ~0.2 in
+  all four arms** — no mundane fix closes the search gap, so the structural read
+  (reactive nets can't plan) is tested, not assumed.
+- **Landed:** `train`/`train-zoo` default to both-seat (`--both-seat`,
+  `BattleEnv(seat_random=...)`).
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
@@ -166,7 +177,7 @@ output of planning, which has no compact reactive form.
 
 | route | result |
 |-------|--------|
-| RL (budget, opponents, reward shaping, obs, entropy, normalization) | flat — only the **deck** ever moved it |
+| RL (budget, opponents, reward, obs, entropy, normalization, **net size**, **seat**) | flat — only the **deck** moved it (+both-seat is a 2× efficiency win, same ceiling) |
 | **Self-play / league** (warm-start, both-seat, MCTS in pool) | flat over 480k, then down |
 | **Distillation** of MCTS (cheating *or* DMCTS, positional *or* semantic, stochastic *or* deterministic) | caps ~0.40 agreement → PPO-level net |
 

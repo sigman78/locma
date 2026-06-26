@@ -25,6 +25,24 @@ def test_env_reset_step():
     assert reward in (-1.0, 0.0, 1.0)
 
 
+def test_battle_env_seat_random_covers_both_seats():
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    env = BattleEnv(opponent=opp, seed=0, seat_random=True)
+    seats = set()
+    for _ in range(30):
+        env.reset()
+        seats.add(env.agent_seat)
+    assert seats == {0, 1}  # both first- and second-player seats exercised
+
+
+def test_battle_env_seat_fixed_by_default():
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    env = BattleEnv(opponent=opp, seed=0)  # seat_random defaults False
+    for _ in range(5):
+        env.reset()
+        assert env.agent_seat == 0
+
+
 def test_obs_size_matches_encode():
     """Verify OBS_SIZE constant matches encode_battle output length."""
     from locma.core.views import BattleView, CardView  # noqa: PLC0415

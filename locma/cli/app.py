@@ -260,6 +260,7 @@ def train(
         None, help="comma-separated step marks to save checkpoints at (one trajectory)"
     ),
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+    both_seat: bool = typer.Option(True, help="train as both first AND second player"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -285,6 +286,7 @@ def train(
             n_envs=n_envs,
             checkpoints=marks,
             ent_coef=ent_coef,
+            both_seat=both_seat,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -297,6 +299,7 @@ def train_zoo_cmd(
     out: str = "model.zip",
     seed: int = 0,
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+    both_seat: bool = typer.Option(True, help="train as both first AND second player"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -312,7 +315,11 @@ def train_zoo_cmd(
         from locma.envs.training import train_zoo  # noqa: PLC0415 — optional [ml] dep
 
         saved = train_zoo(
-            steps_per_opponent=steps_per_opponent, out=out, seed=seed, ent_coef=ent_coef
+            steps_per_opponent=steps_per_opponent,
+            out=out,
+            seed=seed,
+            ent_coef=ent_coef,
+            both_seat=both_seat,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

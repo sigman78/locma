@@ -10,17 +10,22 @@ from __future__ import annotations
 import functools
 
 
-def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0):
+def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0, seat_random: bool = False):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
     Rebuilds the opponent from its spec string inside each subprocess, so the
     (possibly stateful) opponent never has to be pickled and crosses no process
-    boundary.
+    boundary. ``seat_random`` trains the agent as both first and second player.
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.registry import make_policy  # noqa: PLC0415
 
-    return BattleEnv(opponent=make_policy(opponent_spec), seed=seed, agent_seat=agent_seat)
+    return BattleEnv(
+        opponent=make_policy(opponent_spec),
+        seed=seed,
+        agent_seat=agent_seat,
+        seat_random=seat_random,
+    )
 
 
 def _ckpt_path(out: str, steps: int) -> str:
@@ -29,15 +34,19 @@ def _ckpt_path(out: str, steps: int) -> str:
     return f"{base}-{steps}.zip"
 
 
-def _build_env(opponent_spec: str, seed: int, n_envs: int):
+def _build_env(opponent_spec: str, seed: int, n_envs: int, both_seat: bool = True):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
-    process for true CPU parallelism; each env gets a distinct seed."""
+    process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
+    randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix)."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
     )
 
-    fns = [functools.partial(_make_battle_env, opponent_spec, seed + i) for i in range(n_envs)]
+    fns = [
+        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat)
+        for i in range(n_envs)
+    ]
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
 
 
@@ -50,6 +59,7 @@ def train_agent(
     n_envs: int = 1,
     checkpoints=None,
     ent_coef: float = 0.02,
+    both_seat: bool = True,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -59,6 +69,8 @@ def train_agent(
     steps: total env timesteps (ignored when `checkpoints` is given).
     out: output model path; checkpoints derive step-suffixed siblings.
     n_envs: number of parallel envs (CPU speedup).
+    both_seat: train as both first and second player (default True; eval is
+        mirrored, so seat-0-only training is a coverage gap — see docs/baseline.md).
     checkpoints: optional iterable of step marks. When given, training runs as
         one continuous trajectory, saving a step-suffixed model at each mark, and
         returns the list of saved paths. Otherwise trains `steps` and returns
@@ -68,7 +80,7 @@ def train_agent(
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-    env = _build_env(opponent_spec, seed, n_envs)
+    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat)
     model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
 
     if checkpoints:
@@ -104,6 +116,7 @@ def train_zoo(
     seed: int = 0,
     ent_coef: float = 0.02,
     verbose: int = 1,
+    both_seat: bool = True,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -120,11 +133,15 @@ def train_zoo(
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
     model = MaskablePPO(
-        "MlpPolicy", _build_env(opps[0], seed, 1), verbose=verbose, seed=seed, ent_coef=ent_coef
+        "MlpPolicy",
+        _build_env(opps[0], seed, 1, both_seat=both_seat),
+        verbose=verbose,
+        seed=seed,
+        ent_coef=ent_coef,
     )
     for i, opp in enumerate(opps):
         if i > 0:
-            model.set_env(_build_env(opp, seed, 1))
+            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat))
         model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
     model.save(out)
     return out
