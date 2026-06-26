@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CardView:
     instance_id: int
     card_id: int
@@ -16,13 +16,13 @@ class CardView:
     has_attacked: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DraftView:
     round: int
     offered: tuple  # 3 CardView (instance_id unused, -1)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BattleView:
     turn: int
     me_health: int
