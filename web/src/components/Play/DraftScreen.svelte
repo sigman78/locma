@@ -19,7 +19,14 @@
     }
   }
 
+  function cost(c: CardState): number {
+    return cardMeta(c.card_id)?.cost ?? 0
+  }
+
   $: cards = pending.triplet.map(toCard)
+  $: drafted = (pending.my_cards ?? [])
+    .map((id, i) => toCard(id, i))
+    .sort((a, b) => (cost(a) - cost(b)) || (a.atk - b.atk))
 </script>
 
 <div class="draft">
@@ -31,6 +38,18 @@
       </button>
     {/each}
   </div>
+  {#if drafted.length > 0}
+    <div class="strip-wrap">
+      <span class="strip-label">Your deck ({drafted.length})</span>
+      <div class="strip">
+        {#each drafted as c, i (c.card_id + '-' + i)}
+          <div class="strip-card">
+            <CardView card={c} tipDir="above" />
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
   <div class="foot">
     <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>
     <button class="auto" on:click={() => dispatch('auto')}>Pick rest for me</button>
@@ -51,4 +70,12 @@
   .auto { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
     padding: 6px 14px; cursor: pointer; font-weight: 600; }
   .auto:hover { background: #2a2a44; }
+  /* drafted-cards strip */
+  .strip-wrap { display: flex; flex-direction: column; align-items: flex-start;
+    width: 100%; max-width: 700px; gap: 4px; }
+  .strip-label { color: #888; font-size: 0.8rem; }
+  .strip { --card-w: 80px; --card-h: 112px;
+    display: flex; flex-wrap: wrap; padding-right: 27px; }
+  /* position: relative + z-index: auto keeps CardView's :hover z-index: 50 untrapped */
+  .strip-card { position: relative; margin-right: -27px; margin-bottom: 8px; }
 </style>

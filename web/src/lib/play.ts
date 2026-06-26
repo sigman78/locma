@@ -30,6 +30,7 @@ export interface DraftPending {
   total: number
   triplet: number[]
   my_picks: number
+  my_cards: number[]
 }
 
 export interface BattlePending {
