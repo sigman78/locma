@@ -327,17 +327,20 @@ hyperparameter tuning:
 |-------|--------|------|
 | **Draft control** | ✅ **done (PR #21)** | §8.1: the gap was mostly the deck. `ppo:` now drafts `balanced` → beats the ground baselines (~0.55) and is ~even with `mcts:100`. |
 | **Reward shaping** (PBS) | ✗ **ruled out** | §8.2: health-only potential is exactly neutral (= sparse 0.554); adding board advantage *hurts* (→0.50). Sparse ±1 is already adequate. |
-| **Self-play / league** | **open — High** | The path to exceed a fixed-opponent ceiling and approach `mcts:100`'s planning edge (the residual 0.39 same-deck gap is *lookahead*). |
-| **Both-seat training** | open — Med | Agent only trains seat 0, never the second-player coin (`battle.py:55-60`), yet eval mirrors into seat 1. Cheap (alternate `agent_seat`). |
-| **Longer horizon** (`gamma` 0.99→0.997) | open — Low–Med | Untested; cheap. |
-| Net size / `n_steps` / lr sweep | open — Low | Defaults likely fine for 308 dims; do last. |
+| **Self-play / league** | ✗ **ruled out** | §8.3: warm-started league (PPO snapshots + baselines + `mcts:100`, both-seat training) was **flat over 480k**, then slightly down (vs `mcts` 0.24→0.16). A reactive net can't be self-played into planning. |
+| **Both-seat training** | tested (within self-play) | Covered by §8.3's seat-randomized league; no gain. |
+| **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
 | Observation richness / entropy / normalization | ✗ ruled out | §3.4, multi-seed A/B — all neutral. |
+| **Search in the loop** (AlphaZero-style) | **open — the real lever** | Net guides MCTS (priors + leaf value), trained by self-play of the *search*. The only path to MCTS-level *planning*; a bigger build. |
 
-**Recommended order (remaining):** the cheap levers (both-seat, `gamma`) are worth a
-quick A/B, but the residual gap to the cheating searcher is its **planning**, so the
-real lever is **self-play / league** (or inference-time search) — not reward, obs,
-or opponent-pool tweaks, which are now all spent. The `train-zoo` CLI exists for
-opponent-curriculum experiments (`ZOO_OPPONENTS` in `locma/envs/training.py`).
+**Recommended order (remaining):** every training-method lever is now spent — reward,
+obs, opponent diversity, and **self-play** (§8.3) all flat; only the **deck** ever
+moved the PPO. The residual gap to `mcts:100` is its **planning**, which a reactive
+policy net cannot acquire by playing more games. The real lever is **search in the
+loop** (AlphaZero-style: a policy+value net guiding MCTS). The cheap thing to re-try
+first is **distilling the now strong + fast heuristic MCTS** — old distillation
+plateaued at ~0.25 agreement under the *positional* action space; the semantic space
+lifted greedy-cloning 0.69→0.95, so MCTS-cloning is worth re-measuring.
 
 ### 8.2 Reward shaping — ruled out
 
@@ -356,8 +359,31 @@ A health-only potential neither helps nor hurts; the **board-advantage** term
 *hurts* (more shaping → monotonically worse) because it discourages the favorable
 face-trades that win this aggressive tempo game. The sparse win/loss signal is
 already adequate — densifying it does not improve credit assignment. So the
-residual gap to `mcts:100` is its **lookahead**, addressable by self-play or
-search, not reward shaping.
+residual gap to `mcts:100` is its **lookahead** — and §8.3 shows self-play does
+not close it either.
+
+### 8.3 Self-play / league — ruled out
+
+A warm-started (from `zoo-mixed`) league: each episode samples an opponent from
+past frozen PPO snapshots of the learner (self-play) + the ground baselines
+(anti-forget) + `mcts:100` (a strong, now-cheap live teacher). Seat-randomized;
+the agent drafts its own `balanced` deck. (Harness adversarially verified first —
+the review caught and fixed two real bugs: seat-locked training and the agent's
+deck being coupled to the opponent's draft.)
+
+| training | vs max-guard | vs max-attack | vs `mcts:100` |
+|----------|--------------|---------------|---------------|
+| warm-start (`zoo-mixed`) | 0.59 | 0.58 | 0.24 |
+| after 480k self-play (6 league rounds) | 0.49 | 0.59 | **0.16** |
+
+**Flat, then slightly down** — over 480k steps the model only oscillated around
+warm-start strength and ended *below* it, and it got *worse* vs `mcts:100`
+(0.24→0.16). This is the same wall every training-method lever hit. The reason is
+structural: a **reactive policy net cannot match a search policy by playing more
+games** — self-play improves which move the net reflexively picks but adds no
+*planning*, which is exactly MCTS's edge. The only architecture that closes this is
+**search in the loop** (AlphaZero-style: a policy+value net guiding MCTS, trained by
+self-play of the search) — not more self-play of the raw net.
 
 ### 8.1 Why the heuristics still win — it's mostly the deck, not the battle
 
