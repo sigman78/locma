@@ -55,11 +55,18 @@ class BattleEnv(gym.Env):
 
     metadata: dict = {}
 
-    def __init__(self, opponent, seed: int = 0, agent_seat: int = 0) -> None:
+    def __init__(
+        self, opponent, seed: int = 0, agent_seat: int = 0, seat_random: bool = False
+    ) -> None:
         super().__init__()
         self.opponent = opponent
         self.base_seed = seed
         self.agent_seat = agent_seat
+        # seat_random: randomize the agent's seat per episode so it trains as both
+        # first AND second player (the seat-2 coin/tempo openings) — eval is mirrored
+        # across both seats, so seat-0-only training is a coverage gap.
+        self.seat_random = seat_random
+        self._seat_rng = random.Random(seed + 777)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
@@ -98,6 +105,8 @@ class BattleEnv(gym.Env):
 
         eff = seed if seed is not None else self.base_seed + self._ep
         self._ep += 1
+        if self.seat_random:
+            self.agent_seat = self._seat_rng.randint(0, 1)
 
         self.gs = GameState.new(random.Random(eff))
         draftmod.start_draft(self.gs, self._cards)

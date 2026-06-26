@@ -97,6 +97,35 @@ uv run locma tournament random scripted greedy max-guard max-attack \
 
 ---
 
+# Baselines — 2026-06-26: PPO is not under-capacity (net size × seat 2×2)
+
+_Date: 2026-06-26_
+
+Is the PPO's ceiling a mundane bug (MLP too small, single-side training, action
+mapping)? A clean 2×2 — net {64×64, 256×256×256} × seat {seat-0 only, both} —
+trained vs `mixed` 400k, evaluated paired with `balanced` (120 games/cell):
+
+| net | seat | scripted | max-guard | max-attack | **avg-hard3** | vs mcts:100 |
+|-----|------|----------|-----------|------------|---------------|-------------|
+| 64×64 | seat-0 (shipped config) | 0.483 | 0.467 | 0.525 | 0.492 | 0.200 |
+| 64×64 | **both** | 0.500 | 0.542 | 0.608 | **0.550** | 0.192 |
+| 256³ | seat-0 | 0.492 | 0.392 | 0.467 | 0.450 | 0.133 |
+| 256³ | both | 0.500 | 0.392 | 0.483 | 0.458 | 0.200 |
+
+- **MLP size is not the cap — bigger *hurts*.** 256×256×256 < 64×64 at this budget
+  (under-trained for the data). The SB3 default size is right.
+- **Both-seat training helps the small net (+0.06, 0.49 → 0.55)** — mostly a **2×
+  efficiency** win (0.55 ≈ the shipped 800k-*seat-0* model's 0.556) plus the
+  *correct* thing (eval is mirrored across seats). Now the default in
+  `train` / `train-zoo` (`--both-seat`).
+- **Action mapping is sound** — BC-of-`greedy` reaches 0.95 agreement, so the net
+  can represent and execute a strong policy from this obs/action space.
+- **vs `mcts:100` flat at ~0.2 across all four** — no mundane fix closes the search
+  gap, which is what makes the structural conclusion (reactive nets can't plan)
+  trustworthy rather than premature.
+
+---
+
 # Baselines — 2026-06-25: MCTS heuristic rollout (turn-based, new default)
 
 _Date: 2026-06-25_
