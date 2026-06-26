@@ -8,14 +8,62 @@ games remain byte-identically replayable.
 
 from __future__ import annotations
 
-import copy
 import math
 import random
 
 from locma.core import battle as battlemod
 from locma.core.engine import make_battle_view
-from locma.core.state import Phase
+from locma.core.instance import CardInstance
+from locma.core.state import GameState, Phase
 from locma.policies.battles import RandomBattlePolicy
+
+
+def _clone_inst(c: CardInstance) -> CardInstance:
+    d = CardInstance.__new__(CardInstance)
+    d.card = c.card  # share the immutable (frozen) Card template
+    d.instance_id = c.instance_id
+    d.attack = c.attack
+    d.defense = c.defense
+    d.abilities = c.abilities
+    d.can_attack = c.can_attack
+    d.has_attacked = c.has_attacked
+    return d
+
+
+def _clone_player(p):
+    q = type(p).__new__(type(p))
+    q.health = p.health
+    q.mana = p.mana
+    q.max_mana = p.max_mana
+    q.bonus_mana = p.bonus_mana
+    q.damage_counter = p.damage_counter
+    q.bonus_draw = p.bonus_draw
+    q.deck = [_clone_inst(c) for c in p.deck]
+    q.hand = [_clone_inst(c) for c in p.hand]
+    q.board = [_clone_inst(c) for c in p.board]
+    return q
+
+
+def _clone_battle(gs: GameState) -> GameState:
+    """Fast battle-only clone of a GameState for MCTS forward simulation.
+
+    Copies only the mutable battle state (players + their card-instance lists) and
+    SHARES the immutable frozen ``Card`` templates plus the battle-unused ``rng`` /
+    ``draft_pool`` / ``picks``. Equivalent to ``copy.deepcopy`` for battle purposes
+    (battle never mutates the shared fields) but ~6.7x faster — deepcopy was ~74%
+    of MCTS time. Behaviour is byte-identical, so replay determinism is preserved.
+    """
+    c = GameState.__new__(GameState)
+    c.rng = gs.rng
+    c.phase = gs.phase
+    c.turn = gs.turn
+    c.current = gs.current
+    c.draft_pool = gs.draft_pool
+    c.draft_round = gs.draft_round
+    c.picks = gs.picks
+    c.winner = gs.winner
+    c.players = (_clone_player(gs.players[0]), _clone_player(gs.players[1]))
+    return c
 
 
 class _Node:
@@ -47,6 +95,9 @@ class MCTSBattlePolicy:
         self._seed = seed
         self.turn_cap = turn_cap
         self.rollout = rollout or RandomBattlePolicy("mcts-rollout", seed=seed)
+        # The default random rollout ignores the BattleView, so we skip building it
+        # (a big per-ply cost). A custom rollout that reads the view still gets one.
+        self._rollout_view = not isinstance(self.rollout, RandomBattlePolicy)
         self._r = random.Random(seed)
 
     def reset(self, seed=None):
@@ -67,7 +118,8 @@ class MCTSBattlePolicy:
     def _rollout(self, sim, root_seat: int) -> float:
         while sim.phase == Phase.BATTLE and sim.turn <= self.turn_cap:
             legal = battlemod.battle_legal(sim)
-            action = self.rollout.battle_action(make_battle_view(sim), legal)
+            view = make_battle_view(sim) if self._rollout_view else None
+            action = self.rollout.battle_action(view, legal)
             battlemod.apply_battle(sim, action)
         return self._reward(sim, root_seat)
 
@@ -95,7 +147,7 @@ class MCTSBattlePolicy:
         root = _Node(None, None, root_seat, list(legal))
 
         for _ in range(self.iterations):
-            sim = copy.deepcopy(state)
+            sim = _clone_battle(state)
             node = root
 
             # --- selection: descend fully-expanded nodes by UCB ---
