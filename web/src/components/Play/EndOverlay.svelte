@@ -14,7 +14,7 @@
     <p class="rid">replay {result.replay_id}</p>
     <div class="actions">
       <button on:click={() => dispatch('again')}>Try again</button>
-      <a href="/index.html" class="replay-btn">Replay</a>
+      <a href="/index.html" class="replay-btn">View replay</a>
     </div>
   </div>
 </div>
@@ -24,7 +24,7 @@
     position: absolute;
     inset: 0;
     z-index: 50;
-    background: rgba(8, 8, 12, 0.78);
+    background: rgba(8, 8, 12, 0.5);
     display: grid;
     place-items: center;
   }

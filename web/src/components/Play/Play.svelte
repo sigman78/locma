@@ -19,7 +19,7 @@
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
 
-  const END_DELAY_MS = 1000
+  const END_DELAY_MS = 1800
   const HUMAN_FX_MS = 850
 
   let ready = false
