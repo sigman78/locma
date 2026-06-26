@@ -109,6 +109,21 @@ scannable index. One line per finding.
   only the **deck** ever moved the PPO). **To beat MCTS you need search in the
   loop (AlphaZero-style: a policy+value net guiding MCTS), not more self-play.**
 
+### Non-cheating MCTS (DMCTS) — the strength is the search, not the peeking
+- **DMCTS** = determinized MCTS: don't peek at the opponent's hand; sample K
+  plausible hands from the card pool, run the fast heuristic MCTS on each world,
+  vote. The move is a function of the **public** obs (info-matched to the student).
+- **DMCTS ≈ the cheating `mcts:100` in strength** (K15/I30, 80 games/cell): vs
+  greedy **0.96** / max-guard 0.85 / max-attack 0.81 / **ppo 0.76**, head-to-head
+  vs cheating mcts **0.463** (even). It beats the pool *harder* than the cheater vs
+  greedy/max-guard/ppo. Speed ~0.84 s/game (K10 0.51, K25 2.2) vs the cheater's 0.19.
+- **Implication:** the opponent's hidden hand barely changes the best move in this
+  board/tempo game — the cheating MCTS's power is its **search**, not the cheating.
+  So a strong, *info-matched* (learnable) teacher now exists. It also reframes the
+  old distillation cap (0.37 agreement) as MCTS **stochasticity**, not the info gap
+  — the fix is a *deterministic* teacher (obs-seeded DMCTS, verified stable given
+  the obs). Distillation re-test in progress.
+
 ### Prior (pre-investigation) context
 - Cheating perfect-info `mcts:100` beats `greedy` 0.79 (it *plans*); distilling it
   into a reactive net plateaued (information gap) — `baseline.md`.
