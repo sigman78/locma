@@ -13,8 +13,10 @@ _Date: 2026-06-26_
   project memory. Its own source docstring says `Perfect-information (cheating)`.
   The "first policy to beat every PPO **without cheating**" claim is wrong.
 - **`dmcts` is the only fair searcher** — it resamples the opponent's hidden
-  hand+deck (a determinization) instead of peeking. One residual caveat: it keeps
-  its **own** real deck order, so it still knows its own future draws.
+  hand+deck (a determinization) instead of peeking. A residual self-leak (it kept
+  its **own** real deck order) was **found and fixed** (now reshuffles its own
+  deck); A/B shows the self-leak was worth **~zero** (fair vs leaky head-to-head
+  0.51, avg-hard3 0.727 vs 0.724). dmcts is now strictly leak-free.
 - **Reactive policies are honest** (`random`, `scripted`, `greedy`, `max-guard`,
   `max-attack`, **`ppo`**): they map a side-visible observation to an action.
 - Against a real game server that passes only `(visible_state, actions)`:
@@ -57,7 +59,7 @@ cheaters are the ones that cannot function without peeking.
 |---|---|---|---|---|
 | `random` / `scripted` / `greedy` / `max-guard` / `max-attack` | no | no | yes, directly | **no** |
 | **`ppo`** | no | no | yes, directly (obs→action) | **no** |
-| **`dmcts`** | yes (bring your own engine) | **no** — samples the opponent's hidden hand+deck | **yes**, with a self-built simulator + a view→state reconstructor | **no — fair** (one caveat below) |
+| **`dmcts`** | yes (bring your own engine) | **no** — samples the opponent's hidden hand+deck; reshuffles its own deck | **yes**, with a self-built simulator + a view→state reconstructor | **no — strictly fair** |
 | **`mcts`** | yes | **yes** — peeks at the opponent's real hand *and* both deck orders | no | **yes** |
 | **`azlite`** | yes | **yes** — clones the true state; plans against the opponent's real hand *and* both deck orders | no | **yes** |
 
@@ -104,21 +106,45 @@ the hand alone, and it explains the full-roster matrix cleanly:
   `mcts` beats `dmcts` 0.54) is partly search quality and **partly the foresight
   they have and `dmcts` does not**.
 
-## `dmcts` — the fair searcher, and its one caveat
+## `dmcts` — the fair searcher (now strictly leak-free)
 
-`dmcts` is built for imperfect information. `mcts.py:266` `_determinize` *"clones
-gs but resamples the OPPONENT's hidden hand + deck from the card pool"*, then runs
-MCTS on each of `K` sampled worlds and aggregates. Its docstring (`mcts.py:226`)
-spells out the contrast: *"Unlike MCTSBattlePolicy (which peeks at the opponent's
-real hand), DMCTS samples … a fair [search]."* That closes leaks #1 and #2 — it
-never sees the opponent's true hand or deck order.
+`dmcts` is built for imperfect information. `_determinize` resamples the
+OPPONENT's hidden hand + deck from the card pool, then runs MCTS on each of `K`
+sampled worlds and aggregates. Its docstring spells out the contrast: *"Unlike
+MCTSBattlePolicy (which peeks at the opponent's real hand), DMCTS samples … a fair
+[search]."* That closes leaks #1 and #2 — it never sees the opponent's true hand
+or deck order.
 
-**Residual caveat (leak #3, self-only):** `_determinize` resamples only the
-*opponent's* deck; it keeps the searcher's **own** real deck order from the state.
-Since the own shuffle is also hidden in the real game, `dmcts` still knows its own
-future draws. A strictly fair version should re-shuffle its *own* unknown deck
-too. So `dmcts` is "fair on the opponent, mildly optimistic about itself." This is
-worth tightening (reshuffle own deck in `_determinize`) and re-measuring.
+**The one residual leak (#3, self-only) — found and fixed (2026-06-26).**
+`_determinize` originally kept the searcher's **own** real deck *order*. Since the
+shuffle is hidden even from its owner (`draft.py:50`), that let the search peek at
+its *own* future draws. Fixed: `_determinize` now reshuffles the own deck order
+(`reshuffle_own=True`, default) — you know your deck's *contents*, not its order.
+A determinized world is now strictly public + own-known: own hand/board real, own
+deck contents preserved but order randomized, opponent hand+deck resampled, real
+state untouched (asserted in `tests/test_mcts.py`).
+
+**Measured impact of the self-leak: ~zero.** A/B of fair (`reshuffle_own=True`) vs
+leaky (`=False`) dmcts under identical seeds:
+
+| opponent | fair | leaky | Δ |
+|---|---|---|---|
+| random | 1.000 | 1.000 | 0.000 |
+| greedy | 0.913 | 0.893 | +0.020 |
+| scripted | 0.667 | 0.680 | −0.013 |
+| max-guard | 0.760 | 0.753 | +0.007 |
+| max-attack | 0.753 | 0.740 | +0.013 |
+| ppo | 0.707 | 0.693 | +0.013 |
+| **avg-hard3** | **0.727** | **0.724** | **+0.002** |
+
+(150 games/cell; honest opponents.) **fair vs leaky head-to-head: 0.510
+[0.461–0.559], n=400** — indistinguishable from 0.50, fair if anything nominally
+ahead. So knowing your *own* future draws barely changes the *current* best move in
+this tempo game; the self-leak inflated nothing. The recorded dmcts numbers (the
+full-roster matrix) therefore stand unchanged, and `dmcts` is now the strictly
+leak-free fair yardstick. This is the sharp contrast with `mcts`/`azlite`: the
+*damaging* leak is **opponent** information (worth ~0.45–0.60 of within-search
+advantage), which only the cheaters have; `dmcts` never did.
 
 ## How the `state` reaches the policies
 
@@ -181,10 +207,11 @@ and a perfect-foresight searcher silently consumes it.
 
 ## Follow-ups
 
-- [ ] Relabel the `azlite` section in `docs/baseline.md` (and the full-roster
+- [x] Relabel the `azlite` section in `docs/baseline.md` (and the full-roster
   framing) — perfect-foresight cheating, both hand and future draws.
-- [ ] Fix the project memory note ("non-cheating" → "perfect-foresight cheating").
-- [ ] Tighten `dmcts._determinize` to also reshuffle the searcher's own deck, then
-  re-measure `dmcts` vs `ppo` and the baselines (the strictly-fair number).
+- [x] Fix the project memory note ("non-cheating" → "perfect-foresight cheating").
+- [x] Tighten `dmcts._determinize` to also reshuffle the searcher's own deck, and
+  re-measure — done; the self-leak was worth ~zero (fair vs leaky 0.51 head-to-head,
+  avg-hard3 0.727 vs 0.724), so the recorded `dmcts` numbers stand.
 - [ ] Consider a `cheats: bool` capability flag on policies so the harness can tag
   results and never silently report a cheating searcher beside fair ones.
