@@ -128,3 +128,49 @@ def test_dmcts_deterministic_mode_stable_given_obs():
     view = make_battle_view(gs)
     p = DMCTSBattlePolicy(determinizations=6, iterations=6, seed=0, deterministic=True)
     assert p.battle_action(view, legal, state=gs) == p.battle_action(view, legal, state=gs)
+
+
+def test_dmcts_determinize_is_fair_no_state_leak():
+    """A fair world uses only public + own-known info: own hand/board kept real,
+    own deck CONTENTS preserved but ORDER reshuffled (no future-draw self-leak),
+    opponent hand+deck resampled. Real state untouched."""
+    from collections import Counter  # noqa: PLC0415
+
+    from locma.policies.mcts import _SAMPLED_ID_BASE, DMCTSBattlePolicy  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me, opp = gs.current, 1 - gs.current
+    real_me_hand = [c.instance_id for c in gs.players[me].hand]
+    real_me_board = [c.instance_id for c in gs.players[me].board]
+    real_me_deck_order = [c.instance_id for c in gs.players[me].deck]
+    real_me_deck_contents = Counter(c.card for c in gs.players[me].deck)
+    assert len(real_me_deck_order) >= 5  # need a non-trivial deck to see a reshuffle
+
+    det = DMCTSBattlePolicy(seed=123, reshuffle_own=True)._determinize(gs, random.Random(123))
+    dm, do = det.players[me], det.players[opp]
+
+    # own hand + board are real (you see them)
+    assert [c.instance_id for c in dm.hand] == real_me_hand
+    assert [c.instance_id for c in dm.board] == real_me_board
+    # own deck: same contents (you know what you drafted) ...
+    assert Counter(c.card for c in dm.deck) == real_me_deck_contents
+    # ... but reshuffled order — the future-draw sequence is hidden (no self-leak)
+    assert [c.instance_id for c in dm.deck] != real_me_deck_order
+    # opponent hand + deck resampled (never the real hidden cards)
+    assert do.hand and all(c.instance_id >= _SAMPLED_ID_BASE for c in do.hand)
+    assert do.deck and all(c.instance_id >= _SAMPLED_ID_BASE for c in do.deck)
+    # real state untouched by determinization
+    assert [c.instance_id for c in gs.players[me].deck] == real_me_deck_order
+
+
+def test_dmcts_reshuffle_own_off_reproduces_leak():
+    """The opt-out keeps the own deck order real (the old, leaky behaviour) — used
+    to A/B how much the self-leak mattered."""
+    from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me = gs.current
+    det = DMCTSBattlePolicy(seed=123, reshuffle_own=False)._determinize(gs, random.Random(123))
+    assert [c.instance_id for c in det.players[me].deck] == [
+        c.instance_id for c in gs.players[me].deck
+    ]

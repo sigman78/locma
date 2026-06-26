@@ -226,9 +226,12 @@ class DMCTSBattlePolicy:
     Unlike ``MCTSBattlePolicy`` (which peeks at the opponent's real hand), DMCTS
     samples ``determinizations`` plausible opponent hands/decks from the card pool,
     runs the heuristic MCTS on each "world", and votes — so its move depends only on
-    public information. Empirically ~as strong as the cheating MCTS in this
-    board/tempo game (the hidden hand barely changes the best move), but a fair
-    player. Keeps the agent's own private state real (a player knows their own deck).
+    public + own-known information. Empirically ~as strong as the cheating MCTS in
+    this board/tempo game (the hidden hand barely changes the best move), but a fair
+    player. The agent's own hand/board are kept real (it sees them), but its own
+    deck ORDER is reshuffled (``reshuffle_own``, default on): a player knows their
+    deck's contents, not its hidden shuffle, so leaving the order real would leak
+    its own future draws.
 
     ``deterministic=True`` seeds the sampling + search from the observation each
     decision, so the move is a stable function of the public ``BattleView`` (used
@@ -244,6 +247,7 @@ class DMCTSBattlePolicy:
         seed: int = 0,
         rollout_turns: int = 3,
         deterministic: bool = False,
+        reshuffle_own: bool = True,
     ):
         self.name = name
         self.K = determinizations
@@ -251,6 +255,7 @@ class DMCTSBattlePolicy:
         self.c = c
         self.rollout_turns = rollout_turns
         self.deterministic = deterministic
+        self.reshuffle_own = reshuffle_own
         self._seed = seed
         self._r = random.Random(seed)
         self._cards = load_cards()
@@ -264,8 +269,17 @@ class DMCTSBattlePolicy:
         self._inner.reset(s)
 
     def _determinize(self, gs, rng):
-        """Clone gs but resample the OPPONENT's hidden hand + deck from the card
-        pool (keep their visible board/health/mana and the agent's real state)."""
+        """Clone gs into a fair "world" using only public + own-known information.
+
+        Resamples the OPPONENT's hidden hand + deck from the card pool (keeping
+        their visible board/health/mana). For the agent's OWN side, the hand and
+        board are kept real (a player sees their own hand), but the deck ORDER is
+        reshuffled when ``reshuffle_own`` is set: a player knows their deck's
+        *contents* but not its shuffled order, so the future-draw sequence is
+        hidden even from its owner. Leaving it real would let the search peek at
+        its own future draws — a self-leak. (``reshuffle_own=False`` reproduces the
+        old behaviour, for measuring how much that leak mattered.)
+        """
         det = _clone_battle(gs)
         opp = 1 - det.current
         p = det.players[opp]
@@ -277,6 +291,8 @@ class DMCTSBattlePolicy:
             CardInstance.from_card(rng.choice(self._cards), _SAMPLED_ID_BASE + nh + i)
             for i in range(nd)
         ]
+        if self.reshuffle_own:
+            rng.shuffle(det.players[det.current].deck)
         return det
 
     def battle_action(self, view, legal, state=None):
