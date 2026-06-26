@@ -97,6 +97,40 @@ uv run locma tournament random scripted greedy max-guard max-attack \
 
 ---
 
+# Baselines — 2026-06-25: MCTS heuristic rollout (turn-based, new default)
+
+_Date: 2026-06-25_
+
+MCTS rollouts are now **heuristic** by default (`rollout_turns=3`): random-play a
+few *turn boundaries* (adaptive depth — a turn is variable‑length), then score the
+settled position with a board/health heuristic, instead of random‑playing to
+terminal. Random rollouts are high‑variance and weak at 100 iterations; the
+heuristic leaf value is both much **stronger** and ~6× faster. Combined with the
+fast battle clone, `mcts:100` went from ~7.8 s/game → **~0.2 s/game (~30×)**. The
+legacy terminal rollout is `rollout_turns<=0` (spec `mcts:100,1.41,0,0`).
+
+## `mcts:100` (heuristic) win rate vs the pool
+
+`locma play mcts:100 <opp> --games 60 --seed 0` (120 games/cell):
+
+| vs → | random | scripted | greedy | max‑guard | max‑attack | ppo (balanced) |
+|------|--------|----------|--------|-----------|------------|----------------|
+| **mcts:100** | 1.000 | 0.658 | 0.908 | 0.767 | 0.708 | **0.733** |
+
+It is now the **strongest policy in the kit by a clear margin** — it beats every
+baseline and the new PPO (which the *old* random‑rollout `mcts:100` was only
+~even with). The old `mcts:100` beat `greedy` ~0.79; that section below is
+superseded by this default.
+
+## Reproduce
+
+```bash
+uv run locma play mcts:100 greedy --games 60 --seed 0            # heuristic (default)
+uv run locma play mcts:100,1.41,0,0 greedy --games 60 --seed 0   # legacy terminal rollout
+```
+
+---
+
 # Baselines — 2026-06-25: PPO × draft sweep (the deck is the lever)
 
 _Date: 2026-06-25_

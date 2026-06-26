@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 ABILITY_ORDER = "BCDGLW"  # Breakthrough, Charge, Drain, Guard, Lethal, Ward
+_ABILITY_IDX = {ch: i for i, ch in enumerate(ABILITY_ORDER)}  # O(1) lookup for has()
 
 
 class CardType(IntEnum):
@@ -18,7 +19,7 @@ def normalize_abilities(raw: str) -> str:
     return "".join(ch if ch in present else "-" for ch in ABILITY_ORDER)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Card:
     id: int
     name: str
@@ -32,4 +33,4 @@ class Card:
     card_draw: int
 
     def has(self, ability: str) -> bool:
-        return self.abilities[ABILITY_ORDER.index(ability)] != "-"
+        return self.abilities[_ABILITY_IDX[ability]] != "-"

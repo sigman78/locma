@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from locma.core.cards import ABILITY_ORDER, Card
+from locma.core.cards import _ABILITY_IDX, Card
 
 
-@dataclass
+@dataclass(slots=True)
 class CardInstance:
     card: Card
     instance_id: int
@@ -27,4 +27,4 @@ class CardInstance:
         )
 
     def has(self, ability: str) -> bool:
-        return self.abilities[ABILITY_ORDER.index(ability)] != "-"
+        return self.abilities[_ABILITY_IDX[ability]] != "-"

@@ -42,6 +42,12 @@ def test_mcts_partial_params():
     assert p.battle.iterations != 100
 
 
+def test_mcts_rollout_turns_param():
+    assert make_policy("mcts:100").battle.rollout_turns == 3  # heuristic default
+    assert make_policy("mcts:50,1.41,0,5").battle.rollout_turns == 5
+    assert make_policy("mcts:50,1.41,0,0").battle.rollout_turns == 0  # legacy terminal
+
+
 def test_ppo_default_and_path():
     assert make_policy("ppo").battle.model_path == "model.zip"
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"
