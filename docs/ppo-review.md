@@ -325,16 +325,39 @@ hyperparameter tuning:
 
 | # | Lever | Impact | Cost | Why |
 |---|-------|--------|------|-----|
-| 1 | **Reward shaping** — sparse ±1 → dense potential-based (health / board-advantage delta) | **High** | Small (env reward) | Battles are 30–60 decisions; terminal-only reward makes credit assignment hard. `explained_variance` 0.48–0.63 says the critic is imperfect — dense signal is the most principled fix. |
-| 2 | **Opponent strategy** — curriculum / `mixed` / self-play | Medium | Small–Large | Curriculum (`train-zoo`) and `mixed` re-tested under the fixed action space (the positional-era "diversity doesn't help" may not hold). Self-play/league is the high-ceiling version (deferred). |
-| 3 | **Both-seat training** | Medium | Small (alternate `agent_seat`) | Agent only trains as seat 0, never learning the second-player coin/bonus-mana mechanic (`battle.py:55-60`), yet eval is mirrored into seat 1 half the time — a real distribution gap. |
-| 4 | **Longer horizon** — `gamma` 0.99 → 0.997 | Low–Med | Trivial (1 param) | `0.99^50 ≈ 0.6` heavily discounts the eventual win; compounds with sparse reward. |
-| 5 | **Draft control** — agent drafts its own deck | Med–High | Large (draft head/env) | Today the opponent drafts both decks; the agent plays a deck it didn't choose. High ceiling but expands scope to draft+battle. |
+| 1 | **Draft control** — agent drafts its own deck | **High** | Medium (draft env/head) | See §8.1: the gap to the ground baselines is *mostly the deck*. Battle-only PPO is yoked to a generic `greedy` draft while the baselines win through deck construction. |
+| 2 | **Reward shaping** — sparse ±1 → dense potential-based (health / board-advantage delta) | High | Small (env reward) | Battles are 30–60 decisions; terminal-only reward makes credit assignment hard. `explained_variance` 0.48–0.63 says the critic is imperfect. Addresses the *residual* battle sharpness once the deck is fixed. |
+| 3 | **Opponent strategy** — `mixed` / curriculum / self-play | Medium | Small–Large | `mixed` already best among trained models (`baseline.md`); self-play/league is the high-ceiling version (deferred). |
+| 4 | **Both-seat training** | Medium | Small (alternate `agent_seat`) | Agent only trains as seat 0, never learning the second-player coin/bonus-mana mechanic (`battle.py:55-60`), yet eval is mirrored into seat 1 half the time. |
+| 5 | **Longer horizon** — `gamma` 0.99 → 0.997 | Low–Med | Trivial (1 param) | `0.99^50 ≈ 0.6` heavily discounts the eventual win; compounds with sparse reward. |
 | 6 | Net size / `n_steps` / lr sweep | Low | Small | Defaults likely fine for 308 dims; do last. |
 
-**Recommended order:** reward shaping + `gamma=0.997` first (cheap, principled,
-targets the long-horizon credit assignment that caps value learning), then
-both-seat training; defer draft control and self-play until the cheap structural
-levers are spent. The `train-zoo` CLI command (lever #2, curriculum) exists for
-quick experimentation; the opponent set is `ZOO_OPPONENTS` in
-`locma/envs/training.py`.
+**Recommended order:** draft control first (§8.1 shows it is where most of the gap
+lives), then reward shaping + `gamma=0.997` for the residual battle sharpness, then
+both-seat training. The `train-zoo` CLI command (lever #3) exists already; its
+opponent set is `ZOO_OPPONENTS` in `locma/envs/training.py`.
+
+### 8.1 Why the heuristics still win — it's mostly the deck, not the battle
+
+A deck-swap probe (zoo `mixed` model, 240 mirrored games/cell) isolates draft from
+battle by pairing the **same trained PPO battle net** with different drafts:
+
+| agent (draft + battle) | scripted | greedy | max-guard | max-attack |
+|------------------------|----------|--------|-----------|------------|
+| PPO + **greedy** draft (shipped `ppo:`) | 0.396 | 0.592 | 0.412 | 0.404 |
+| PPO + **max-guard** draft | 0.608 | 0.496 | **0.500** | **0.500** |
+| PPO + **max-attack** draft | 0.471 | 0.671 | 0.446 | 0.500 |
+| `greedy` (ref) | 0.463 | 0.500 | 0.471 | 0.308 |
+
+Holding the battle net fixed and swapping only the draft to `max-guard`'s lifts PPO
+from losing (0.41/0.40) to **even with every ground baseline** (0.50/0.50, and 0.61
+vs `scripted`). The battle policy was never the bottleneck — the generic `greedy`
+deck was. The strong baselines win largely through **deck construction** (a Guard
+wall, or max aggression); even among them, `max-guard`'s wall beats `max-attack`'s
+race 0.61. A behavioural probe confirms PPO is *not* a `greedy` clone (it agrees
+with `greedy` on only ~36% of decisions and attacks the face far more — 22–31% vs
+6–8%), so it learned a real, distinct policy; it is simply playing a deck that was
+not built for any coherent plan. **For the residual** (even a good deck only reaches
+~0.50, not dominance): the classic limits bite — sparse reward, fixed (not
+self-play) opponents, and no search/planning (why cheating `mcts:100` beats `greedy`
+0.79: it *plans*; PPO reacts).
