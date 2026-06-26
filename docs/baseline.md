@@ -30,6 +30,108 @@ not just the ordinal.
 
 ---
 
+# Baselines — 2026-06-26: full-roster tournament (baselines + search + PPO) — azlite undefeated, ratings inverted
+
+_Date: 2026-06-26_
+
+The whole bunch in one bracket: the five built-in baselines plus all three search
+policies (`mcts:100` cheating perfect-info, `azlite:100` AlphaZero-lite, `dmcts`
+fair determinized MCTS) and the strongest learned policy
+(`ppo:runs/ppo-shuffled-pool.zip`). One round-robin so openskill/Elo rate everyone
+against everyone — `locma tournament … --games 200 --seed 0 --reference random
+--matrix`, 400 games per pair (mirrored), 36 pairs, 14,400 games. This is the
+**first appearance of `dmcts` numbers** anywhere in this file.
+
+## Ratings (openskill ordinal / Elo)
+
+| policy                          | openskill | elo  | p vs random |
+|---------------------------------|-----------|------|-------------|
+| `ppo` (shuffled-pool)           | 64.87     | 3177 | 3.1e-118    |
+| `dmcts`                         | 47.87     | 2586 | 7.7e-121    |
+| `azlite:100`                    | 30.53     | 2039 | 7.7e-121    |
+| `mcts:100`                      | 14.25     | 1575 | 7.7e-121    |
+| `max-attack`                    | -4.08     | 1130 | 8.3e-114    |
+| `max-guard`                     | -15.23    | 932  | 8.3e-114    |
+| `greedy`                        | -26.42    | 795  | 8.2e-112    |
+| `scripted`                      | -35.64    | 773  | 6.2e-116    |
+| `random`                        | -38.76    | 493  | —           |
+
+## Pair-score matrix (row's win rate vs column)
+
+`ppo` = `ppo:runs/ppo-shuffled-pool.zip`.
+
+|            | random | scripted | greedy | max-guard | max-attack | mcts:100 | azlite:100 | dmcts | ppo  |
+|------------|--------|----------|--------|-----------|------------|----------|------------|-------|------|
+| random     | —      | 0.01     | 0.01   | 0.01      | 0.01       | 0.00     | 0.00       | 0.00  | 0.00 |
+| scripted   | 0.99   | —        | 0.57   | 0.47      | 0.59       | 0.30     | 0.31       | 0.32  | 0.41 |
+| greedy     | 0.99   | 0.43     | —      | 0.43      | 0.33       | 0.07     | 0.18       | 0.07  | 0.35 |
+| max-guard  | 0.99   | 0.53     | 0.56   | —         | 0.58       | 0.20     | 0.23       | 0.20  | 0.42 |
+| max-attack | 0.99   | 0.41     | 0.67   | 0.42      | —          | 0.20     | 0.20       | 0.23  | 0.38 |
+| mcts:100   | 1.00   | 0.70     | 0.93   | 0.80      | 0.81       | —        | 0.45       | 0.54  | 0.71 |
+| azlite:100 | 1.00   | 0.69     | 0.82   | 0.77      | 0.81       | 0.56     | —          | 0.60  | 0.76 |
+| dmcts      | 1.00   | 0.68     | 0.93   | 0.80      | 0.77       | 0.46     | 0.40       | —     | 0.74 |
+| ppo        | 1.00   | 0.59     | 0.65   | 0.57      | 0.62       | 0.28     | 0.24       | 0.26  | —    |
+
+## The ratings are inverted — read the matrix
+
+The openskill/Elo order (`ppo` > `dmcts` > `azlite` > `mcts`) is almost exactly
+**backwards** from the head-to-head truth. Among the four strong policies the
+pair-score matrix is, unusually, **cleanly transitive**:
+
+- **`azlite:100` is the only undefeated policy in the roster** — it wins *every*
+  head-to-head: beats the cheating `mcts:100` (0.56), `dmcts` (0.60), `ppo` (0.76),
+  and all five baselines (0.69–1.00). Yet it rates **#3**.
+- **`mcts:100`** beats `dmcts` (0.54) and `ppo` (0.71); its only loss is to
+  `azlite` (0.45) → true **#2**, rated **#4** (last of the strong cluster).
+- **`dmcts`** beats `ppo` (0.74) and all baselines but loses to `mcts` (0.46) and
+  `azlite` (0.40) → true **#3**, rated **#2**.
+- **`ppo` (shuffled-pool)** beats all five baselines (0.57–0.65) but loses every
+  game to the three searches (0.24–0.28) → true **#4 of the strong cluster**, yet
+  the rating models crown it **#1** (openskill 64.87 / Elo 3177).
+
+So the rating systems place the *single undefeated policy* third and the
+*loses-to-every-search* policy first. This is the same non-transitivity pathology
+flagged throughout this file (PPO's "annihilate `random`, beat the ground
+baselines" profile fools latent-skill models), now at its sharpest: **the
+pair-score matrix is authoritative; the ordinal is not.**
+
+## Strength order, and what `dmcts` adds
+
+True ranking by head-to-head: **`azlite` > `mcts` > `dmcts` > `ppo` >
+{ground baselines} > `random`**. The strong cluster is cleanly ordered; the
+ground baselines keep their familiar rock-paper-scissors (`scripted` beats
+`greedy` 0.57 and `max-attack` 0.59 but loses to `max-guard` 0.47).
+
+The three searches all crush the ground baselines far harder than `ppo` does
+(avg-hard3 over `scripted`/`max-guard`/`max-attack`: `mcts` **0.770**, `azlite`
+**0.757**, `dmcts` **0.750**, vs `ppo` **0.593**). Note `mcts` edges `azlite` on
+the baseline sweep (0.770 vs 0.757) yet *loses* to it head-to-head (0.45) — even
+avg-hard3 doesn't capture that `azlite` is undefeated; only the matrix does.
+
+`dmcts` (fair determinized MCTS — sample `K` hands, run MCTS per world) debuts as a
+**strong, non-cheating** policy: it beats every baseline and `ppo` (0.74) but sits
+below both `mcts` and `azlite`, the weakest of the three searches head-to-head.
+`azlite` — also non-cheating and ~2× faster — dominates it (0.60), reaffirming
+that the PUCT + heuristic-oracle design is the better fair searcher here.
+
+Cross-check: `azlite` vs `ppo` (0.76) and vs `mcts` (0.56) reproduce the prior
+azlite section's 0.760 / 0.570 (200-game) within noise; its avg-hard3 0.757 here
+matches its solo 0.741.
+
+## Reproduce
+
+```bash
+uv run locma tournament random scripted greedy max-guard max-attack \
+  mcts:100 azlite:100 dmcts ppo:runs/ppo-shuffled-pool.zip \
+  --games 200 --seed 0 --reference random --matrix
+```
+
+(`ppo:` needs the `[ml]` extra and a local `runs/ppo-shuffled-pool.zip`; the
+search policies are self-contained. `dmcts` at ~0.8 s/game is the bottleneck —
+the full bracket is ~80 min.)
+
+---
+
 # Baselines — 2026-06-26: shuffled draft pool replaced uniform (prior matrix frozen)
 
 _Date: 2026-06-26_
