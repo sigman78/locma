@@ -50,6 +50,18 @@ def test_submit_draft_advances_round():
     assert all(isinstance(cid, int) for cid in p["my_cards"])
 
 
+def test_submit_draft_response_includes_drafted():
+    g = make_game(human_seat=0)
+    resp = g.submit_draft(0)
+    # drafted list must be present and have exactly one entry after the first pick
+    assert "drafted" in resp
+    assert len(resp["drafted"]) == 1
+    assert all(isinstance(cid, int) for cid in resp["drafted"])
+    # while still in draft phase, len(drafted) must equal pending my_picks
+    assert resp["pending"]["phase"] == "draft"
+    assert len(resp["drafted"]) == resp["pending"]["my_picks"]
+
+
 def _legal_pass(g):
     return {"t": "pass"}
 

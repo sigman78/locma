@@ -229,10 +229,12 @@ class InteractiveGame:
         }
 
     def _response(self) -> dict:
+        gs = self.gs
         return {
             "status": self.status,
             "slice": {"events": list(self._slice)},
             "steps": list(self._steps),
             "pending": self.pending(),
             "result": self.result,
+            "drafted": [c.id for c in gs.picks[self.human_seat]],
         }
