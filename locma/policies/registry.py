@@ -46,8 +46,11 @@ def _mcts(params, spec):
     iters = int(params[0]) if len(params) > 0 else 100
     c = float(params[1]) if len(params) > 1 else math.sqrt(2)
     seed = int(params[2]) if len(params) > 2 else 0
+    rollout_turns = int(params[3]) if len(params) > 3 else 3  # heuristic rollout (0 = legacy)
     return Composer(
-        MCTSBattlePolicy(iterations=iters, c=c, seed=seed), GreedyDraftPolicy(), name=spec
+        MCTSBattlePolicy(iterations=iters, c=c, seed=seed, rollout_turns=rollout_turns),
+        GreedyDraftPolicy(),
+        name=spec,
     )
 
 

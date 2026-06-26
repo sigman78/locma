@@ -88,3 +88,19 @@ def test_clone_battle_shares_cards_and_isolates_mutations():
         len(gs.players[0].deck),
     )
     assert snap == after  # original state untouched by clone simulation
+
+
+def test_mcts_defaults_to_heuristic_rollout_and_legacy_still_works():
+    assert MCTSBattlePolicy().rollout_turns == 3  # heuristic turn-bounded by default
+    gs = _battle_state(seed=7)
+    legal = battlemod.battle_legal(gs)
+    view = make_battle_view(gs)
+    # legacy terminal rollout (rollout_turns=0) still returns a legal action
+    a = MCTSBattlePolicy(iterations=8, seed=0, rollout_turns=0).battle_action(view, legal, state=gs)
+    assert a in legal
+
+
+def test_mcts_leaf_value_in_range():
+    gs = _battle_state(seed=8)
+    v = MCTSBattlePolicy()._leaf_value(gs, 0)
+    assert -1.0 <= v <= 1.0
