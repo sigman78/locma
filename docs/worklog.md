@@ -246,8 +246,13 @@ Two paths remain, and they **compose** — substrate then algorithm:
 - **`azlite` was mislabeled "non-cheating"** in `baseline.md` and memory; its own
   docstring says `Perfect-information (cheating)`. Corrected both.
 - **`dmcts` is the only fair searcher** (resamples the opponent's hidden hand+deck).
-  Residual caveat: it keeps its *own* real deck order (knows its own future draws);
-  a strictly-fair version should reshuffle its own deck too. Follow-up.
+  Had a residual self-leak (kept its *own* real deck order → knew its own future
+  draws); **fixed** — `_determinize` now reshuffles the own deck (`reshuffle_own`,
+  default on). **A/B: the self-leak was worth ~zero** — fair vs leaky head-to-head
+  0.51 [0.46–0.56], avg-hard3 0.727 vs 0.724, all per-cell deltas within noise. So
+  knowing your *own* future draws barely changes the current move; the damaging
+  leak is *opponent* info, which only `mcts`/`azlite` have. `dmcts` now strictly
+  leak-free; recorded numbers stand (~0.73 avg-hard3, beats `ppo` ~0.71).
 - **Deployment:** against a real `(visible_state, action)` server, reactive policies
   and `dmcts` work (dmcts needs its own engine as a model); `mcts`/`azlite` can't be
   reproduced — the info they need isn't on the wire. The honest ranking is
