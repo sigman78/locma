@@ -157,16 +157,29 @@ scannable index. One line per finding.
 - **Reproducibility:** engine is seed-deterministic; eval uses held-out seeds
   (`1_000_000+`) disjoint from training env seeds (`0,1,…`) to avoid leakage.
 
-## Open levers (next, ranked) — see `ppo-review.md` §8
-- **Spent / ruled out:** action space (fixed), draft (balanced, shipped), reward
-  shaping, observation richness, entropy, normalization, opponent-pool diversity,
-  **self-play / league** (flat over 480k, even with both-seat training + MCTS in
-  the pool), and longer horizon.
-- **The remaining lever is SEARCH in the loop** — AlphaZero-style: a policy+value
-  net guiding MCTS (priors + leaf value), trained by self-play of the *search*.
-  The reactive PPO can't be self-played into planning; this is the one architecture
-  that fits everything learned. Bigger build.
-- **Distillation of the (now strong + fast) heuristic MCTS** is the cheap thing to
-  re-try first — the old practicum/distill plateaued at ~0.25 agreement under the
-  *positional* action space; the semantic space lifted greedy-cloning 0.69→0.95, so
-  MCTS-cloning is worth re-measuring.
+## Bottom line — the reactive-net wall (every imitation/training-method path is spent)
+
+The whole investigation converges on one structural fact: **a reactive policy net
+(obs → action, no lookahead) cannot reach the search policies' strength**, and
+*none* of the ways to push it there work — because a search policy's move is the
+output of planning, which has no compact reactive form.
+
+| route | result |
+|-------|--------|
+| RL (budget, opponents, reward shaping, obs, entropy, normalization) | flat — only the **deck** ever moved it |
+| **Self-play / league** (warm-start, both-seat, MCTS in pool) | flat over 480k, then down |
+| **Distillation** of MCTS (cheating *or* DMCTS, positional *or* semantic, stochastic *or* deterministic) | caps ~0.40 agreement → PPO-level net |
+
+Greedy (a simple heuristic) clones to 0.95; *any* search policy caps ~0.40. The
+deck is the lever for the reactive net (shipped: `ppo+balanced` beats the ground
+baselines, ~even with the *old* weak MCTS). The residual gap to the *strong* MCTS is
+its **planning**, and the only architecture that gets planning is **search at play
+time** — don't re-run the reactive routes.
+
+## Open levers (next) — see `ppo-review.md` §8
+- **SEARCH in the loop (AlphaZero-style)** — the one remaining lever: a policy+value
+  net that *guides* MCTS (priors + leaf value), trained by self-play of the
+  **search** (not the raw net). The net makes the search cheaper/sharper; the search
+  provides the planning the net can't represent. Bigger build, but it fits
+  everything above. The fast forward model (`_clone_battle`) + `dmcts` (a fair,
+  strong determinized search) are the building blocks.
