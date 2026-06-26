@@ -68,9 +68,7 @@ def _azlite(params, spec):
     seed = int(params[2]) if len(params) > 2 else 0
     rollout_turns = int(params[3]) if len(params) > 3 else 0
     return Composer(
-        AZLiteBattlePolicy(
-            iterations=iters, c_puct=c_puct, seed=seed, rollout_turns=rollout_turns
-        ),
+        AZLiteBattlePolicy(iterations=iters, c_puct=c_puct, seed=seed, rollout_turns=rollout_turns),
         BalancedDraftPolicy(),
         name=spec,
     )
