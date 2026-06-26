@@ -19,8 +19,8 @@ boundary (alpha = beta = 0.05) or `--max-games` is hit. It stops as soon as the
 evidence decides — far fewer games than a fixed-n test for clear effects.
 
 ## Ratings: Elo and openskill
-`tournament` reports both. Elo is the classic pairwise update; openskill
-(Plackett-Luce) tracks a (mu, sigma) belief and reports a conservative
+`tournament` reports both. Elo is an order-free Bradley-Terry (MM) fit; openskill
+(Plackett-Luce, seeded shuffle-averaged) tracks a (mu, sigma) belief and reports a conservative
 **ordinal** = mu - 3*sigma. openskill is the primary number (it models
 uncertainty); Elo is kept for continuity and comparison.
 

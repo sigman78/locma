@@ -30,7 +30,7 @@ not just the ordinal.
 
 ---
 
-# Baselines — 2026-06-26: full-roster tournament (baselines + search + PPO) — azlite undefeated, ratings inverted
+# Baselines — 2026-06-26: full-roster tournament (baselines + search + PPO) — azlite tops; rating estimator fixed
 
 _Date: 2026-06-26_
 
@@ -44,17 +44,21 @@ against everyone — `locma tournament … --games 200 --seed 0 --reference rand
 
 ## Ratings (openskill ordinal / Elo)
 
+Computed with the **order-free** rating estimator (Bradley-Terry Elo +
+shuffle-averaged openskill) introduced in this change — see "why they didn't
+agree before" below.
+
 | policy                          | openskill | elo  | p vs random |
 |---------------------------------|-----------|------|-------------|
-| `ppo` (shuffled-pool)           | 64.87     | 3177 | 3.1e-118    |
-| `dmcts`                         | 47.87     | 2586 | 7.7e-121    |
-| `azlite:100`                    | 30.53     | 2039 | 7.7e-121    |
-| `mcts:100`                      | 14.25     | 1575 | 7.7e-121    |
-| `max-attack`                    | -4.08     | 1130 | 8.3e-114    |
-| `max-guard`                     | -15.23    | 932  | 8.3e-114    |
-| `greedy`                        | -26.42    | 795  | 8.2e-112    |
-| `scripted`                      | -35.64    | 773  | 6.2e-116    |
-| `random`                        | -38.76    | 493  | —           |
+| `azlite:100`                    | 29.05     | 1755 | 7.7e-121    |
+| `mcts:100`                      | 28.72     | 1748 | 7.7e-121    |
+| `dmcts`                         | 28.28     | 1732 | 7.7e-121    |
+| `ppo` (shuffled-pool)           | 22.75     | 1578 | 3.1e-118    |
+| `scripted`                      | 21.76     | 1552 | 6.2e-116    |
+| `max-guard`                     | 20.88     | 1529 | 8.3e-114    |
+| `max-attack`                    | 20.09     | 1507 | 8.3e-114    |
+| `greedy`                        | 16.92     | 1438 | 8.2e-112    |
+| `random`                        | -20.67    | 661  | —           |
 
 ## Pair-score matrix (row's win rate vs column)
 
@@ -72,35 +76,42 @@ against everyone — `locma tournament … --games 200 --seed 0 --reference rand
 | dmcts      | 1.00   | 0.68     | 0.93   | 0.80      | 0.77       | 0.46     | 0.40       | —     | 0.74 |
 | ppo        | 1.00   | 0.59     | 0.65   | 0.57      | 0.62       | 0.28     | 0.24       | 0.26  | —    |
 
-## The ratings are inverted — read the matrix
+## Ratings now agree with the matrix — and why they didn't before
 
-The openskill/Elo order (`ppo` > `dmcts` > `azlite` > `mcts`) is almost exactly
-**backwards** from the head-to-head truth. Among the four strong policies the
-pair-score matrix is, unusually, **cleanly transitive**:
+Both the openskill ordinal and Elo now rank the roster in exactly its
+head-to-head order: **`azlite` > `mcts` > `dmcts` > `ppo` > {baselines} >
+`random`**. `azlite:100` — the **only policy that wins every head-to-head** (beats
+cheating `mcts` 0.56, `dmcts` 0.60, `ppo` 0.76, and all five baselines
+0.69–1.00) — tops both. `ppo` beats all five baselines (0.57–0.65) but loses every
+game to the three searches (0.24–0.28), so it lands 4th, just above the baselines.
 
-- **`azlite:100` is the only undefeated policy in the roster** — it wins *every*
-  head-to-head: beats the cheating `mcts:100` (0.56), `dmcts` (0.60), `ppo` (0.76),
-  and all five baselines (0.69–1.00). Yet it rates **#3**.
-- **`mcts:100`** beats `dmcts` (0.54) and `ppo` (0.71); its only loss is to
-  `azlite` (0.45) → true **#2**, rated **#4** (last of the strong cluster).
-- **`dmcts`** beats `ppo` (0.74) and all baselines but loses to `mcts` (0.46) and
-  `azlite` (0.40) → true **#3**, rated **#2**.
-- **`ppo` (shuffled-pool)** beats all five baselines (0.57–0.65) but loses every
-  game to the three searches (0.24–0.28) → true **#4 of the strong cluster**, yet
-  the rating models crown it **#1** (openskill 64.87 / Elo 3177).
+**This was not true under the old estimator, and the difference was a bug, not
+non-transitivity.** The original `elo_from_results` / `openskill_from_results`
+updated ratings in a single sequential sweep, so the result depended on the
+*order* games were fed — and the tournament feeds them grouped by pair (all of
+A's wins, then B's). On this exact matrix the old single-pass estimator rated
+**`ppo` #1 (openskill 64.87 / Elo 3177) and `azlite` #3** — almost the reverse of
+the truth. Two checks pinned the cause: (1) merely **shuffling the game order**
+moved `azlite` 3rd → 1st and `ppo` 1st → 4th, and (2) a convergent
+**Bradley-Terry** fit recovered the matrix order exactly. This change replaces
+both estimators with order-free fits — **Elo via Bradley-Terry MM**, **openskill
+via seeded shuffle-averaging** (`locma/stats/`) — so a rating is now a function of
+the results, not their order.
 
-So the rating systems place the *single undefeated policy* third and the
-*loses-to-every-search* policy first. This is the same non-transitivity pathology
-flagged throughout this file (PPO's "annihilate `random`, beat the ground
-baselines" profile fools latent-skill models), now at its sharpest: **the
-pair-score matrix is authoritative; the ordinal is not.**
+The genuine non-transitivity that remains is small and confined to the baselines:
+`scripted` beats `greedy` (0.57) and `max-attack` (0.59) but loses to `max-guard`
+(0.47), so no scalar can order those three perfectly — hence their clustered
+20–22 ordinals. **Read the matrix for the baseline rock-paper-scissors; the gross
+ordering the ratings now report is correct.** (The "ratings rank PPO #1 — read the
+matrix" refrain in the dated sections below is partly this same single-pass
+artifact; see the methodology note.)
 
 ## Strength order, and what `dmcts` adds
 
-True ranking by head-to-head: **`azlite` > `mcts` > `dmcts` > `ppo` >
-{ground baselines} > `random`**. The strong cluster is cleanly ordered; the
-ground baselines keep their familiar rock-paper-scissors (`scripted` beats
-`greedy` 0.57 and `max-attack` 0.59 but loses to `max-guard` 0.47).
+Head-to-head ranking, now matched by the ratings above: **`azlite` > `mcts` >
+`dmcts` > `ppo` > {ground baselines} > `random`**. The strong cluster is cleanly
+ordered; the ground baselines keep their familiar rock-paper-scissors (`scripted`
+beats `greedy` 0.57 and `max-attack` 0.59 but loses to `max-guard` 0.47).
 
 The three searches all crush the ground baselines far harder than `ppo` does
 (avg-hard3 over `scripted`/`max-guard`/`max-attack`: `mcts` **0.770**, `azlite`
@@ -117,6 +128,17 @@ that the PUCT + heuristic-oracle design is the better fair searcher here.
 Cross-check: `azlite` vs `ppo` (0.76) and vs `mcts` (0.56) reproduce the prior
 azlite section's 0.760 / 0.570 (200-game) within noise; its avg-hard3 0.757 here
 matches its solo 0.741.
+
+## Methodology note — rating tables in older sections predate this fix
+
+The rating (openskill / Elo) tables in the **dated sections below were produced by
+the order-dependent single-pass estimator** and are therefore unreliable — not
+just in magnitude but sometimes in *ordering* (the PPO sections' "ratings rank PPO
+#1 while it loses to 3/5 baselines" is largely the same artifact, not pure
+non-transitivity). The **pair-score matrices in those sections are unaffected** —
+they are direct win rates. Only this section's ratings use the order-free
+estimator; re-rating an old matrix with it will move the numbers (and may reorder
+them). Read older ordinals with that caveat; trust the matrices.
 
 ## Reproduce
 

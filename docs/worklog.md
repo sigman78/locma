@@ -203,3 +203,33 @@ Two paths remain, and they **compose** — substrate then algorithm:
   *planning*. Building blocks already exist: fast `_clone_battle` forward model,
   `dmcts` (a fair determinized search — swap its heuristic leaf for the net value +
   add priors), the semantic action space, and the heuristic leaf to bootstrap.
+
+## 2026-06-26 — full-roster tournament + rating-estimator fix
+
+### Full-roster tournament (`docs/baseline.md`)
+- One round-robin over the whole roster — 5 baselines + `mcts:100` (cheating) +
+  `azlite:100` + `dmcts` (fair determinized) + `ppo:runs/ppo-shuffled-pool.zip` —
+  400 games/pair, `--seed 0`. **First `dmcts` numbers in the docs.**
+- **`azlite:100` is the only undefeated policy**: beats `mcts` 0.56, `dmcts` 0.60,
+  `ppo` 0.76, and all baselines 0.69–1.00. Head-to-head order:
+  `azlite > mcts > dmcts > ppo > {baselines} > random`.
+- **`dmcts` debut** — strong fair search: beats every baseline and `ppo` (0.74) but
+  loses to `mcts` (0.46) and `azlite` (0.40). `azlite` (also non-cheating, ~2×
+  faster) dominates it; PUCT + heuristic-oracle beats determinized rollout here.
+- The three searches crush the ground baselines far harder than `ppo` (avg-hard3:
+  mcts 0.770, azlite 0.757, dmcts 0.750 vs ppo 0.593).
+
+### Rating-estimator bug — fixed
+- **`elo_from_results` / `openskill_from_results` were single-pass and
+  order-dependent.** Fed the tournament's pair-grouped game order they **inverted**
+  this roster: rated `ppo` #1 (openskill 64.87 / Elo 3177) and the undefeated
+  `azlite` #3.
+- **Measurement bug, not non-transitivity:** shuffling the game order moved
+  `azlite` 3rd→1st and `ppo` 1st→4th, and a convergent Bradley-Terry fit recovered
+  the matrix order.
+- **Fix:** Elo → order-free **Bradley-Terry MM**; openskill → **seeded
+  shuffle-averaging** of the online PlackettLuce (`locma/stats/`). Ratings now
+  match the matrix (`azlite` #1). The "ratings mislead, read the matrix" refrain
+  across the docs partly misattributed this bug to non-transitivity; genuine
+  non-transitivity remains only in the baseline rock-paper-scissors. Rating tables
+  in older `baseline.md` sections predate the fix (matrices stand).
