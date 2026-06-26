@@ -69,6 +69,26 @@ def test_weighted_values_keywords_over_raw_stats():
     assert GreedyDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
 
 
+def test_weighted_values_removal_spell_by_effect_magnitude():
+    # A red item with -7 defense (7 damage to an ENEMY minion) must not be scored
+    # as a -7 card; spell-aware value treats it as strong removal (+7).
+    offered = (
+        _CV(2, 7, 0, -7, "------"),  # red item: 7-damage removal
+        _CV(0, 2, 1, 1, "------"),  # weak 1/1 creature
+        _CV(0, 1, 1, 1, "------"),
+    )
+    assert WeightedDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
+
+
+def test_card_value_caps_destroy_sentinel():
+    from locma.policies.drafts import _card_value  # noqa: PLC0415
+
+    decimate = _CV(2, 5, 0, -99, "BCDGLW")  # destroy-a-minion + strip-all sentinel
+    v = _card_value(decimate)
+    assert v < 25, "defense -99 must be capped, not ~99"
+    assert v > 6, "still premium: above a vanilla 3/3 creature (6)"
+
+
 def test_balanced_prefers_creature_and_is_stateful():
     p = BalancedDraftPolicy()
     offered = (_CV(1, 3, 2, 2, "------"), _CV(0, 3, 2, 2, "------"))  # item vs equal creature

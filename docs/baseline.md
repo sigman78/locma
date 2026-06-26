@@ -146,6 +146,25 @@ mean win rate vs the three hard baselines (`scripted` / `max-guard` /
 instead of `greedy` — that alone turns it from losing (~0.39) to **beating** the
 ground baselines (~0.55), with no retraining.
 
+## Spell-aware draft valuation (refinement)
+
+Item cards carry stats applied to the **enemy**: red/blue removal spells have
+**negative** attack/defense (e.g. *Decimate* defense −99 = destroy a minion,
+*Mighty Throwing Axe* defense −7 = 7 damage). The stat-summing heuristics scored
+these by `attack + defense`, valuing *Decimate* at **−99** — the worst card in the
+game. Fixed: `_card_value` (`locma/policies/drafts.py`) now values items by the
+**magnitude** of their effect (`|attack| + |defense|`, capped at 13 so
+destroy-sentinels don't dominate) + keyword value.
+
+But *correct* spell valuation **hurt** the PPO pairing — the learned battle net
+plays creatures far better than spells (`ppo+balanced` 0.544 → 0.487 once it drafted
+removal). Tuning the `balanced` item discount against the PPO net (1.5 → 6 → 12 gave
+0.47 → 0.52 → 0.56 avg vs the hard baselines) settled on a strong creature bias: the
+shipped `balanced` drafts creature-heavy and takes only premium removal, reaching
+**0.556** (scripted 0.520 / max-guard 0.553 / max-attack 0.593 — beats all three),
+the best draft in the sweep. `greedy` is left deliberately naive as the reference
+baseline.
+
 ## Reproduce
 
 ```bash
