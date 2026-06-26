@@ -30,6 +30,7 @@ export interface DraftPending {
   total: number
   triplet: number[]
   my_picks: number
+  my_cards: number[]
 }
 
 export interface BattlePending {
@@ -72,6 +73,7 @@ export interface PlayStep {
 export interface SubmitResponse extends GameSnapshot {
   slice: Slice
   steps: PlayStep[]
+  drafted?: number[]
 }
 
 // --- legal-action predicates (drive what is clickable) ---

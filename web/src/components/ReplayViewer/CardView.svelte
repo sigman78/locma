@@ -69,7 +69,7 @@
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
-        <img src={artUrl(card.card_id)} alt={name} on:error={() => (imgOk = false)} />
+        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
@@ -123,7 +123,8 @@
 {/if}
 
 <style>
-  .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px); }
+  .cardwrap { position: relative; width: var(--card-w, 108px); height: var(--card-h, 150px);
+    user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
   .cardwrap:hover { z-index: 50; }
   /* mana cost — top-left gem (printed cost) */
   .cost { position: absolute; top: 3px; left: 3px; z-index: 2;
@@ -136,6 +137,7 @@
   .card { position: relative; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
     background-color: #1c1c22;
+    user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
     background-image:
       repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 6px),
       repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 6px); }

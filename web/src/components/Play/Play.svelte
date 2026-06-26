@@ -19,6 +19,9 @@
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
 
+  const END_DELAY_MS = 1800
+  const HUMAN_FX_MS = 850
+
   let ready = false
   let error: string | null = null
   let gameId: string | null = null
@@ -30,12 +33,19 @@
   let liveStep: PlayStep | null = null
   let playing = false
   let seq: Sequencer | null = null
+  let finalBattle: BattlePending | null = null
+  let showEnd = false
+  let endTimer: ReturnType<typeof setTimeout> | null = null
+  let staged: { cardIds: number[]; response: SubmitResponse } | null = null
 
   loadCards()
     .then(() => (ready = true))
     .catch((e) => (error = String(e)))
 
-  onDestroy(() => seq?.cancel())
+  onDestroy(() => {
+    seq?.cancel()
+    if (endTimer) { clearTimeout(endTimer); endTimer = null }
+  })
 
   function fire(evs: EventDict[], action: ActionDict | null) {
     events = evs
@@ -86,6 +96,19 @@
       liveStep = null
       currentAction = null
     }
+    if (r.result) {
+      const last = steps[steps.length - 1]
+      if (last) {
+        finalBattle = { phase: 'battle', you, view: last.view, legal: [] }
+        endTimer = setTimeout(
+          () => (showEnd = true),
+          paced ? END_DELAY_MS : HUMAN_FX_MS + END_DELAY_MS,
+        )
+      } else {
+        // No board to freeze — reveal overlay immediately
+        showEnd = true
+      }
+    }
     snap = { status: r.status, pending: r.pending, result: r.result }
   }
 
@@ -105,13 +128,18 @@
   async function pick(p: number) {
     if (!gameId || playing) return
     try {
-      await applyResponse(await submitDraft(gameId, p), true)
+      const r = await submitDraft(gameId, p)
+      if (r.pending && r.pending.phase === 'battle') {
+        staged = { cardIds: r.drafted ?? [], response: r }
+      } else {
+        await applyResponse(r, true)
+      }
     } catch (e) {
       error = String(e)
     }
   }
 
-  // Auto-draft every remaining round with random picks; commit once at the end.
+  // Auto-draft every remaining round with random picks; stage at the end.
   async function autoDraft() {
     if (!gameId || playing) return
     try {
@@ -119,10 +147,17 @@
       while (r.pending && r.pending.phase === 'draft') {
         r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       }
-      await applyResponse(r, true)
+      staged = { cardIds: r.drafted ?? [], response: r }
     } catch (e) {
       error = String(e)
     }
+  }
+
+  async function play() {
+    if (!staged) return
+    const s = staged
+    staged = null
+    await applyResponse(s.response, true)
   }
 
   async function act(a: ActionDict) {
@@ -143,7 +178,15 @@
     snap = null
     events = []
     currentAction = null
+    finalBattle = null
+    showEnd = false
+    staged = null
+    if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
+
+  $: battlePending = (snap?.pending && snap.pending.phase === 'battle')
+    ? (snap.pending as BattlePending)
+    : finalBattle
 </script>
 
 <main>
@@ -152,21 +195,32 @@
   {:else if !snap || !gameId}
     <h1>LOCM — Play vs AI</h1>
     <NewGame on:start={(e) => start(e.detail)} />
-  {:else if snap.result}
-    <EndOverlay result={snap.result} on:again={again} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
-    <DraftScreen pending={snap.pending as DraftPending} on:pick={(e) => pick(e.detail)} on:auto={autoDraft} />
-  {:else if snap.pending && snap.pending.phase === 'battle'}
-    <BattleScreen
-      pending={snap.pending as BattlePending}
-      {you}
-      {events}
-      {currentAction}
-      {fxToken}
-      {liveStep}
-      {playing}
-      on:act={(e) => act(e.detail)}
-    />
+    <DraftScreen
+      pending={snap.pending as DraftPending}
+      done={!!staged}
+      doneCardIds={staged?.cardIds ?? []}
+      on:pick={(e) => pick(e.detail)}
+      on:auto={autoDraft}
+      on:play={play} />
+  {:else if battlePending}
+    <div class="board-stage">
+      <BattleScreen
+        pending={battlePending}
+        {you}
+        {events}
+        {currentAction}
+        {fxToken}
+        {liveStep}
+        playing={playing || !!snap?.result}
+        on:act={(e) => act(e.detail)}
+      />
+      {#if showEnd && snap?.result}
+        <EndOverlay result={snap.result} on:again={again} />
+      {/if}
+    </div>
+  {:else if snap?.result}
+    <EndOverlay result={snap.result} on:again={again} />
   {/if}
 
   <!-- blocking error overlay: a failed request leaves the game state unknown,
@@ -189,6 +243,7 @@
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
   main { padding: 16px; color: #ddd; }
   h1 { font-size: 20px; }
+  .board-stage { position: relative; width: max-content; margin: 0 auto; }
   /* blocking modal: fixed full-viewport backdrop catches all clicks */
   .error-overlay { position: fixed; inset: 0; z-index: 1000;
     display: grid; place-items: center; background: rgba(0, 0, 0, 0.72); }
