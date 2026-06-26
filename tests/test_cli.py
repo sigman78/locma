@@ -88,3 +88,13 @@ def test_train_help_lists_command():
 def test_train_rejects_zero_steps():
     # The guard fires before any ML import, so this passes with or without [ml].
     assert runner.invoke(app, ["train", "--steps", "0"]).exit_code != 0
+
+
+def test_train_zoo_help_lists_command():
+    # --help does not import the ML stack, so this is safe without the [ml] extra.
+    assert runner.invoke(app, ["train-zoo", "--help"]).exit_code == 0
+
+
+def test_train_zoo_rejects_zero_steps():
+    # The guard fires before any ML import, so this passes with or without [ml].
+    assert runner.invoke(app, ["train-zoo", "--steps-per-opponent", "0"]).exit_code != 0

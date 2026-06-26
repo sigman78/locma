@@ -26,6 +26,77 @@ order — so read the matrix, not just the ordinal.
 
 ---
 
+# Baselines — 2026-06-25: PPO zoo (semantic action space + opponent strategy)
+
+_Date: 2026-06-25_
+
+After the semantic action-space fix (PR #19; see `docs/ppo-review.md`), this
+study re-asks the opponent-diversity question the positional-era study answered
+"no" to. Three `MaskablePPO` models, **800k steps each**, differing only in
+training opponent strategy:
+
+- **single** — 800k vs `greedy` (one fixed opponent).
+- **mixed** — 800k vs the `mixed` per-episode baseline pool.
+- **curriculum** — 200k each, **back-to-back** on one model:
+  `greedy → scripted → max-guard → max-attack` (the new `locma train-zoo`).
+
+## Tournament (5 baselines + 3 PPO, 200 games/pair, `--seed 0`)
+
+Pair-score matrix, row win rate vs column (PPO models abbreviated p:single /
+p:mixed / p:curr):
+
+|            | random | scripted | greedy | max-guard | max-attack | p:single | p:mixed | p:curr |
+|------------|--------|----------|--------|-----------|------------|----------|---------|--------|
+| scripted   | 0.98   | —        | 0.55   | 0.51      | 0.56       | 0.72     | 0.61    | 0.60   |
+| greedy     | 0.98   | 0.46     | —      | 0.47      | 0.30       | 0.35     | 0.42    | 0.42   |
+| max-guard  | 1.00   | 0.49     | 0.53   | —         | 0.60       | 0.70     | 0.58    | 0.64   |
+| max-attack | 0.98   | 0.43     | 0.69   | 0.40      | —          | 0.65     | 0.59    | 0.66   |
+| **p:single** | 0.99 | 0.28     | 0.65   | 0.30      | 0.35       | —        | 0.48    | 0.54   |
+| **p:mixed**  | 0.98 | 0.39     | 0.57   | 0.41      | 0.41       | 0.52     | —       | 0.52   |
+| **p:curr**   | 0.98 | 0.40     | 0.58   | 0.36      | 0.34       | 0.47     | 0.48    | —      |
+
+Avg win rate vs the four non-`random` baselines: **p:mixed 0.445 > p:curr 0.420 >
+p:single 0.395**.
+
+## Findings
+
+1. **Opponent diversity now helps** — the opposite of the positional-era study.
+   `mixed` (0.445) and `curriculum` (0.420) both beat single-`greedy` (0.395) on
+   the *hard* baselines: `single` is a `greedy`-specialist (greedy 0.65 but
+   scripted 0.28 / max-guard 0.30), while `mixed` is balanced (~0.39–0.41 across
+   all four ground baselines). The fixed action space unlocked a lever the broken
+   one couldn't use.
+2. **`mixed` is the best strategy** — it beats both other PPOs head-to-head (0.52
+   vs each) and is the most balanced. `curriculum` helps over `single` but is
+   slightly behind `mixed` on the hardest baselines.
+3. **Still short of the ground baselines** — even `mixed` loses to `scripted`
+   (0.61), `max-guard` (0.58), and `max-attack` (0.59). But this is a large step
+   up from the positional era (where PPO lost ~0.70–0.77 to these); the gap is now
+   ~0.58–0.61, not ~0.77.
+4. **Ratings mislead again — read the matrix.** openskill/elo rank the PPOs #1/#2/#3
+   (curriculum 51.3 / mixed 37.2 / single 24.6) *above every baseline* — yet
+   `curriculum` (rated #1) **loses head-to-head to both other PPOs** (0.47, 0.48)
+   and loses 0.58–0.66 to the ground baselines. The pair-score matrix is the truth.
+
+**Takeaway.** Under the semantic action space, opponent diversity is a real lever
+(`mixed` best, ~0.45 avg vs ground baselines), but no PPO yet *beats* the ground
+baselines. Closing that gap needs the structural levers in `docs/ppo-review.md`
+§8 (reward shaping, both-seat training, longer horizon), not more opponents.
+
+## Reproduce
+
+```bash
+uv sync --extra ml
+uv run locma train --steps 800000 --opponent greedy --out runs/zoo-single.zip --seed 0
+uv run locma train --steps 800000 --opponent mixed  --out runs/zoo-mixed.zip  --seed 0
+uv run locma train-zoo --steps-per-opponent 200000  --out runs/zoo-curriculum.zip --seed 0
+uv run locma tournament random scripted greedy max-guard max-attack \
+  ppo:runs/zoo-single.zip ppo:runs/zoo-mixed.zip ppo:runs/zoo-curriculum.zip \
+  --games 100 --seed 0 --matrix
+```
+
+---
+
 # Baselines — 2026-06-25: MCTS distillation (practicum → BC)
 
 _Date: 2026-06-25_

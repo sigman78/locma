@@ -66,6 +66,29 @@ it the command exits with a clear error.
 
 Example: `uv run locma train --steps 50000 --opponent random --out model.zip`
 
+## train-zoo
+`locma train-zoo [--steps-per-opponent N] [--out FILE] [--seed S] [--ent-coef C]`
+Train **one** MaskablePPO agent **back-to-back** against a code-declared set of
+opponents (a curriculum): the model's weights carry across phases — each phase
+swaps the opponent and continues training without resetting. Total budget is
+`steps_per_opponent × len(zoo)`. **Requires the `[ml]` extra.**
+
+The opponent set is the `ZOO_OPPONENTS` constant in `locma/envs/training.py`
+(currently `greedy → scripted → max-guard → max-attack`); edit that tuple to
+change the curriculum. There is no CLI list flag yet — it is deliberately a code
+constant for now.
+
+- `--steps-per-opponent` timesteps per opponent phase (default 200000).
+- `--out` output path for the saved model (default `model.zip`).
+- `--ent-coef` entropy coefficient (default 0.02).
+
+The saved model is a normal PPO artifact — evaluate it like any other policy,
+e.g. `locma tournament random scripted greedy max-guard max-attack ppo:zoo.zip
+--matrix`. For the rationale and a roadmap of further PPO levers, see
+`docs/ppo-review.md`.
+
+Example: `uv run locma train-zoo --steps-per-opponent 200000 --out runs/zoo.zip`
+
 ## fetch-cards
 `locma fetch-cards`
 Refresh the vendored card list from the upstream source.

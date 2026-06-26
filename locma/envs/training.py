@@ -88,3 +88,43 @@ def train_agent(
     model.save(out)
     env.close()
     return out
+
+
+# A small, code-declared "zoo" of opponents to train against back-to-back. This is
+# intentionally a constant for now (no CLI list plumbing); edit it to change the
+# curriculum. Order matters — training proceeds left to right. See docs/cli.md and
+# the future-explorations roadmap in docs/ppo-review.md.
+ZOO_OPPONENTS: tuple[str, ...] = ("greedy", "scripted", "max-guard", "max-attack")
+
+
+def train_zoo(
+    opponents=ZOO_OPPONENTS,
+    steps_per_opponent: int = 200_000,
+    out: str = "model.zip",
+    seed: int = 0,
+    ent_coef: float = 0.02,
+    verbose: int = 1,
+):
+    """Train ONE MaskablePPO model back-to-back against each opponent in turn.
+
+    The model's weights carry across phases (a curriculum) — `set_env` swaps the
+    opponent and `learn` continues without resetting the timestep counter. Total
+    budget is ``steps_per_opponent * len(opponents)``. Returns the saved path.
+
+    Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
+    """
+    opps = list(opponents)
+    if not opps:
+        raise ValueError("train_zoo needs a non-empty opponent list")
+
+    from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+    model = MaskablePPO(
+        "MlpPolicy", _build_env(opps[0], seed, 1), verbose=verbose, seed=seed, ent_coef=ent_coef
+    )
+    for i, opp in enumerate(opps):
+        if i > 0:
+            model.set_env(_build_env(opp, seed, 1))
+        model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
+    model.save(out)
+    return out
