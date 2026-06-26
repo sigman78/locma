@@ -218,6 +218,7 @@ class InteractiveGame:
                 "total": len(gs.draft_pool),
                 "triplet": [c.id for c in trip],
                 "my_picks": len(gs.picks[self.human_seat]),
+                "my_cards": [c.id for c in gs.picks[self.human_seat]],
             }
         legal = battlemod.battle_legal(gs)
         return {
