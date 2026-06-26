@@ -213,9 +213,10 @@ Two paths remain, and they **compose** — substrate then algorithm:
 - **`azlite:100` is the only undefeated policy**: beats `mcts` 0.56, `dmcts` 0.60,
   `ppo` 0.76, and all baselines 0.69–1.00. Head-to-head order:
   `azlite > mcts > dmcts > ppo > {baselines} > random`.
-- **`dmcts` debut** — strong fair search: beats every baseline and `ppo` (0.74) but
-  loses to `mcts` (0.46) and `azlite` (0.40). `azlite` (also non-cheating, ~2×
-  faster) dominates it; PUCT + heuristic-oracle beats determinized rollout here.
+- **`dmcts` debut** — the one *fair* search: beats every baseline and `ppo` (0.74)
+  but loses to `mcts` (0.46) and `azlite` (0.40). That gap is partly cheating, not
+  skill — `azlite`/`mcts` have perfect foresight (see the searcher audit below).
+  `dmcts` vs `ppo` 0.74 is the honest search-vs-reactive number.
 - The three searches crush the ground baselines far harder than `ppo` (avg-hard3:
   mcts 0.770, azlite 0.757, dmcts 0.750 vs ppo 0.593).
 
@@ -233,3 +234,36 @@ Two paths remain, and they **compose** — substrate then algorithm:
   across the docs partly misattributed this bug to non-transitivity; genuine
   non-transitivity remains only in the baseline rock-paper-scissors. Rating tables
   in older `baseline.md` sections predate the fix (matrices stand).
+
+## 2026-06-26 — searchers cheat; search-as-training-opponent; curriculum endpoint
+
+### Searcher honesty audit (`docs/searchers-fiasco.md`)
+- **`mcts` and `azlite` are perfect-*foresight* cheaters.** They clone the real
+  `GameState` and simulate forward, leaking not just the opponent's hidden hand but
+  **both decks' shuffled order** — every future draw (decks shuffled once at draft
+  `draft.py:50`; draws are deterministic `pop(0)` `battle.py:41`; the clone copies
+  both decks in order). They play a fully revealed, deterministic game.
+- **`azlite` was mislabeled "non-cheating"** in `baseline.md` and memory; its own
+  docstring says `Perfect-information (cheating)`. Corrected both.
+- **`dmcts` is the only fair searcher** (resamples the opponent's hidden hand+deck).
+  Residual caveat: it keeps its *own* real deck order (knows its own future draws);
+  a strictly-fair version should reshuffle its own deck too. Follow-up.
+- **Deployment:** against a real `(visible_state, action)` server, reactive policies
+  and `dmcts` work (dmcts needs its own engine as a model); `mcts`/`azlite` can't be
+  reproduced — the info they need isn't on the wire. The honest ranking is
+  `dmcts > ppo/reactive > baselines > random`.
+
+### Search policies as TRAINING opponents (`BattleEnv`)
+- `BattleEnv` now passes the forward-model `state` to the opponent
+  (`battle_action(view, legal, self.gs)`), mirroring the play harness
+  (`engine.py:135`) — heuristics ignore it, search policies need it. Un-defers the
+  "search opponents" TODO; enables training a PPO against `mcts`/`azlite`/`dmcts`.
+
+### PPO curriculum endpoint vs `azlite` — flat (prediction held)
+- Warm-started the strongest zoo model (`ppo-shuffled-pool.zip`) and continued
+  **+200k steps vs `azlite:100`**. Result: **no movement** — avg-hard3 0.594 →
+  0.597 (flat); vs `azlite` 0.237 → 0.270 (within ±0.055 noise, still ~73% loss).
+- Confirms the structural ceiling: a reactive net can't plan, the training opponent
+  doesn't change that — and it especially can't learn to beat a **perfect-foresight
+  cheater** reactively. ~95 min at ~35 fps (the search opponent is the cost). Lever
+  remains search at play time (`ppo-review.md` §8), not the training opponent.
