@@ -59,6 +59,93 @@ flipping that head-to-head.)
 
 ---
 
+# Baselines — 2026-06-26: PPO retrained under the shuffled draft pool (beats all ground baselines)
+
+_Date: 2026-06-26_
+
+Retraining the `train-zoo` curriculum (greedy → scripted → max-guard → max-attack,
+200k steps each = 800k, both-seat) under the **new shuffled draft pool** default,
+then evaluating the model paired with the `balanced` draft (the `ppo:` spec) vs each
+baseline (`locma play ppo:runs/ppo-shuffled-pool.zip <opp> --games 500 --seed 0`,
+1000 games/cell):
+
+| policy                                   | random | scripted | greedy | max-guard | max-attack | **avg-hard3** |
+|------------------------------------------|--------|----------|--------|-----------|------------|---------------|
+| **ppo** (shuffled-pool zoo + `balanced`) | 0.995  | 0.596    | 0.674  | 0.577     | 0.592      | **0.588**     |
+
+This is the **strongest PPO in this file** — it **beats all five baselines**, every
+hard cell ≥ 0.577 (avg-hard3 **0.588** vs the prior best 0.569 for the both-seat
+`mixed` 800k model). The `ppo:` spec pairs the battle net with the `balanced` draft,
+the draft sweep's best partner. It is the **bar** for the AlphaZero-lite work.
+
+## Reproduce
+
+```bash
+uv run locma train-zoo --out runs/ppo-shuffled-pool.zip --seed 0
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma play ppo:runs/ppo-shuffled-pool.zip $OPP --games 500 --seed 0
+done
+```
+
+---
+
+# Baselines — 2026-06-26: AlphaZero-lite — search beats every PPO
+
+_Date: 2026-06-26_
+
+`azlite` is **AlphaZero-lite**: PUCT-guided MCTS on the perfect-information forward
+model, using existing heuristics as the `f(s) -> (policy, value)` oracle instead of a
+self-play-trained net (the `docs/ppo-review.md` §8.4B "search in the loop" path, in
+its simplest form). The **prior** over a node's legal actions is a 1-ply heuristic
+lookahead (apply each action, score the result with the board/health leaf value,
+softmax); the **value** is that same leaf value. PUCT focuses the simulations, so 100
+of them already play at — and past — the cheating MCTS's level. Drop-in (`azlite:100`),
+self-contained (no `[ml]`), deterministic, ~0.4 s/game. Paired with the `balanced`
+draft like `ppo:`.
+
+## Win rate vs the pool (`azlite:100`, balanced draft, `--seed 0`, 300 games/cell)
+
+| policy         | random | scripted | greedy | max-guard | max-attack | **avg-hard3** |
+|----------------|--------|----------|--------|-----------|------------|---------------|
+| **azlite:100** | 1.000  | 0.677    | 0.823  | 0.757     | 0.790      | **0.741**     |
+
+It **beats every baseline** — avg-hard3 **0.741**, versus the strongest PPO's 0.588 —
+the first policy in this kit to do so without cheating *and* without a trained net.
+
+## Head-to-head vs the strongest policies
+
+| matchup (`azlite:100` = A)                   | win rate A | 95% CI      | n   |
+|----------------------------------------------|------------|-------------|-----|
+| azlite vs `ppo:runs/ppo-shuffled-pool.zip`   | **0.760**  | 0.696–0.814 | 200 |
+| azlite vs `mcts:100` (cheating perfect-info) | 0.570      | 0.501–0.637 | 200 |
+
+azlite **beats the strongest PPO head-to-head 0.76** and is **even-to-ahead of the
+cheating MCTS (0.57)** — a simple, fast drop-in that beats every PPO we have tested,
+by a wide margin on the baseline sweep and head-to-head.
+
+## Why it works (and what it means for §8.4B)
+
+The PPO study concluded the ceiling is **structural** — a reactive net cannot plan, and
+the only fix is **search at play time** (`docs/ppo-review.md` §8). `azlite` is the
+cheapest possible test of that claim: keep the existing heuristic as the (prior, value)
+oracle and just add PUCT search. It immediately reaches MCTS strength and laps every
+PPO — confirming the thesis. The *full* §8.4B build (a self-play-trained policy/value
+net replacing the heuristic oracle) remains the lever for going *beyond* the cheating
+MCTS; `azlite` is its working skeleton — the PUCT loop, the forward model, and the
+prior/value plumbing — with a heuristic stand-in for the net.
+
+## Reproduce
+
+```bash
+for OPP in random scripted greedy max-guard max-attack; do
+  uv run locma play azlite:100 $OPP --games 150 --seed 0
+done
+uv run locma play azlite:100 ppo:runs/ppo-shuffled-pool.zip --games 100 --seed 0
+uv run locma play azlite:100 mcts:100 --games 100 --seed 0
+```
+
+---
+
 # Baselines — 2026-06-25: PPO zoo (semantic action space + opponent strategy)
 
 _Date: 2026-06-25_

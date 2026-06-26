@@ -54,6 +54,26 @@ def _mcts(params, spec):
     )
 
 
+def _azlite(params, spec):
+    """AlphaZero-lite — PUCT-guided MCTS with a heuristic (policy, value) oracle.
+
+    Spec ``azlite:iterations,c_puct,seed,rollout_turns``. Paired with the
+    `balanced` draft (the draft sweep's best partner; see docs/baseline.md), as
+    `ppo:` is — so the matchup against the baselines is apples-to-apples.
+    """
+    from locma.policies.azlite import AZLiteBattlePolicy  # noqa: PLC0415
+
+    iters = int(params[0]) if len(params) > 0 else 100
+    c_puct = float(params[1]) if len(params) > 1 else 1.5
+    seed = int(params[2]) if len(params) > 2 else 0
+    rollout_turns = int(params[3]) if len(params) > 3 else 0
+    return Composer(
+        AZLiteBattlePolicy(iterations=iters, c_puct=c_puct, seed=seed, rollout_turns=rollout_turns),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 def _dmcts(params, spec):
     """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
     from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
@@ -105,6 +125,7 @@ _FACTORIES = {
     "max-guard": _max_guard,
     "max-attack": _max_attack,
     "mcts": _mcts,
+    "azlite": _azlite,
     "dmcts": _dmcts,
     "ppo": _ppo,
     "mixed": _mixed,

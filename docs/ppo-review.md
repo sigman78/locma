@@ -471,3 +471,15 @@ This is a bigger build, but every piece (fast clone, semantic action space, a fa
 determinized search, a heuristic leaf to bootstrap the value net) is already in the
 kit. Path A is the substrate that makes B's net stronger and its search cheaper; B is
 the planning that A's reactive net can never represent on its own.
+
+**Update (2026-06-26): the skeleton is built and it already wins.** `azlite`
+(`locma/policies/azlite.py`) realizes B in its simplest form — PUCT search with a
+**heuristic** `(policy, value)` oracle instead of a trained net: prior = 1-ply
+heuristic lookahead softmax, value = the board/health leaf. With **no net and no
+self-play**, `azlite:100` **beats every baseline** (avg-hard3 0.741), **beats the
+strongest PPO head-to-head 0.76**, and is **even-to-ahead of the cheating MCTS**
+(0.57) — see `docs/baseline.md` (2026-06-26). This confirms the thesis directly:
+**search at play time is the lever**, not more reactive-net training. The remaining
+upside of the *full* B (a self-play-trained policy/value net replacing the heuristic
+oracle) is to push *past* the cheating MCTS; `azlite` is the working harness it would
+drop into — swap `_prior`/`_value` for the net's policy/value heads.
