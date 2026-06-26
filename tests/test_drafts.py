@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 
 from locma.policies.drafts import (
+    BalancedDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
+    MaxDefenseDraftPolicy,
     MaxGuardDraftPolicy,
     RandomDraftPolicy,
+    WeightedDraftPolicy,
 )
 
 
@@ -50,3 +53,26 @@ def test_max_attack_prefers_highest_attack():
 
 def test_greedy_draft_prefers_highest_score():
     assert GreedyDraftPolicy("g").draft_action(_view(), [0, 1, 2]) == 2
+
+
+def test_max_defense_prefers_highest_defense_creature():
+    offered = (_CV(0, 1, 5, 1, "------"), _CV(0, 2, 1, 5, "------"), _CV(1, 1, 9, 9, "------"))
+    assert MaxDefenseDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 1
+
+
+def test_weighted_values_keywords_over_raw_stats():
+    # idx0 vanilla 3/3 (no kw); idx1 guard 3/2 (G in proper BCDGLW slot 3).
+    offered = (_CV(0, 3, 3, 3, "------"), _CV(0, 3, 3, 2, "---G--"), _CV(0, 1, 1, 1, "------"))
+    # weighted values Guard (+2.0) so 3+2+2.0=7 beats the vanilla 6 ...
+    assert WeightedDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 1
+    # ... whereas plain greedy (0.5/keyword) takes the higher-stat vanilla.
+    assert GreedyDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
+
+
+def test_balanced_prefers_creature_and_is_stateful():
+    p = BalancedDraftPolicy()
+    offered = (_CV(1, 3, 2, 2, "------"), _CV(0, 3, 2, 2, "------"))  # item vs equal creature
+    assert p.draft_action(_DV(offered), [0, 1]) == 1  # creature preferred
+    assert len(p._picks) == 1
+    p.reset()
+    assert p._picks == []
