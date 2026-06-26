@@ -165,6 +165,13 @@ shipped `balanced` drafts creature-heavy and takes only premium removal, reachin
 the best draft in the sweep. `greedy` is left deliberately naive as the reference
 baseline.
 
+This is **not** a training-distribution gap: training a PPO battle net *on*
+spell-heavy hands (≈1.1 removal/deck) did not improve spell-deck play (0.493 vs
+0.487 for the creature-trained net) and made it worse overall (0.492 vs 0.556 on
+the good deck). Spell decks are simply weaker for this aggressive tempo style — a
+creature gives recurring board presence and face damage; one-shot removal trades
+1-for-1 without advancing your own clock.
+
 ## Reproduce
 
 ```bash
