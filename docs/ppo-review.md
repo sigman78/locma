@@ -332,7 +332,7 @@ hyperparameter tuning:
 | **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
 | Observation richness / entropy / normalization / **net size** | ✗ ruled out | §3.4 multi-seed A/B + the net-size×seat 2×2 (`baseline.md`) — all neutral; bigger net *hurts*. |
 | **Richer board encoding** (tokens + self-attention + tactical scalars) | **tested — parity (secondary)** | §8.4A update: a *correctly slot-addressable* token+attention encoding reaches/marginally beats flat under the curriculum (avg-hard3 0.588 vs 0.573, 2 seeds) but within seed noise, at ~4× cost. A real but secondary lever; the relational matrix and its use as a substrate for B remain untested. |
-| **Search in the loop** (AlphaZero-lite) | **open — the real lever** | §8.4B: net guides `dmcts`/MCTS (PUCT priors + value leaf), trained by self-play of the *search*. The only path to MCTS-level *planning*; a bigger build. |
+| **Search in the loop** (AlphaZero-lite) | **Phase 1 validated** | §8.4B update: fair net-guided determinized PUCT (`netdmcts`, frozen net oracle) hits avg-hard3 **0.82** — beats dmcts (0.70), the raw net (0.64), and even the cheating azlite/mcts (0.74), *fairly*. The real lever, confirmed. Phase 2 = self-play training of the search. |
 
 **Recommended order (remaining):** every training-method lever is now spent — reward,
 obs, opponent diversity, and **self-play** (§8.3) all flat; only the **deck** ever
@@ -551,3 +551,29 @@ strongest PPO head-to-head 0.76**, and is **even-to-ahead of the cheating MCTS**
 upside of the *full* B (a self-play-trained policy/value net replacing the heuristic
 oracle) is to push *past* the cheating MCTS; `azlite` is the working harness it would
 drop into — swap `_prior`/`_value` for the net's policy/value heads.
+
+**Update (2026-06-27): Phase 1 of the *full* B is built — and a FAIR policy now beats
+the cheaters.** `netdmcts` (`net_oracle.py`) is the fair realization: PUCT over
+**determinized** worlds (dmcts's sampling — no hidden info) with a **trained net** as
+the `(policy, value)` oracle (`NetOracle` reads only the public `BattleView`),
+replacing both azlite's heuristic oracle and its cheating real-state clone. With the
+self-play net (`selfplay-r2` — a 0.639 *reactive* net) as a **frozen** oracle (no AZ
+training yet):
+
+| policy (2 seeds, 50 games/opp) | fair? | avg-hard3 |
+|---|---|---|
+| **netdmcts:8,40** (net oracle, determinized PUCT) | ✅ | **0.817** |
+| dmcts:15,30 (heuristic oracle, determinized) | ✅ | 0.697 |
+| raw net `selfplay-r2` | ✅ | 0.639 |
+| azlite / mcts (perfect-foresight CHEATERS) | ❌ | 0.741 / ~0.74 |
+
+The net oracle beats the heuristic oracle by **+0.12 avg-hard3** (both seeds: +0.127,
++0.113), at *less* search budget (8×40=320 vs 15×30=450). Search lifts the same net
+**+0.18** over its bare reactive self (0.639 → 0.817). And a **fair, no-hidden-info**
+policy now **tops the perfect-foresight cheaters** (0.74). Iteration-efficient: strong
+even at I=20 (0.825 vs max-attack), 0.875 at I=80. This is the strongest policy in the
+kit and the clean validation of B — **search-in-the-loop with a net oracle adds the
+planning the reactive net structurally lacks, *fairly*.** Phase 2 (self-play *of the
+search*: AZ targets = visit distribution + game outcome, iterated) is the open upside —
+the oracle here was only RL-trained, not search-trained. See `docs/baseline.md`
+("netdmcts"), `docs/netdmcts-phase1-design.md`, and the 2026-06-27 worklog entry.

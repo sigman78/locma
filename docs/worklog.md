@@ -374,3 +374,34 @@ from the tuned base). Matched eval, 300 games/opp, seed 0:
   reactive net** produced — above from-scratch RL (0.588) and the curriculum base (0.601).
 - **Ceiling intact:** even 0.64 is well below the search policies (dmcts/azlite ~0.73);
   self-play adds no planning. See `ppo-review.md` §8.3 update.
+
+## 2026-06-27 — netdmcts (AlphaZero-lite Phase 1): a FAIR policy that beats the cheaters
+
+Built the §8.4B lever's Phase 1: fair net-guided determinized PUCT. Shared PUCT core
+(`puct.py`, refactored out of azlite), module-level `determinize` (from dmcts), a
+`NetOracle` (the token net's masked policy-prior + value, reading only `BattleView`),
+and `NetGuidedDMCTSBattlePolicy` = PUCT over K determinized worlds with the net oracle
+(`netdmcts:K,I,c_puct,model_path`). Frozen oracle (the self-play net `selfplay-r2`); no
+AZ training yet.
+
+**Result (avg-hard3, 2 seeds, 50 games/opp):**
+
+| policy | fair? | mean avg-hard3 |
+|--------|-------|----------------|
+| **netdmcts:8,40** (net oracle) | ✅ | **0.817** (s0 .820 / s1 .813) |
+| dmcts:15,30 (heuristic oracle) | ✅ | 0.697 |
+| raw net selfplay-r2 | ✅ | 0.639 |
+| azlite / mcts (cheating refs) | ❌ | 0.741 / ~0.74 |
+
+- **Net oracle ≫ heuristic oracle in fair search:** +0.12 avg-hard3 over dmcts on both
+  seeds (+0.127, +0.113), at *less* search budget (320 vs 450 sims).
+- **Search ≫ raw net:** +0.18 over the same net used bare (0.639 → 0.817) — the planning
+  the reactive net structurally lacked.
+- **Fair beats cheating:** a no-hidden-info policy (0.817) tops the perfect-foresight
+  `azlite`/`mcts` (~0.74). Iteration-efficient (strong at I=20; 0.875 at I=80).
+- **Verdict:** §8.4B confirmed — search-in-the-loop with a net oracle is the lever, and
+  it's fair/deployable (forward-simulates determinized worlds; never sees the opponent's
+  hand). Strongest policy in the project. **Phase 2 justified** (self-play *of the
+  search*: AZ targets = visit distribution + outcome, iterated; the oracle here was only
+  RL-trained). All behind clean refactors (azlite + dmcts tests unchanged). See
+  `ppo-review.md` §8.4B, `baseline.md` ("netdmcts").
