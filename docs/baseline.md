@@ -1133,6 +1133,14 @@ token net overfits the lone opponent. **Verdict: parity / a slight lean toward t
 under the curriculum — a secondary lever, within seed noise.** Token costs ~4× the
 training wall-clock. Full analysis in `ppo-review.md` §8.4A.
 
+**Self-play (token).** Warm-starting the curriculum PPO2 and running self-play (one
+round vs a per-episode mix of frozen-self + baselines) lifts avg-hard3 **0.601 → 0.632
+→ 0.639** (rounds 1, 2; matched 300 games/opp, seed 0) — a real but **front-loaded,
+plateauing** gain (round 2 within noise). `selfplay-r2` (**0.639**) is the strongest
+reactive net produced, above from-scratch (0.588), still well below search (~0.73).
+This *corrects* §8.3 for the new architecture — the flat net decayed under self-play;
+the token net is sharpened by it. See `ppo-review.md` §8.3 update.
+
 Reproduce:
 ```bash
 # token arm (one seed)

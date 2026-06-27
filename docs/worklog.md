@@ -352,3 +352,25 @@ flat — verified byte-for-byte).
   `_clone_battle` landed after it) — 35k examples in ~75s, not ~40 min. The `random`
   opponent is excluded from the dmcts practicum (degenerate states, noise, not in avg-hard3).
   Pipeline additive behind `--obs-mode flat`; see `baseline.md` ("Distillation").
+
+## 2026-06-27 — Self-play of token PPO2: responds where the flat net decayed (then plateaus)
+
+Quick probe (throwaway scripts, no infra): warm-start the zoo-curriculum PPO2
+(`ab-token-s1`) and run self-play rounds — each round trains 200k against a per-episode
+mix of a *frozen self* + the ground baselines (conservative `target_kl=0.025` inherited
+from the tuned base). Matched eval, 300 games/opp, seed 0:
+
+| stage | avg-hard3 | Δ |
+|-------|-----------|---|
+| base (`ab-token-s1`) | 0.601 | — |
+| self-play r1 | 0.632 | +0.031 |
+| self-play r2 (self = r1) | 0.639 | +0.007 |
+
+- **Real but front-loaded + plateauing:** +0.031 (r1, ~2.6σ, consistent across all four
+  opponents) then +0.007 (r2, within noise) → converges ~0.64, does **not** compound.
+- **Corrects §8.3 for the new architecture:** the flat-net league *decayed* under
+  self-play; the slot-addressable token net is *sharpened* by it (capacity + the
+  conservative KL cap keeping updates stable). `selfplay-r2` (0.639) is the **strongest
+  reactive net** produced — above from-scratch RL (0.588) and the curriculum base (0.601).
+- **Ceiling intact:** even 0.64 is well below the search policies (dmcts/azlite ~0.73);
+  self-play adds no planning. See `ppo-review.md` §8.3 update.
