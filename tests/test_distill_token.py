@@ -1,8 +1,7 @@
 # tests/test_distill_token.py
-"""Token-obs mode distillation tests.
+"""Token-obs mode behavior_clone smoke tests (require the [ml] extra).
 
-Requires the [ml] extra (sb3_contrib + torch); skipped otherwise via module-level
-importorskip (following the pattern of test_training_token.py).
+Pure load_practicum tests (no ML deps) live in test_distill_token_load.py.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ _TOKEN_MANIFEST = {
 }
 
 
-def _write_fake_token_practicum(path, n=20, n_games=5):
+def _write_fake_token_practicum(path, n: int = 20, n_games: int = 5) -> None:
     """Write a minimal token-mode practicum npz + manifest for testing."""
     rng = np.random.default_rng(42)
     game_id = np.repeat(np.arange(n_games, dtype=np.int32), n // n_games)
@@ -46,54 +45,59 @@ def _write_fake_token_practicum(path, n=20, n_games=5):
         opponent_id=np.zeros(n, dtype=np.int8),
         game_id=game_id,
     )
-    with open(_manifest_path(str(path)), "w") as f:
+    with open(_manifest_path(str(path)), "w", encoding="utf-8") as f:
         json.dump(_TOKEN_MANIFEST, f)
 
 
 # ---------------------------------------------------------------------------
-# load_practicum tests (pure numpy — no ML deps required)
+# Item 1 — manifest-authoritative obs_mode (no [ml] required: ValueError fires
+# before ML imports since manifest resolution was moved before torch/sb3 imports)
 # ---------------------------------------------------------------------------
 
 
-def test_load_practicum_token_returns_four_keys(tmp_path):
-    from locma.envs.distill import load_practicum  # noqa: PLC0415
+def test_behavior_clone_token_mismatch_raises_value_error(tmp_path):
+    """behavior_clone(obs_mode='flat') on a token practicum → clear ValueError, not KeyError."""
+    from locma.envs.distill import behavior_clone  # noqa: PLC0415
 
     p = tmp_path / "token.npz"
     _write_fake_token_practicum(p)
-    arrays, manifest = load_practicum(str(p))
-    assert manifest["obs_mode"] == "token"
-    for key in ("obs_tokens", "obs_card_ids", "obs_token_mask", "obs_scalars"):
-        assert key in arrays, f"missing key {key!r}"
-    assert arrays["obs_tokens"].shape == (20, MAX_TOKENS, TOKEN_FEATS)
-    assert arrays["obs_scalars"].shape == (20, N_TACTICAL)
+    with pytest.raises(ValueError, match="obs_mode"):
+        behavior_clone(data=str(p), obs_mode="flat", epochs=1)
 
 
-def test_load_practicum_token_rejects_wrong_token_feats(tmp_path):
-    from locma.envs.distill import load_practicum  # noqa: PLC0415
+# ---------------------------------------------------------------------------
+# behavior_clone token smoke tests (require [ml] extra)
+# ---------------------------------------------------------------------------
 
-    p = tmp_path / "bad.npz"
+
+def test_behavior_clone_token_no_obs_mode_follows_manifest(tmp_path):
+    """behavior_clone(data=<token practicum>) with NO obs_mode trains successfully."""
+    pytest.importorskip("sb3_contrib")
+    pytest.importorskip("torch")
+
+    from locma.envs.distill import behavior_clone  # noqa: PLC0415
+
+    p = tmp_path / "token.npz"
     _write_fake_token_practicum(p)
-    bad_manifest = dict(_TOKEN_MANIFEST, token_feats=99)
-    with open(_manifest_path(str(p)), "w") as f:
-        json.dump(bad_manifest, f)
-    with pytest.raises(ValueError, match="layout"):
-        load_practicum(str(p))
+    out = str(tmp_path / "m.zip")
 
+    # Key regression: omitting obs_mode must follow the manifest, not crash.
+    result = behavior_clone(data=str(p), out=out, epochs=1, val_frac=0.5, verbose=0)
 
-# ---------------------------------------------------------------------------
-# behavior_clone token smoke test (requires [ml] extra)
-# ---------------------------------------------------------------------------
-
-pytest.importorskip("sb3_contrib")
-pytest.importorskip("torch")
-gymnasium = pytest.importorskip("gymnasium")
-
-from sb3_contrib import MaskablePPO  # noqa: E402
-
-from locma.envs.distill import behavior_clone  # noqa: E402
+    assert isinstance(result, dict)
+    assert result["out"] == out
+    assert os.path.exists(out), "model zip was not saved"
 
 
 def test_behavior_clone_token_returns_finite_agreement(tmp_path):
+    pytest.importorskip("sb3_contrib")
+    pytest.importorskip("torch")
+    gymnasium = pytest.importorskip("gymnasium")
+
+    from sb3_contrib import MaskablePPO  # noqa: PLC0415
+
+    from locma.envs.distill import behavior_clone  # noqa: PLC0415
+
     p = tmp_path / "token.npz"
     _write_fake_token_practicum(p)
     out = str(tmp_path / "m.zip")

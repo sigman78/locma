@@ -94,20 +94,34 @@ def behavior_clone(
     val_frac: float = 0.1,
     seed: int = 0,
     verbose: int = 1,
-    obs_mode: str = "flat",
+    obs_mode: str | None = None,
 ) -> dict:
     """Masked-CE behavior cloning of a practicum into a MaskablePPO model.zip.
 
-    ``obs_mode="flat"`` (default) uses MlpPolicy and a flat obs vector.
+    ``obs_mode`` defaults to the value recorded in the practicum manifest.  If
+    supplied it must match the manifest — mismatches raise a clear ``ValueError``
+    rather than a cryptic ``KeyError``.
+    ``obs_mode="flat"`` uses MlpPolicy and a flat obs vector.
     ``obs_mode="token"`` uses MultiInputPolicy + TokenSetExtractor and a dict obs.
     """
+    arrays, manifest = load_practicum(data)
+
+    # Resolve obs_mode from manifest — before any ML import so mismatches are cheap.
+    manifest_mode = manifest.get("obs_mode", "flat")
+    if obs_mode is None:
+        obs_mode = manifest_mode
+    elif obs_mode != manifest_mode:
+        raise ValueError(
+            f"obs_mode={obs_mode!r} but practicum manifest is {manifest_mode!r}; "
+            f"omit --obs-mode or pass --obs-mode {manifest_mode!r}"
+        )
+
     import torch  # noqa: PLC0415 — optional [ml] dep
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
     from stable_baselines3.common.vec_env import DummyVecEnv  # noqa: PLC0415
 
     from locma.envs.training import _make_battle_env  # noqa: PLC0415
 
-    arrays, _ = load_practicum(data)
     act = arrays["action"].astype(np.int64)
     mask = arrays["mask"].astype(bool)
 

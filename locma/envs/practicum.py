@@ -150,11 +150,26 @@ def record_practicum(
         game_id=np.asarray(gid_all, dtype=np.int32),
     )
     if obs_mode == "token":
+        # .reshape(...) gives correct shape even when n==0 (mirrors flat branch).
         obs_arrays = dict(
-            obs_tokens=np.asarray([d["tokens"] for d in obs_all], dtype=np.float32),
-            obs_card_ids=np.asarray([d["card_ids"] for d in obs_all], dtype=np.float32),
-            obs_token_mask=np.asarray([d["token_mask"] for d in obs_all], dtype=np.float32),
-            obs_scalars=np.asarray([d["scalars"] for d in obs_all], dtype=np.float32),
+            obs_tokens=(
+                np.asarray([d["tokens"] for d in obs_all], dtype=np.float32).reshape(
+                    n, MAX_TOKENS, TOKEN_FEATS
+                )
+            ),
+            obs_card_ids=(
+                np.asarray([d["card_ids"] for d in obs_all], dtype=np.float32).reshape(
+                    n, MAX_TOKENS
+                )
+            ),
+            obs_token_mask=(
+                np.asarray([d["token_mask"] for d in obs_all], dtype=np.float32).reshape(
+                    n, MAX_TOKENS
+                )
+            ),
+            obs_scalars=(
+                np.asarray([d["scalars"] for d in obs_all], dtype=np.float32).reshape(n, N_TACTICAL)
+            ),
         )
     else:
         obs = np.asarray(obs_all, dtype=np.float32).reshape(n, OBS_SIZE)

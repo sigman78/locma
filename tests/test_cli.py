@@ -144,7 +144,8 @@ def test_train_zoo_help_includes_learning_rate_and_target_kl():
 
 def test_record_practicum_rejects_bad_obs_mode():
     # Validation fires before any real recording (guard is above the lazy import).
-    res = runner.invoke(app, ["record-practicum", "--games", "1", "--obs-mode", "bogus"])
+    # --games is intentionally omitted: validation fires before recording starts.
+    res = runner.invoke(app, ["record-practicum", "--obs-mode", "bogus"])
     assert res.exit_code != 0
     assert "obs_mode" in res.output
 

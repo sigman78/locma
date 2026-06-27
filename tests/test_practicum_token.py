@@ -150,7 +150,31 @@ def test_record_practicum_invalid_obs_mode_raises(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 5. _Collector unit test: token mode appends dicts
+# 6. Action/mask identity: teacher decisions are observation-independent
+# ---------------------------------------------------------------------------
+
+
+def test_action_mask_identity_flat_vs_token(tmp_path):
+    """flat and token modes must record identical action+mask arrays (same teacher decisions)."""
+    out_flat = str(tmp_path / "flat.npz")
+    out_token = str(tmp_path / "token.npz")
+    record_practicum(
+        teacher="greedy", opponents=("random",), games=2, seed=7, obs_mode="flat", out=out_flat
+    )
+    record_practicum(
+        teacher="greedy", opponents=("random",), games=2, seed=7, obs_mode="token", out=out_token
+    )
+
+    with np.load(out_flat) as flat, np.load(out_token) as token:
+        n_flat = flat["action"].shape[0]
+        n_token = token["action"].shape[0]
+        assert n_flat == n_token, f"example count mismatch: flat={n_flat}, token={n_token}"
+        assert np.array_equal(flat["action"], token["action"]), "action arrays differ"
+        assert np.array_equal(flat["mask"], token["mask"]), "mask arrays differ"
+
+
+# ---------------------------------------------------------------------------
+# 7. _Collector unit test: token mode appends dicts
 # ---------------------------------------------------------------------------
 
 

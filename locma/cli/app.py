@@ -393,8 +393,8 @@ def distill(
     lr: float = 3e-4,
     val_frac: float = typer.Option(0.1, help="fraction of games held out for agreement"),
     seed: int = 0,
-    obs_mode: str = typer.Option(
-        "flat", help="observation encoding: 'flat' (default) or 'token' (tokenized for PPO2)"
+    obs_mode: str | None = typer.Option(
+        None, help="obs encoding; defaults to the practicum's manifest mode"
     ),
 ):
     """Behavior-clone a practicum into a MaskablePPO model.zip (requires the [ml] extra)."""
@@ -402,7 +402,7 @@ def distill(
         raise typer.BadParameter("epochs must be >= 1")
     if not 0.0 <= val_frac < 1.0:
         raise typer.BadParameter("val-frac must be in [0, 1)")
-    if obs_mode not in ("flat", "token"):
+    if obs_mode is not None and obs_mode not in ("flat", "token"):
         raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
     try:
         from locma.envs.distill import behavior_clone  # noqa: PLC0415 — optional [ml] dep
