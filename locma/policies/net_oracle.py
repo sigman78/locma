@@ -40,6 +40,9 @@ class NetOracle:
     def __init__(self, model_path: str) -> None:
         self.model_path = model_path
         self._model = None
+        # 1-entry cache: (sim_object, raw_value) from the last priors() call.
+        # value() reuses this when called on the same sim (compare with `is`).
+        self._value_cache: tuple | None = None
 
     # ------------------------------------------------------------------
     # Lazy loading (mirrors MaskablePPOBattlePolicy._ensure)
@@ -65,6 +68,48 @@ class NetOracle:
                 )
 
     # ------------------------------------------------------------------
+    # Single combined forward (P10 optimisation)
+    # ------------------------------------------------------------------
+
+    def _forward(self, view, mask):
+        """Run ONE trunk forward pass; return ``(probs_np, raw_value)``.
+
+        Parameters
+        ----------
+        view:
+            A ``BattleView`` already built from the ``sim`` of interest.
+        mask:
+            Boolean action-mask array of shape ``(155,)``, or ``None``.
+            When ``None`` the policy head is skipped and ``probs_np`` is
+            returned as ``None`` (value-only path).
+
+        Returns
+        -------
+        tuple[np.ndarray | None, float]
+            ``probs_np`` is ``None`` when ``mask`` is ``None``; otherwise a
+            ``(155,)`` float32 array of **masked** action probabilities.
+            ``raw_value`` is the critic output from ``sim.current``'s
+            perspective (pre-sign-flip, pre-clip).
+        """
+        import torch  # noqa: PLC0415 — lazy [ml] dep
+
+        self._ensure()
+        obs = encode_battle_tokens(view)
+        obs_t, _ = self._model.policy.obs_to_tensor(obs)
+
+        with torch.no_grad():
+            features = self._model.policy.extract_features(obs_t)
+            latent_pi, latent_vf = self._model.policy.mlp_extractor(features)
+            raw_value = float(self._model.policy.value_net(latent_vf).item())
+            if mask is None:
+                return None, raw_value
+            dist = self._model.policy._get_action_dist_from_latent(latent_pi)
+            dist.apply_masking(mask)
+            probs_np: np.ndarray = dist.distribution.probs[0].cpu().numpy()
+
+        return probs_np, raw_value
+
+    # ------------------------------------------------------------------
     # Oracle interface
     # ------------------------------------------------------------------
 
@@ -72,11 +117,14 @@ class NetOracle:
         """Return masked policy priors aligned with ``actions``.
 
         Builds the ``BattleView`` from ``sim`` (which must be a ``GameState``),
-        runs one forward pass through the net's actor head with the legal-action
-        mask, then maps each action in ``actions`` to its semantic index and
-        collects the corresponding probability.  The collected values are
-        renormalised to sum to 1; if they sum to ~0 (net gave no mass to any
-        legal action) the method falls back to uniform priors.
+        runs one combined forward pass through the trunk (computing BOTH the
+        policy probs and the critic value in a single pass), stashes the raw
+        value in ``self._value_cache`` for reuse by the subsequent ``value()``
+        call on the same ``sim``, then maps each action in ``actions`` to its
+        semantic index and collects the corresponding probability.  The
+        collected values are renormalised to sum to 1; if they sum to ~0 (net
+        gave no mass to any legal action) the method falls back to uniform
+        priors.
 
         Parameters
         ----------
@@ -93,24 +141,17 @@ class NetOracle:
         list[float]
             Prior probabilities aligned with ``actions``, summing to 1.
         """
-        import torch  # noqa: PLC0415 — lazy [ml] dep
-
-        self._ensure()
         n = len(actions)
         if n == 0:
             return []
 
         view = make_battle_view(sim)
-        obs = encode_battle_tokens(view)
-
-        obs_t, _ = self._model.policy.obs_to_tensor(obs)
         mask = action_mask(view, actions)  # (155,) bool
 
-        with torch.no_grad():
-            dist = self._model.policy.get_distribution(obs_t, action_masks=mask)
-            probs_t = dist.distribution.probs  # shape [1, 155]
+        probs_np, raw_value = self._forward(view, mask)
 
-        probs_np: np.ndarray = probs_t[0].cpu().numpy()  # shape [155]
+        # Stash raw value (from sim.current's perspective) for value() reuse
+        self._value_cache = (sim, raw_value)
 
         collected = []
         for a in actions:
@@ -125,6 +166,11 @@ class NetOracle:
 
     def value(self, sim, root_seat: int) -> float:
         """Return the net's critic value for ``sim``, from ``root_seat``'s perspective.
+
+        When ``priors()`` was called just before on the **same** ``sim`` object,
+        the raw critic value is reused from the cache (no second trunk pass).
+        Otherwise a standalone forward is run (value-only; cheaper than a full
+        combined forward since the policy head is skipped).
 
         The critic evaluates from ``sim.current``'s perspective; if
         ``sim.current != root_seat`` the sign is flipped.  The result is
@@ -143,24 +189,15 @@ class NetOracle:
         float
             Value estimate in [-1.0, 1.0].
         """
-        import torch  # noqa: PLC0415 — lazy [ml] dep
-
-        self._ensure()
-
-        view = make_battle_view(sim)
-        obs = encode_battle_tokens(view)
-
-        obs_t, _ = self._model.policy.obs_to_tensor(obs)
-
-        with torch.no_grad():
-            val_t = self._model.policy.predict_values(obs_t)  # shape [1, 1]
-
-        v = float(val_t.item())
+        if self._value_cache is not None and self._value_cache[0] is sim:
+            # Cache hit: reuse the raw value from the preceding priors() call
+            raw = self._value_cache[1]
+        else:
+            # Cache miss: standalone value-only forward (skips policy head)
+            _, raw = self._forward(make_battle_view(sim), None)
 
         # The critic speaks from sim.current's perspective; flip if needed
-        if sim.current != root_seat:
-            v = -v
-
+        v = raw if sim.current == root_seat else -raw
         return max(-1.0, min(1.0, v))
 
 
