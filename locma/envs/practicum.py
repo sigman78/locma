@@ -16,7 +16,17 @@ import numpy as np
 
 from locma.core.battle import battle_legal
 from locma.core.engine import make_battle_view, run_game
-from locma.envs.encode import ACTION_SIZE, OBS_SIZE, action_mask, encode_battle, sem_index
+from locma.envs.encode import (
+    ACTION_SIZE,
+    MAX_TOKENS,
+    N_TACTICAL,
+    OBS_SIZE,
+    TOKEN_FEATS,
+    action_mask,
+    encode_battle,
+    encode_battle_tokens,
+    sem_index,
+)
 from locma.policies.registry import make_policy
 
 _DEFAULT_OPPONENTS = ("random", "scripted", "greedy", "max-guard", "max-attack")
@@ -41,8 +51,9 @@ class _Collector:
     action the semantic action space cannot represent (sem_index is None).
     """
 
-    def __init__(self, teacher_seat: int) -> None:
+    def __init__(self, teacher_seat: int, obs_mode: str = "flat") -> None:
         self.teacher_seat = teacher_seat
+        self.obs_mode = obs_mode
         self.obs: list = []
         self.action: list = []
         self.mask: list = []
@@ -61,7 +72,10 @@ class _Collector:
         if idx is None or idx >= ACTION_SIZE:
             self.dropped += 1
             return
-        self.obs.append(encode_battle(view))
+        if self.obs_mode == "token":
+            self.obs.append(encode_battle_tokens(view))
+        else:
+            self.obs.append(encode_battle(view))
         self.action.append(idx)
         self.mask.append(action_mask(view, legal))
 
@@ -72,13 +86,22 @@ def record_practicum(
     games: int = 200,
     out: str = "practicum.npz",
     seed: int = 0,
+    obs_mode: str = "flat",
 ) -> dict:
     """Generate a practicum and write ``out`` (.npz) + its manifest.
 
     For each opponent and each game seed, plays BOTH seat orientations (teacher on
     seat 0 then seat 1) so the captured states are seat-balanced. Returns the
     manifest dict.
+
+    ``obs_mode`` controls the recorded observation format:
+    - ``"flat"`` (default): stores ``obs`` array of shape (n, OBS_SIZE), unchanged.
+    - ``"token"``: stores four arrays (obs_tokens, obs_card_ids, obs_token_mask,
+      obs_scalars) for the PPO2 tokenized observation; no ``obs`` key written.
     """
+    if obs_mode not in {"flat", "token"}:
+        raise ValueError(f"obs_mode must be 'flat' or 'token', got {obs_mode!r}")
+
     opponents = list(opponents)
     obs_all: list = []
     act_all: list = []
@@ -98,7 +121,7 @@ def record_practicum(
                 teacher_pol = make_policy(teacher)
                 opp_pol = make_policy(opp_spec)
                 p0, p1 = (teacher_pol, opp_pol) if teacher_seat == 0 else (opp_pol, teacher_pol)
-                col = _Collector(teacher_seat)
+                col = _Collector(teacher_seat, obs_mode)
                 try:
                     result = run_game(p0, p1, s, on_pre_step=col)
                 except Exception:
@@ -118,10 +141,7 @@ def record_practicum(
                 gid += 1
 
     n = len(act_all)
-    obs = np.asarray(obs_all, dtype=np.float32).reshape(n, OBS_SIZE)
-    np.savez(
-        out,
-        obs=obs,
+    common_arrays = dict(
         action=np.asarray(act_all, dtype=np.int64),
         mask=np.asarray(mask_all, dtype=bool).reshape(n, ACTION_SIZE),
         winner=np.asarray(winner_all, dtype=np.int8),
@@ -129,8 +149,21 @@ def record_practicum(
         opponent_id=np.asarray(opp_all, dtype=np.int8),
         game_id=np.asarray(gid_all, dtype=np.int32),
     )
-    manifest = {
-        "obs_size": OBS_SIZE,
+    if obs_mode == "token":
+        obs_arrays = dict(
+            obs_tokens=np.asarray([d["tokens"] for d in obs_all], dtype=np.float32),
+            obs_card_ids=np.asarray([d["card_ids"] for d in obs_all], dtype=np.float32),
+            obs_token_mask=np.asarray([d["token_mask"] for d in obs_all], dtype=np.float32),
+            obs_scalars=np.asarray([d["scalars"] for d in obs_all], dtype=np.float32),
+        )
+    else:
+        obs = np.asarray(obs_all, dtype=np.float32).reshape(n, OBS_SIZE)
+        obs_arrays = dict(obs=obs)
+
+    np.savez(out, **obs_arrays, **common_arrays)
+
+    manifest: dict = {
+        "obs_mode": obs_mode,
         "action_size": ACTION_SIZE,
         "teacher": teacher,
         "opponents": opponents,
@@ -141,6 +174,13 @@ def record_practicum(
         "failed_games": failed_games,
         "engine_version": _engine_version(),
     }
+    if obs_mode == "token":
+        manifest["max_tokens"] = MAX_TOKENS
+        manifest["token_feats"] = TOKEN_FEATS
+        manifest["n_tactical"] = N_TACTICAL
+    else:
+        manifest["obs_size"] = OBS_SIZE
+
     with open(_manifest_path(out), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     return manifest
