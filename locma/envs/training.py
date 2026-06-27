@@ -16,13 +16,15 @@ def _make_battle_env(
     agent_seat: int = 0,
     seat_random: bool = False,
     obs_mode: str = "flat",
+    reward_mode: str = "sparse",
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
     Rebuilds the opponent from its spec string inside each subprocess, so the
     (possibly stateful) opponent never has to be pickled and crosses no process
     boundary. ``seat_random`` trains the agent as both first and second player.
-    ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
+    ``obs_mode`` selects the observation encoding: "flat", "token", or
+    "tactical"; "base" is accepted by BattleEnv as an alias for "flat".
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.registry import make_policy  # noqa: PLC0415
@@ -33,6 +35,7 @@ def _make_battle_env(
         agent_seat=agent_seat,
         seat_random=seat_random,
         obs_mode=obs_mode,
+        reward_mode=reward_mode,
     )
 
 
@@ -48,18 +51,21 @@ def _build_env(
     n_envs: int,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    reward_mode: str = "sparse",
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
     randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
-    ``obs_mode`` selects the observation encoding: "flat" (default) or "token"."""
+    ``obs_mode`` selects the observation encoding."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
     )
 
     fns = [
-        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode)
+        functools.partial(
+            _make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode, reward_mode
+        )
         for i in range(n_envs)
     ]
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
@@ -74,13 +80,18 @@ def _make_model(
     ent_coef: float,
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    init_model: str | None = None,
 ):
-    """Construct a MaskablePPO model, selecting the policy class by obs_mode.
-
-    "flat" → MlpPolicy (unchanged from the baseline).
-    "token" → MultiInputPolicy + TokenSetExtractor (self-attention over card tokens).
-    """
+    """Construct or load a MaskablePPO model, selecting policy class by obs_mode."""
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+    if init_model:
+        model = MaskablePPO.load(init_model, env=env, seed=seed)
+        model.verbose = verbose
+        model.ent_coef = ent_coef
+        model.learning_rate = learning_rate
+        model.target_kl = target_kl
+        return model
 
     if obs_mode == "token":
         from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
@@ -95,7 +106,7 @@ def _make_model(
             learning_rate=learning_rate,
             target_kl=target_kl,
         )
-    # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
+
     return MaskablePPO(
         "MlpPolicy",
         env,
@@ -118,31 +129,18 @@ def train_agent(
     ent_coef: float = 0.02,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    reward_mode: str = "sparse",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    init_model: str | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
-    Parameters
-    ----------
-    opponent_spec: registry spec string for the opponent (rebuilt per env).
-    steps: total env timesteps (ignored when `checkpoints` is given).
-    out: output model path; checkpoints derive step-suffixed siblings.
-    n_envs: number of parallel envs (CPU speedup).
-    both_seat: train as both first and second player (default True; eval is
-        mirrored, so seat-0-only training is a coverage gap — see docs/baseline.md).
-    obs_mode: ``"flat"`` (default) for MlpPolicy + flat Box obs; ``"token"``
-        for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
-    checkpoints: optional iterable of step marks. When given, training runs as
-        one continuous trajectory, saving a step-suffixed model at each mark, and
-        returns the list of saved paths. Otherwise trains `steps` and returns
-        the single `out` path.
-    learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
-    target_kl: PPO target KL divergence for early stopping (None = off, the default).
-
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
-    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode)
+    env = _build_env(
+        opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode
+    )
     model = _make_model(
         env,
         obs_mode=obs_mode,
@@ -151,6 +149,7 @@ def train_agent(
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        init_model=init_model,
     )
 
     if checkpoints:
@@ -188,43 +187,38 @@ def train_zoo(
     verbose: int = 1,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    reward_mode: str = "sparse",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    init_model: str | None = None,
 ):
-    """Train ONE MaskablePPO model back-to-back against each opponent in turn.
-
-    The model's weights carry across phases (a curriculum) — `set_env` swaps the
-    opponent and `learn` continues without resetting the timestep counter. Total
-    budget is ``steps_per_opponent * len(opponents)``. Returns the saved path.
-
-    Parameters
-    ----------
-    opponents: ordered sequence of opponent spec strings (the curriculum).
-    steps_per_opponent: env timesteps per opponent phase.
-    out: output model path.
-    obs_mode: ``"flat"`` (default) for MlpPolicy + flat Box obs; ``"token"``
-        for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
-    learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
-    target_kl: PPO target KL divergence for early stopping (None = off, the default).
-
-    Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
-    """
+    """Train ONE MaskablePPO model back-to-back against each opponent in turn."""
     opps = list(opponents)
     if not opps:
         raise ValueError("train_zoo needs a non-empty opponent list")
 
     model = _make_model(
-        _build_env(opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode),
+        _build_env(opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode),
         obs_mode=obs_mode,
         seed=seed,
         verbose=verbose,
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        init_model=init_model,
     )
     for i, opp in enumerate(opps):
         if i > 0:
-            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat, obs_mode=obs_mode))
+            model.set_env(
+                _build_env(
+                    opp,
+                    seed,
+                    1,
+                    both_seat=both_seat,
+                    obs_mode=obs_mode,
+                    reward_mode=reward_mode,
+                )
+            )
         model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
     model.save(out)
     return out

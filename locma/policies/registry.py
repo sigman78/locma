@@ -75,15 +75,22 @@ def _azlite(params, spec):
 
 
 def _dmcts(params, spec):
-    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
+    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns,det``."""
     from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
 
     k = int(params[0]) if len(params) > 0 else 15  # determinizations (worlds)
     i = int(params[1]) if len(params) > 1 else 30  # iterations per world
     seed = int(params[2]) if len(params) > 2 else 0
     rollout_turns = int(params[3]) if len(params) > 3 else 3
+    deterministic = bool(int(params[4])) if len(params) > 4 else False
     return Composer(
-        DMCTSBattlePolicy(determinizations=k, iterations=i, seed=seed, rollout_turns=rollout_turns),
+        DMCTSBattlePolicy(
+            determinizations=k,
+            iterations=i,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            deterministic=deterministic,
+        ),
         GreedyDraftPolicy(),
         name=spec,
     )
@@ -126,6 +133,19 @@ def _ppo(params, spec):
     )
 
 
+def _ppo_tactical(params, spec):
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
+
+    model_path = params[0] if params else "model.zip"
+    return Composer(
+        MaskablePPOBattlePolicy(model_path=model_path, obs_mode="tactical"),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 # The pool of baseline opponents a `mixed` training opponent draws from.
 _MIXED_POOL = ("random", "scripted", "greedy", "max-guard", "max-attack")
 
@@ -150,14 +170,14 @@ _FACTORIES = {
     "dmcts": _dmcts,
     "netdmcts": _netdmcts,
     "ppo": _ppo,
+    "ppo-tactical": _ppo_tactical,
     "mixed": _mixed,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo` and `netdmcts` need a model artifact + the [ml] extra (use `ppo:path`
-# or `netdmcts:K,I,c,path`); `mixed` is a non-stationary training opponent,
-# not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts"}
+# `ppo`, `ppo-tactical`, and `netdmcts` need a model artifact + the [ml] extra;
+# `mixed` is a non-stationary training opponent, not a baseline to rank.
+_HIDDEN = {"ppo", "ppo-tactical", "mixed", "netdmcts"}
 
 
 def policy_names() -> list[str]:

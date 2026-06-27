@@ -188,6 +188,25 @@ def noise_floor(a: str, games: int = 200, seed: int = 0):
     )
 
 
+@app.command("action-stats")
+def action_stats(policy: str, opponent: str = "mixed", games: int = 100, seed: int = 0):
+    """Print tactical action histograms for policy A in mirrored matches."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    from locma.harness.action_stats import policy_action_stats  # noqa: PLC0415
+
+    make_policy(policy)
+    make_policy(opponent)
+    stats = policy_action_stats(policy, opponent, games=games, seed=seed)
+    rates = stats.as_rates()
+    t = Table(title=f"Action stats: {policy} vs {opponent}", box=None)
+    t.add_column("metric")
+    t.add_column("value", justify="right")
+    for k, v in rates.items():
+        t.add_row(k, f"{int(v)}" if k == "decisions" else f"{v:.3f}")
+    console.print(t)
+
+
 @app.command()
 def sprt(
     x: str,
@@ -262,18 +281,20 @@ def train(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+        "flat", help="obs encoding: flat/base, token, or tactical"
     ),
+    reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
+    init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
         raise typer.BadParameter("steps must be >= 1")
     if n_envs < 1:
         raise typer.BadParameter("n_envs must be >= 1")
-    if obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if obs_mode not in ("flat", "base", "token", "tactical"):
+        raise typer.BadParameter("obs_mode must be flat/base, token, or tactical")
     marks = None
     if checkpoints:
         try:
@@ -295,8 +316,10 @@ def train(
             ent_coef=ent_coef,
             both_seat=both_seat,
             obs_mode=obs_mode,
+            reward_mode=reward_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            init_model=init_model,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -311,18 +334,20 @@ def train_zoo_cmd(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+        "flat", help="obs encoding: flat/base, token, or tactical"
     ),
+    reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
+    init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
     [ml] extra."""
     if steps_per_opponent < 1:
         raise typer.BadParameter("steps-per-opponent must be >= 1")
-    if obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if obs_mode not in ("flat", "base", "token", "tactical"):
+        raise typer.BadParameter("obs_mode must be flat/base, token, or tactical")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -338,8 +363,10 @@ def train_zoo_cmd(
             ent_coef=ent_coef,
             both_seat=both_seat,
             obs_mode=obs_mode,
+            reward_mode=reward_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            init_model=init_model,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
