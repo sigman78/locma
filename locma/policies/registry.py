@@ -89,6 +89,27 @@ def _dmcts(params, spec):
     )
 
 
+def _netdmcts(params, spec):
+    """Net-guided determinized PUCT — spec ``netdmcts:K,I,c_puct,model_path``.
+
+    Paired with the ``balanced`` draft (same as ``ppo``/``azlite`` for
+    apples-to-apples comparisons against the scripted baselines).
+    """
+    from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
+
+    k = int(params[0]) if len(params) > 0 else 15
+    i = int(params[1]) if len(params) > 1 else 80
+    c_puct = float(params[2]) if len(params) > 2 else 1.5
+    model_path = params[3] if len(params) > 3 else "model.zip"
+    return Composer(
+        NetGuidedDMCTSBattlePolicy(
+            determinizations=k, iterations=i, c_puct=c_puct, model_path=model_path
+        ),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 def _ppo(params, spec):
     from locma.policies.ppo import (  # noqa: PLC0415
         MaskablePPOBattlePolicy,
@@ -127,6 +148,7 @@ _FACTORIES = {
     "mcts": _mcts,
     "azlite": _azlite,
     "dmcts": _dmcts,
+    "netdmcts": _netdmcts,
     "ppo": _ppo,
     "mixed": _mixed,
 }

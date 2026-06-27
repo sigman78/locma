@@ -15,10 +15,16 @@ so this module is import-safe without the [ml] extra.
 
 from __future__ import annotations
 
+import random
+
 import numpy as np
 
+from locma.core import battle as battlemod
 from locma.core.engine import make_battle_view
-from locma.envs.encode import action_mask, encode_battle_tokens, sem_index
+from locma.data.cards_db import load_cards
+from locma.envs.encode import action_mask, encode_battle, encode_battle_tokens, sem_index
+from locma.policies.mcts import determinize
+from locma.policies.puct import puct_search
 
 
 class NetOracle:
@@ -147,3 +153,101 @@ class NetOracle:
             v = -v
 
         return max(-1.0, min(1.0, v))
+
+
+class NetGuidedDMCTSBattlePolicy:
+    """Fair net-guided determinized PUCT (Phase-1 netdmcts).
+
+    Like ``DMCTSBattlePolicy`` but uses a ``NetOracle`` (net policy priors + critic
+    value) in place of the heuristic rollout.  Samples ``determinizations`` plausible
+    hidden worlds, runs ``puct_search`` with the net oracle on each, accumulates the
+    root edge visit counts across all worlds, and picks the action with the most total
+    visits.
+
+    Root legal actions are identical across determinized worlds: ``determinize`` keeps
+    the agent's own hand and board real, only resampling the opponent's hidden hand/deck,
+    so ``battle_legal`` is the same in every world.
+
+    ``deterministic=True`` seeds the sampling and search from a hash of the public
+    observation so the move is a stable function of the ``BattleView`` (mirrors
+    ``DMCTSBattlePolicy``'s deterministic distillation path).
+    """
+
+    def __init__(
+        self,
+        name: str = "netdmcts",
+        model_path: str = "model.zip",
+        determinizations: int = 15,
+        iterations: int = 80,
+        c_puct: float = 1.5,
+        seed: int = 0,
+        deterministic: bool = False,
+    ) -> None:
+        self.name = name
+        self.model_path = model_path
+        self.K = determinizations
+        self.iterations = iterations
+        self.c_puct = c_puct
+        self.deterministic = deterministic
+        self._seed = seed
+        self._r = random.Random(seed)
+        self._cards = load_cards()
+        self._oracle = NetOracle(model_path)
+
+    def reset(self, seed=None) -> None:
+        """Reseed the internal RNG (mirrors ``DMCTSBattlePolicy.reset``)."""
+        s = self._seed if seed is None else seed
+        self._r = random.Random(s)
+
+    def battle_action(self, view, legal, state=None):
+        """Return a legal action using net-guided determinized PUCT.
+
+        Parameters
+        ----------
+        view:
+            The public ``BattleView`` for the current player.
+        legal:
+            The list of legal actions at this state.
+        state:
+            The live ``GameState`` forward-model (required).
+
+        Raises
+        ------
+        ValueError
+            If ``state`` is ``None``.
+        """
+        if state is None:
+            raise ValueError(
+                "NetGuidedDMCTSBattlePolicy requires the forward-model `state` argument"
+            )
+        if len(legal) == 1:
+            return legal[0]
+
+        # Deterministic distillation path: seed RNG from the observation hash
+        if self.deterministic:
+            import hashlib  # noqa: PLC0415 — only the distillation path needs this
+
+            obs = encode_battle(view)
+            seed = int.from_bytes(hashlib.blake2b(obs.tobytes(), digest_size=7).digest(), "little")
+            rng = random.Random(seed)
+        else:
+            rng = self._r
+
+        # Accumulate root edge visit counts across K determinized worlds
+        total: list[int] | None = None
+        for _ in range(self.K):
+            det = determinize(state, rng, self._cards)
+            counts = puct_search(det, self._oracle, self.iterations, self.c_puct, rng)
+            if total is None:
+                total = list(counts)
+            else:
+                for i in range(len(total)):
+                    total[i] += counts[i]
+
+        # Map back to the real state's legal actions
+        actions = list(battlemod.battle_legal(state))
+        assert len(actions) == len(total), (
+            f"action/count length mismatch: {len(actions)} vs {len(total)}"
+        )
+        best = max(range(len(total)), key=lambda i: total[i])
+        return actions[best]
