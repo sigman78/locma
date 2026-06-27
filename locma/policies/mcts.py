@@ -220,6 +220,31 @@ class MCTSBattlePolicy:
 _SAMPLED_ID_BASE = 100_000  # sampled opponent cards get ids well above real (0..59)
 
 
+def determinize(gs: GameState, rng, cards, reshuffle_own: bool = True) -> GameState:
+    """Clone *gs* into a fair "world" using only public + own-known information.
+
+    Resamples the OPPONENT's hidden hand + deck from *cards* (keeping their
+    visible board/health/mana).  For the agent's OWN side, the hand and board
+    are kept real (a player sees their own hand), but the deck ORDER is
+    reshuffled when *reshuffle_own* is set: a player knows their deck's
+    *contents* but not its shuffled order, so the future-draw sequence is
+    hidden even from its owner.  Leaving it real would let the search peek at
+    its own future draws — a self-leak.  (``reshuffle_own=False`` reproduces the
+    old behaviour, for measuring how much that leak mattered.)
+    """
+    det = _clone_battle(gs)
+    opp = 1 - det.current
+    p = det.players[opp]
+    nh, nd = len(p.hand), len(p.deck)
+    p.hand = [CardInstance.from_card(rng.choice(cards), _SAMPLED_ID_BASE + i) for i in range(nh)]
+    p.deck = [
+        CardInstance.from_card(rng.choice(cards), _SAMPLED_ID_BASE + nh + i) for i in range(nd)
+    ]
+    if reshuffle_own:
+        rng.shuffle(det.players[det.current].deck)
+    return det
+
+
 class DMCTSBattlePolicy:
     """Determinized (NON-cheating) MCTS for imperfect information.
 
@@ -269,31 +294,8 @@ class DMCTSBattlePolicy:
         self._inner.reset(s)
 
     def _determinize(self, gs, rng):
-        """Clone gs into a fair "world" using only public + own-known information.
-
-        Resamples the OPPONENT's hidden hand + deck from the card pool (keeping
-        their visible board/health/mana). For the agent's OWN side, the hand and
-        board are kept real (a player sees their own hand), but the deck ORDER is
-        reshuffled when ``reshuffle_own`` is set: a player knows their deck's
-        *contents* but not its shuffled order, so the future-draw sequence is
-        hidden even from its owner. Leaving it real would let the search peek at
-        its own future draws — a self-leak. (``reshuffle_own=False`` reproduces the
-        old behaviour, for measuring how much that leak mattered.)
-        """
-        det = _clone_battle(gs)
-        opp = 1 - det.current
-        p = det.players[opp]
-        nh, nd = len(p.hand), len(p.deck)
-        p.hand = [
-            CardInstance.from_card(rng.choice(self._cards), _SAMPLED_ID_BASE + i) for i in range(nh)
-        ]
-        p.deck = [
-            CardInstance.from_card(rng.choice(self._cards), _SAMPLED_ID_BASE + nh + i)
-            for i in range(nd)
-        ]
-        if self.reshuffle_own:
-            rng.shuffle(det.players[det.current].deck)
-        return det
+        """Delegate to the module-level ``determinize`` function."""
+        return determinize(gs, rng, self._cards, self.reshuffle_own)
 
     def battle_action(self, view, legal, state=None):
         if state is None:

@@ -174,3 +174,84 @@ def test_dmcts_reshuffle_own_off_reproduces_leak():
     assert [c.instance_id for c in det.players[me].deck] == [
         c.instance_id for c in gs.players[me].deck
     ]
+
+
+# ---------------------------------------------------------------------------
+# module-level determinize() — reused by netdmcts (N2)
+# ---------------------------------------------------------------------------
+
+
+def test_determinize_resamples_opponent_keeps_own_hand_board():
+    """Module-level determinize: opponent hand/deck resampled with sampled ids;
+    own hand and board kept real (same instance_ids)."""
+    from locma.policies.mcts import _SAMPLED_ID_BASE, determinize  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me, opp = gs.current, 1 - gs.current
+    real_me_hand = [c.instance_id for c in gs.players[me].hand]
+    real_me_board = [c.instance_id for c in gs.players[me].board]
+    real_opp_hand_len = len(gs.players[opp].hand)
+    real_opp_deck_len = len(gs.players[opp].deck)
+
+    cards = load_cards()
+    det = determinize(gs, random.Random(123), cards, reshuffle_own=True)
+    dm, do = det.players[me], det.players[opp]
+
+    # own hand + board unchanged
+    assert [c.instance_id for c in dm.hand] == real_me_hand
+    assert [c.instance_id for c in dm.board] == real_me_board
+    # opponent hand + deck resampled with sampled ids
+    assert len(do.hand) == real_opp_hand_len
+    assert len(do.deck) == real_opp_deck_len
+    assert all(c.instance_id >= _SAMPLED_ID_BASE for c in do.hand)
+    assert all(c.instance_id >= _SAMPLED_ID_BASE for c in do.deck)
+
+
+def test_determinize_reshuffle_own_true_permutes_own_deck():
+    """With reshuffle_own=True, own deck is a permutation of the original
+    (same multiset of instance_ids, order may differ)."""
+    from collections import Counter  # noqa: PLC0415
+
+    from locma.policies.mcts import determinize  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me = gs.current
+    real_me_deck_order = [c.instance_id for c in gs.players[me].deck]
+    real_me_deck_contents = Counter(c.card for c in gs.players[me].deck)
+    assert len(real_me_deck_order) >= 5  # non-trivial deck
+
+    cards = load_cards()
+    det = determinize(gs, random.Random(123), cards, reshuffle_own=True)
+    dm = det.players[me]
+
+    # same card multiset (you know what you drafted)
+    assert Counter(c.card for c in dm.deck) == real_me_deck_contents
+    # order is reshuffled (future-draw hidden)
+    assert [c.instance_id for c in dm.deck] != real_me_deck_order
+
+
+def test_determinize_reshuffle_own_false_preserves_deck_order():
+    """With reshuffle_own=False, own deck order is identical to the original."""
+    from locma.policies.mcts import determinize  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me = gs.current
+    real_me_deck_order = [c.instance_id for c in gs.players[me].deck]
+
+    cards = load_cards()
+    det = determinize(gs, random.Random(123), cards, reshuffle_own=False)
+    assert [c.instance_id for c in det.players[me].deck] == real_me_deck_order
+
+
+def test_determinize_does_not_mutate_original_gs():
+    """determinize clones — the original gs is not mutated."""
+    from locma.policies.mcts import determinize  # noqa: PLC0415
+
+    gs = _battle_state(seed=11)
+    me = gs.current
+    original_me_deck = [c.instance_id for c in gs.players[me].deck]
+
+    cards = load_cards()
+    determinize(gs, random.Random(123), cards, reshuffle_own=True)
+
+    assert [c.instance_id for c in gs.players[me].deck] == original_me_deck
