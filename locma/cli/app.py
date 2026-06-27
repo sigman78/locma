@@ -264,6 +264,8 @@ def train(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
+    target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -293,6 +295,8 @@ def train(
             ent_coef=ent_coef,
             both_seat=both_seat,
             obs_mode=obs_mode,
+            learning_rate=learning_rate,
+            target_kl=target_kl,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -309,6 +313,8 @@ def train_zoo_cmd(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
+    target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -332,6 +338,8 @@ def train_zoo_cmd(
             ent_coef=ent_coef,
             both_seat=both_seat,
             obs_mode=obs_mode,
+            learning_rate=learning_rate,
+            target_kl=target_kl,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

@@ -46,6 +46,34 @@ def test_train_agent_token_smoke(tmp_path):
     )
 
 
+def test_train_agent_token_lr_and_target_kl(tmp_path):
+    """(c) Token path: learning_rate and target_kl are accepted and applied."""
+    out = str(tmp_path / "m.zip")
+    train_agent(
+        "random",
+        steps=512,
+        out=out,
+        seed=0,
+        n_envs=1,
+        obs_mode="token",
+        learning_rate=1e-4,
+        target_kl=0.025,
+        verbose=0,
+    )
+
+    assert tmp_path.joinpath("m.zip").exists(), "model not saved"
+
+    # Confirm the model loads and has a Dict obs space (MultiInputPolicy path).
+    m = MaskablePPO.load(out)
+    assert isinstance(m.observation_space, gymnasium.spaces.Dict), (
+        f"expected Dict obs space, got {type(m.observation_space)}"
+    )
+    # learning_rate is stored as a schedule callable; confirm it evaluates to 1e-4.
+    lr = m.learning_rate
+    actual_lr = lr(1.0) if callable(lr) else lr
+    assert actual_lr == pytest.approx(1e-4), f"expected lr=1e-4, got {actual_lr}"
+
+
 def test_train_agent_flat_still_works(tmp_path):
     """(b) Flat path unchanged after refactor: default obs_mode yields a Box-obs model."""
     out = train_agent(

@@ -65,7 +65,16 @@ def _build_env(
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
 
 
-def _make_model(env, *, obs_mode: str, seed: int, verbose: int, ent_coef: float):
+def _make_model(
+    env,
+    *,
+    obs_mode: str,
+    seed: int,
+    verbose: int,
+    ent_coef: float,
+    learning_rate: float = 3e-4,
+    target_kl: float | None = None,
+):
     """Construct a MaskablePPO model, selecting the policy class by obs_mode.
 
     "flat" → MlpPolicy (unchanged from the baseline).
@@ -83,9 +92,19 @@ def _make_model(env, *, obs_mode: str, seed: int, verbose: int, ent_coef: float)
             verbose=verbose,
             seed=seed,
             ent_coef=ent_coef,
+            learning_rate=learning_rate,
+            target_kl=target_kl,
         )
     # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
-    return MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
+    return MaskablePPO(
+        "MlpPolicy",
+        env,
+        verbose=verbose,
+        seed=seed,
+        ent_coef=ent_coef,
+        learning_rate=learning_rate,
+        target_kl=target_kl,
+    )
 
 
 def train_agent(
@@ -99,6 +118,8 @@ def train_agent(
     ent_coef: float = 0.02,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    learning_rate: float = 3e-4,
+    target_kl: float | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -116,11 +137,21 @@ def train_agent(
         one continuous trajectory, saving a step-suffixed model at each mark, and
         returns the list of saved paths. Otherwise trains `steps` and returns
         the single `out` path.
+    learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
+    target_kl: PPO target KL divergence for early stopping (None = off, the default).
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
     env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode)
-    model = _make_model(env, obs_mode=obs_mode, seed=seed, verbose=verbose, ent_coef=ent_coef)
+    model = _make_model(
+        env,
+        obs_mode=obs_mode,
+        seed=seed,
+        verbose=verbose,
+        ent_coef=ent_coef,
+        learning_rate=learning_rate,
+        target_kl=target_kl,
+    )
 
     if checkpoints:
         marks = sorted({int(m) for m in checkpoints})
@@ -157,6 +188,8 @@ def train_zoo(
     verbose: int = 1,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    learning_rate: float = 3e-4,
+    target_kl: float | None = None,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -171,6 +204,8 @@ def train_zoo(
     out: output model path.
     obs_mode: ``"flat"`` (default) for MlpPolicy + flat Box obs; ``"token"``
         for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
+    learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
+    target_kl: PPO target KL divergence for early stopping (None = off, the default).
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -184,6 +219,8 @@ def train_zoo(
         seed=seed,
         verbose=verbose,
         ent_coef=ent_coef,
+        learning_rate=learning_rate,
+        target_kl=target_kl,
     )
     for i, opp in enumerate(opps):
         if i > 0:

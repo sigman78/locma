@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
+import re
 
 from typer.testing import CliRunner
 
 from locma.cli.app import app
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes so Rich-styled help text can be asserted on."""
+    return _ANSI_RE.sub("", text)
 
 
 def test_play_smoke():
@@ -114,3 +122,21 @@ def test_train_zoo_rejects_bad_obs_mode():
     res = runner.invoke(app, ["train-zoo", "--obs-mode", "bogus"])
     assert res.exit_code != 0
     assert "obs_mode" in res.output
+
+
+def test_train_help_includes_learning_rate_and_target_kl():
+    # --help must exit 0 and the new flags must appear in the plain-text output.
+    # Rich adds ANSI styling; strip it before asserting on option names.
+    res = runner.invoke(app, ["train", "--help"])
+    assert res.exit_code == 0
+    plain = _strip_ansi(res.output)
+    assert "--learning-rate" in plain
+    assert "--target-kl" in plain
+
+
+def test_train_zoo_help_includes_learning_rate_and_target_kl():
+    res = runner.invoke(app, ["train-zoo", "--help"])
+    assert res.exit_code == 0
+    plain = _strip_ansi(res.output)
+    assert "--learning-rate" in plain
+    assert "--target-kl" in plain
