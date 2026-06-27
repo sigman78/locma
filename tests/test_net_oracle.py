@@ -142,7 +142,6 @@ def test_net_oracle_combined_forward_equivalence(tmp_path):
     seat = gs.current
     view = make_battle_view(gs)
     obs = encode_battle_tokens(view)
-    obs_t, _ = oracle._model.policy.obs_to_tensor(obs) if oracle._model else (None, None)
 
     # Eagerly load the model so we can access the policy directly
     oracle._ensure()
@@ -205,6 +204,15 @@ def test_net_oracle_cache_reuse(tmp_path):
 
     v_cached = oracle.value(gs, seat)
     assert math.isfinite(v_cached) and -1.0 <= v_cached <= 1.0
+
+    # The cached value must be CORRECT (non-stale): equal to a standalone,
+    # cache-bypassed computation on the same gs+seat.  A fresh oracle has no
+    # cache, so value() takes the standalone _forward(view, None) path.
+    oracle_ref = NetOracle(path)
+    v_standalone_same = oracle_ref.value(gs, seat)
+    assert abs(v_cached - v_standalone_same) < 1e-5, (
+        f"cached value wrong: {v_cached:.8f} vs {v_standalone_same:.8f}"
+    )
 
     # --- Standalone-fallback path ---
     # A fresh oracle (no prior priors() call) on a different sim must still work.
