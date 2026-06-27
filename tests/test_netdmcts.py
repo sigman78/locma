@@ -1,8 +1,10 @@
-"""Tests for NetGuidedDMCTSBattlePolicy.
+"""Tests for NetGuidedDMCTSBattlePolicy and the netdmcts registry entry.
 
-Requires the [ml] extra (sb3_contrib, torch). All tests are gated with
-``pytest.importorskip("sb3_contrib")`` so they are skipped cleanly in CI
-without the extra.
+The registry tests (defaults, bad-spec, hidden-name, param-validation) are
+intentionally **not** [ml]-gated — they exercise pure-Python constructor logic
+and do not load a model.  The search/oracle tests (returns_legal_action,
+raises_without_state, deterministic_stable, etc.) require the [ml] extra and
+are individually gated with ``pytest.importorskip("sb3_contrib")``.
 """
 
 from __future__ import annotations
@@ -172,6 +174,7 @@ def test_netdmcts_registry_defaults():
     assert isinstance(p.battle, NetGuidedDMCTSBattlePolicy)
     assert p.battle.K == 15
     assert p.battle.iterations == 80
+    assert p.battle.c_puct == 1.5
     assert p.battle.model_path == "model.zip"
 
 
@@ -183,8 +186,34 @@ def test_netdmcts_registry_bad_spec_raises():
         make_policy("netdmcts_typo")
 
 
-def test_netdmcts_in_policy_names():
-    """netdmcts appears in policy_names()."""
+def test_netdmcts_hidden_from_policy_names():
+    """netdmcts is hidden from policy_names() (needs model artifact + [ml])."""
     from locma.policies.registry import policy_names  # noqa: PLC0415
 
-    assert "netdmcts" in policy_names()
+    assert "netdmcts" not in policy_names()
+
+
+def test_netdmcts_make_policy_still_works():
+    """Hidden does not mean unconstructable — make_policy('netdmcts:...') still works."""
+    from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+
+    p = make_policy("netdmcts:8,40,1.5,runs/x.zip")
+    assert isinstance(p.battle, NetGuidedDMCTSBattlePolicy)
+    assert p.battle.model_path == "runs/x.zip"
+
+
+def test_netdmcts_zero_determinizations_raises():
+    """determinizations=0 raises ValueError before any model is loaded."""
+    from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
+
+    with pytest.raises(ValueError, match="determinizations"):
+        NetGuidedDMCTSBattlePolicy(determinizations=0)
+
+
+def test_netdmcts_zero_iterations_raises():
+    """iterations=0 raises ValueError before any model is loaded."""
+    from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
+
+    with pytest.raises(ValueError, match="iterations"):
+        NetGuidedDMCTSBattlePolicy(iterations=0)

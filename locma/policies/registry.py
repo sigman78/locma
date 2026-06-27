@@ -154,9 +154,10 @@ _FACTORIES = {
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo` needs a model artifact + the [ml] extra (use `ppo:path`); `mixed` is a
-# non-stationary training opponent, not a baseline to rank.
-_HIDDEN = {"ppo", "mixed"}
+# `ppo` and `netdmcts` need a model artifact + the [ml] extra (use `ppo:path`
+# or `netdmcts:K,I,c,path`); `mixed` is a non-stationary training opponent,
+# not a baseline to rank.
+_HIDDEN = {"ppo", "mixed", "netdmcts"}
 
 
 def policy_names() -> list[str]:

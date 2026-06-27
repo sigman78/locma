@@ -54,6 +54,15 @@ class NetOracle:
             # has dropout=0.1, so training mode makes every forward pass
             # non-deterministic.  Force eval here once and keep it.
             self._model.policy.set_training_mode(False)
+            # Guard: only token (Dict-obs) models are supported — a flat Box-obs
+            # model would fail later with a cryptic shape error inside obs_to_tensor.
+            import gymnasium  # noqa: PLC0415 — lazy, only reached after model load
+
+            if not isinstance(self._model.observation_space, gymnasium.spaces.Dict):
+                raise ValueError(
+                    "NetOracle requires a token (Dict-obs) model; "
+                    f"got {type(self._model.observation_space).__name__}"
+                )
 
     # ------------------------------------------------------------------
     # Oracle interface
@@ -183,6 +192,8 @@ class NetGuidedDMCTSBattlePolicy:
         seed: int = 0,
         deterministic: bool = False,
     ) -> None:
+        if determinizations < 1 or iterations < 1:
+            raise ValueError("determinizations and iterations must be >= 1")
         self.name = name
         self.model_path = model_path
         self.K = determinizations
