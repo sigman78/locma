@@ -137,12 +137,20 @@ Forward pass (batch `B`):
 
 1. `ids = obs["card_ids"].long()` → `id_embed = nn.Embedding(161, id_dim, padding_idx=0)(ids)` → `(B,20,id_dim)`
 2. `x = proj(cat([obs["tokens"], id_embed], -1))`, `proj = Linear(17+id_dim, d_model)` → `(B,20,d_model)`
+2b. **Input normalization (token branch):** `x = LayerNorm(d_model)(x)` — applied per-token
+    (independently on each of the 20 positions), taming raw magnitudes (cost/attack/defense
+    in the O(1–12) range, board-attack totals O(60)) before they enter the transformer.
+    LayerNorm is per-token so permutation equivariance is preserved. The learned CLS
+    parameter is NOT normalized here.
 3. Prepend a learned **CLS** token → `(B,21,d_model)`; `key_padding_mask` from
    `obs["token_mask"]` (pad = True), with `False` for the CLS slot.
 4. `z = TransformerEncoder(TransformerEncoderLayer(d_model, n_heads, ff_mult*d_model,
    dropout, batch_first=True), n_layers)(x, src_key_padding_mask=kpm)`
 5. `cls_out = z[:,0]` (when `pool="cls"`); `s = scalar_mlp(obs["scalars"])`
-   (`Linear(S, d_model)+ReLU`)
+   where `scalar_mlp = Sequential(LayerNorm(N_TACTICAL), Linear(S, d_model), ReLU)` —
+   the leading LayerNorm normalizes the raw scalar magnitudes (health≈30, turn≈50,
+   board totals≈60) before the linear projection, fulfilling the §1 "extractor normalizes"
+   promise.
 6. `return head(cat([cls_out, s], -1))`, `head = Linear(2*d_model, features_dim)+ReLU`
 
 ### Approach-C fallback (one knob set, no rewrite)

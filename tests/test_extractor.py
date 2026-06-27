@@ -134,6 +134,57 @@ def test_permutation_padding_invariance():
 # (d) Smoke: pool="attn" and n_layers=1 produce finite (B, features_dim)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# (e) Input normalization: large-magnitude real-scale inputs stay finite
+# ---------------------------------------------------------------------------
+
+
+def test_large_magnitude_inputs_finite():
+    """Input normalization must tame real-scale magnitudes (health~30, turn~50,
+    attack/defense~12, board totals~60) and produce finite extractor output.
+
+    This catches a regression where unnormalized raw values would cause NaN/Inf
+    through the transformer (e.g. when LayerNorm is accidentally removed).
+    """
+    torch.manual_seed(0)
+    space = token_obs_space()
+    extractor = TokenSetExtractor(space)
+    extractor.eval()
+
+    B = 4
+    # Build realistic worst-case magnitudes for the token features:
+    # zone(3) + type(4) + cost/atk/def(3) + abilities(6) + ready(1) = 17
+    tokens = torch.zeros(B, MAX_TOKENS, TOKEN_FEATS)
+    tokens[:, :, 0] = 1.0  # zone one-hot
+    tokens[:, :, 4] = 1.0  # type one-hot
+    tokens[:, :, 5] = 8.0  # cost (max typical)
+    tokens[:, :, 6] = 12.0  # attack (large)
+    tokens[:, :, 7] = 12.0  # defense (large)
+
+    card_ids = torch.randint(1, NUM_CARDS + 1, (B, MAX_TOKENS)).float()
+    token_mask = torch.ones(B, MAX_TOKENS)
+
+    # Tactical scalars at realistic maximum magnitudes:
+    # turn, me_health, op_health, me_mana, summonable, op_hand, my_board,
+    # op_board, guard_count, my_atk_total, my_def_total, rfd, lethal
+    scalar_row = [50.0, 30.0, 30.0, 12.0, 8.0, 8.0, 6.0, 6.0, 6.0, 60.0, 60.0, 60.0, 1.0]
+    scalars = torch.tensor([scalar_row] * B)
+
+    obs = {
+        "tokens": tokens,
+        "card_ids": card_ids,
+        "token_mask": token_mask,
+        "scalars": scalars,
+    }
+
+    with torch.no_grad():
+        out = extractor(obs)
+
+    assert torch.isfinite(out).all(), (
+        f"Output contains non-finite values with real-scale inputs; "
+        f"min={out.min():.4f}, max={out.max():.4f}"
+    )
+
 
 def test_attn_pool_and_single_layer_smoke():
     """pool='attn' with n_layers=1 produces a finite (B, features_dim) tensor."""

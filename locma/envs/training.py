@@ -110,6 +110,8 @@ def train_agent(
     n_envs: number of parallel envs (CPU speedup).
     both_seat: train as both first and second player (default True; eval is
         mirrored, so seat-0-only training is a coverage gap — see docs/baseline.md).
+    obs_mode: ``"flat"`` (default) for MlpPolicy + flat Box obs; ``"token"``
+        for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
     checkpoints: optional iterable of step marks. When given, training runs as
         one continuous trajectory, saving a step-suffixed model at each mark, and
         returns the list of saved paths. Otherwise trains `steps` and returns
@@ -161,6 +163,14 @@ def train_zoo(
     The model's weights carry across phases (a curriculum) — `set_env` swaps the
     opponent and `learn` continues without resetting the timestep counter. Total
     budget is ``steps_per_opponent * len(opponents)``. Returns the saved path.
+
+    Parameters
+    ----------
+    opponents: ordered sequence of opponent spec strings (the curriculum).
+    steps_per_opponent: env timesteps per opponent phase.
+    out: output model path.
+    obs_mode: ``"flat"`` (default) for MlpPolicy + flat Box obs; ``"token"``
+        for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """

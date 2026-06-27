@@ -55,7 +55,52 @@ def test_encode_for_selects_encoder_by_obs_space():
     assert isinstance(result_dict, dict), "Dict obs space should return a dict"
     assert "tokens" in result_dict
     assert "card_ids" in result_dict
+    assert "token_mask" in result_dict
+    assert "scalars" in result_dict
 
     result_box = _encode_for(box_stub, view)
     assert isinstance(result_box, np.ndarray), "Box obs space should return an ndarray"
     assert result_box.shape == (308,)
+
+
+def test_token_model_save_load_produces_legal_action(tmp_path):
+    """Close the env→save→load→eval loop for a token obs model without training.
+
+    Build a token env + MaskablePPO model, save without learning, load via
+    MaskablePPOBattlePolicy, and confirm the policy returns a legal action.
+    This exercises the Dict-obs predict(..., action_masks=...) path end-to-end.
+    """
+    pytest.importorskip("sb3_contrib")
+    pytest.importorskip("gymnasium")
+    pytest.importorskip("torch")
+
+    from locma.core import battle as battlemod  # noqa: PLC0415
+    from locma.core.engine import make_battle_view  # noqa: PLC0415
+    from locma.envs.battle_env import BattleEnv  # noqa: PLC0415
+    from locma.envs.training import _build_env, _make_model  # noqa: PLC0415
+    from locma.policies.battles import RandomBattlePolicy  # noqa: PLC0415
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.drafts import RandomDraftPolicy  # noqa: PLC0415
+
+    # Build a token env and model, save without learning.
+    env = _build_env("random", seed=0, n_envs=1, obs_mode="token")
+    model = _make_model(env, obs_mode="token", seed=0, verbose=0, ent_coef=0.02)
+    path = str(tmp_path / "tok.zip")
+    model.save(path)
+    env.close()
+
+    # Build a real battle GameState by resetting a BattleEnv — the easiest way
+    # to get a valid battle state without re-implementing the draft engine.
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    battle_env = BattleEnv(opponent=opp, seed=42, obs_mode="token")
+    battle_env.reset()
+    gs = battle_env.gs
+
+    view = make_battle_view(gs)
+    legal = battlemod.battle_legal(gs)
+    battle_env.close()
+
+    # Load via MaskablePPOBattlePolicy and get a decision.
+    pol = MaskablePPOBattlePolicy(model_path=path)
+    action = pol.battle_action(view, legal, gs)
+    assert action in legal, f"Policy returned illegal action {action!r}"

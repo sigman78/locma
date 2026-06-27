@@ -1,17 +1,15 @@
 """Tests for the tokenized observation encoder (Task 1, PPO2).
 
 TDD: all tests were written BEFORE the implementation and run to confirm RED.
-gymnasium is importorskip-gated at module level (test_env.py pattern); the
-encode_battle_tokens tests use only numpy for assertions.
+Pure-numpy encode_battle_tokens tests are NOT gymnasium-gated so they run in
+CI (which installs only the dev extra). Only the token_obs_space tests that
+need gymnasium are gated inside their function bodies.
 """
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
-
-gym = pytest.importorskip("gymnasium")
-
-import numpy as np  # noqa: E402
 
 from locma.core.views import BattleView, CardView  # noqa: E402
 from locma.envs.encode import (  # noqa: E402
@@ -109,6 +107,12 @@ def test_padding_zero_rows_and_mask_sum():
 
     # token_mask sums to exactly the number of real cards
     assert result["token_mask"].sum() == 3.0
+
+    # Real slots carry the correct card_id:
+    #   slot 0 = my_hand[0], slot 8 = my_board[0], slot 14 = op_board[0]
+    assert result["card_ids"][0] == 7.0, "hand slot 0 must carry card_id=7"
+    assert result["card_ids"][8] == 7.0, "my_board slot 8 must carry card_id=7"
+    assert result["card_ids"][14] == 7.0, "op_board slot 14 must carry card_id=7"
 
     # Pad slot indices: 1..7 (hand), 9..13 (my_board), 15..19 (op_board)
     pad_indices = list(range(1, 8)) + list(range(9, 14)) + list(range(15, 20))
@@ -291,12 +295,14 @@ def test_summonable_count_scalar():
 
 def test_token_obs_space_returns_dict_space():
     """token_obs_space() returns a gymnasium spaces.Dict."""
+    gym = pytest.importorskip("gymnasium")
     space = token_obs_space()
     assert isinstance(space, gym.spaces.Dict)
 
 
 def test_token_obs_space_shapes_and_dtypes_match_encoder():
     """spaces.Dict shapes and dtypes match what encode_battle_tokens produces."""
+    pytest.importorskip("gymnasium")
     space = token_obs_space()
     card = _make_card(instance_id=1, card_id=1)
     view = _make_view(my_hand=(card,), my_board=(card,))

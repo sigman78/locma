@@ -20,10 +20,13 @@ class TokenSetExtractor(BaseFeaturesExtractor):
 
     1. card_ids (B,20) → Embedding(161, id_dim) → (B,20,id_dim)
     2. cat([tokens, id_embed], dim=-1) → Linear(TOKEN_FEATS+id_dim, d_model) → (B,20,d_model)
+    2b. LayerNorm(d_model) applied per-token to the projected vectors (normalizes raw
+        card stats like cost/attack/defense before attention — preserves permutation
+        invariance since LayerNorm is applied identically to each position).
     3. Prepend learned CLS → (B,21,d_model); build key_padding_mask from token_mask
     4. TransformerEncoder (n_layers, batch_first) with src_key_padding_mask
     5. Pool: CLS slot z[:,0] (pool="cls") or learned-query MHA over token outputs (pool="attn")
-    6. scalar_mlp(scalars) → (B,d_model)
+    6. scalar_mlp(scalars): LayerNorm(N_TACTICAL) → Linear(N_TACTICAL, d_model) → ReLU → (B,d_model)
     7. head(cat([pool_out, scalar_out])) → (B,features_dim)
 
     No positional encoding is added, making the encoder permutation-equivariant
@@ -56,6 +59,10 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # Project token features + id embedding to d_model.
         self.proj = nn.Linear(TOKEN_FEATS + id_dim, d_model)
 
+        # Normalize projected token vectors before the transformer (per-token,
+        # so permutation invariance is preserved).
+        self.token_ln = nn.LayerNorm(d_model)
+
         # Learned CLS token prepended before the transformer.
         self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
 
@@ -74,8 +81,11 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             encoder_layer, num_layers=n_layers, enable_nested_tensor=False
         )
 
-        # Scalar MLP: project N_TACTICAL scalars → d_model.
+        # Scalar MLP: normalize then project N_TACTICAL scalars → d_model.
+        # LayerNorm on the scalar vector tames raw magnitudes (health≈30,
+        # turn≈50, board totals≈60) before the linear projection.
         self.scalar_mlp = nn.Sequential(
+            nn.LayerNorm(N_TACTICAL),
             nn.Linear(N_TACTICAL, d_model),
             nn.ReLU(),
         )
@@ -103,6 +113,10 @@ class TokenSetExtractor(BaseFeaturesExtractor):
 
         # 2. Project concatenated numeric + id features to d_model.
         x = self.proj(torch.cat([obs["tokens"], id_embed], dim=-1))  # (B, 20, d_model)
+
+        # 2b. Normalize each token vector (LayerNorm is per-token, so permutation
+        #     invariance is preserved — CLS is NOT normalized here).
+        x = self.token_ln(x)  # (B, 20, d_model)
 
         # 3. Prepend learned CLS token.
         B = x.size(0)

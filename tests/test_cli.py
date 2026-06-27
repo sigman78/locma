@@ -102,11 +102,15 @@ def test_train_zoo_rejects_zero_steps():
 
 def test_train_rejects_bad_obs_mode():
     # obs_mode validation fires before any ML import; passes without [ml] extra.
+    # The guard raises typer.BadParameter with "obs_mode must be 'flat' or 'token'".
     res = runner.invoke(app, ["train", "--steps", "1", "--obs-mode", "bogus"])
     assert res.exit_code != 0
+    assert "obs_mode" in res.output
 
 
 def test_train_zoo_rejects_bad_obs_mode():
     # obs_mode validation fires before any ML import; passes without [ml] extra.
+    # The guard raises typer.BadParameter with "obs_mode must be 'flat' or 'token'".
     res = runner.invoke(app, ["train-zoo", "--obs-mode", "bogus"])
     assert res.exit_code != 0
+    assert "obs_mode" in res.output

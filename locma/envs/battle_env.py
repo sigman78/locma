@@ -54,6 +54,10 @@ class BattleEnv(gym.Env):
         Base seed for reproducible episode sequences.
     agent_seat:
         Which player index (0 or 1) the RL agent controls.
+    obs_mode:
+        ``"flat"`` (default) — Box(OBS_SIZE,) float32 vector via
+        ``encode_battle``; ``"token"`` — spaces.Dict tokenized observation via
+        ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars).
     """
 
     metadata: dict = {}
@@ -132,7 +136,9 @@ class BattleEnv(gym.Env):
 
         Returns
         -------
-        obs : np.ndarray of shape (OBS_SIZE,)
+        obs : np.ndarray of shape (OBS_SIZE,) in flat mode, or a dict with
+            keys ``tokens``, ``card_ids``, ``token_mask``, ``scalars`` in token
+            mode (matching ``token_obs_space()``).
         info : dict
         """
         super().reset(seed=seed)
