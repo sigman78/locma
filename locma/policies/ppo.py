@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
-from locma.envs.encode import action_mask, encode_battle, index_to_action
+from locma.envs.encode import action_mask, encode_battle, encode_battle_tokens, index_to_action
+
+
+def _encode_for(model, view):
+    """Select the observation encoder based on the loaded model's observation space.
+
+    ``from gymnasium import spaces`` is kept inside the function body so that this
+    module remains import-safe without the [ml] stack — gymnasium is only available
+    once a model has been loaded.
+    """
+    from gymnasium import spaces  # noqa: PLC0415 — lazy, only reached after model load
+
+    if isinstance(model.observation_space, spaces.Dict):
+        return encode_battle_tokens(view)
+    return encode_battle(view)
 
 
 class MaskablePPOBattlePolicy:
@@ -29,7 +43,7 @@ class MaskablePPOBattlePolicy:
 
     def battle_action(self, view, legal, state=None):
         self._ensure()
-        obs = encode_battle(view)
+        obs = _encode_for(self._model, view)
         mask = action_mask(view, legal)
         idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
         return index_to_action(view, legal, int(idx))
