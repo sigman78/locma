@@ -67,7 +67,12 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             dropout=dropout,
             batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        # enable_nested_tensor=False: the default (True) + a src_key_padding_mask
+        # triggers PyTorch's nested-tensor fast path, which emits a prototype-API
+        # warning and is a documented footgun (can alter outputs across versions).
+        self.transformer = nn.TransformerEncoder(
+            encoder_layer, num_layers=n_layers, enable_nested_tensor=False
+        )
 
         # Scalar MLP: project N_TACTICAL scalars → d_model.
         self.scalar_mlp = nn.Sequential(
