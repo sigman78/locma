@@ -10,27 +10,39 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from locma.envs.encode import N_TACTICAL, NUM_CARDS, TOKEN_FEATS
+from locma.envs.encode import MAX_TOKENS, N_TACTICAL, NUM_CARDS, TOKEN_FEATS
 
 
 class TokenSetExtractor(BaseFeaturesExtractor):
-    """Set-based self-attention feature extractor for tokenized card observations.
+    """Slot-addressable self-attention feature extractor for tokenized card observations.
 
     Architecture (forward pass for batch size B):
 
     1. card_ids (B,20) → Embedding(161, id_dim) → (B,20,id_dim)
-    2. cat([tokens, id_embed], dim=-1) → Linear(TOKEN_FEATS+id_dim, d_model) → (B,20,d_model)
-    2b. LayerNorm(d_model) applied per-token to the projected vectors (normalizes raw
-        card stats like cost/attack/defense before attention — preserves permutation
-        invariance since LayerNorm is applied identically to each position).
-    3. Prepend learned CLS → (B,21,d_model); build key_padding_mask from token_mask
-    4. TransformerEncoder (n_layers, batch_first) with src_key_padding_mask
-    5. Pool: CLS slot z[:,0] (pool="cls") or learned-query MHA over token outputs (pool="attn")
-    6. scalar_mlp(scalars): LayerNorm(N_TACTICAL) → Linear(N_TACTICAL, d_model) → ReLU → (B,d_model)
-    7. head(cat([pool_out, scalar_out])) → (B,features_dim)
+    2. cat([tokens, id_embed], dim=-1) → Linear(TOKEN_FEATS+id_dim, d_model) →
+       LayerNorm(d_model) → (B,20,d_model)
+    3. Add learned per-slot positional embedding (1,20,d_model) — breaks pure
+       set-invariance intentionally (see "Why slot-addressable" below).
+    4. Build key_padding_mask from token_mask (pad=True); all-pad guard unmasks
+       fully-padded rows so attention is defined.
+    5. TransformerEncoder (n_layers, batch_first=True) with src_key_padding_mask
+       provides cross-card relational mixing while preserving slot identity.
+    6. Flatten per-slot outputs: z.reshape(B, MAX_TOKENS * d_model) — slot s occupies
+       the fixed offset range [s*d_model : (s+1)*d_model], making slot-content
+       associations directly addressable by the downstream policy head.
+    7. scalar_mlp(scalars): LayerNorm(N_TACTICAL) → Linear(N_TACTICAL, d_model) → ReLU
+       normalizes raw scalar magnitudes (health≈30, turn≈50, board totals≈60).
+    8. head(cat([flat, s], dim=-1)) → (B, features_dim)
 
-    No positional encoding is added, making the encoder permutation-equivariant
-    (set-based): the output depends only on the *set* of real tokens, not their order.
+    Why slot-addressable (NOT permutation-invariant):
+    The 155-action space indexes actions by slot position: Summon→1+s, Use→9+s*13+tc,
+    Attack→113+a*7+tc, where s/a are the card's slot in hand/board. A permutation-
+    invariant pooled feature (e.g. CLS pooling) produces identical logits when two cards
+    swap slots, so the policy CANNOT learn slot-content-specific actions. The per-slot
+    positional embedding + flat reshape preserves slot identity in the features, enabling
+    the policy head to associate each slot's d_model features with the corresponding
+    action indices. The transformer still provides cross-card relational mixing; only the
+    permutation-invariant POOLING is replaced.
     """
 
     def __init__(
@@ -43,15 +55,9 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         id_dim: int = 16,
         ff_mult: int = 2,
         dropout: float = 0.1,
-        features_dim: int = 128,
-        pool: str = "cls",
+        features_dim: int = 256,
     ) -> None:
         super().__init__(observation_space, features_dim)
-
-        if pool not in ("cls", "attn"):
-            raise ValueError(f"pool must be 'cls' or 'attn', got {pool!r}")
-
-        self.pool = pool
 
         # Card-id embedding: index 0 is PAD (padding_idx → zero, no gradient).
         self.id_embed = nn.Embedding(NUM_CARDS + 1, id_dim, padding_idx=0)
@@ -59,12 +65,14 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # Project token features + id embedding to d_model.
         self.proj = nn.Linear(TOKEN_FEATS + id_dim, d_model)
 
-        # Normalize projected token vectors before the transformer (per-token,
-        # so permutation invariance is preserved).
+        # Normalize projected token vectors before adding positional embedding.
+        # Per-token LayerNorm tames raw magnitudes (cost/attack/defense O(1–12)).
         self.token_ln = nn.LayerNorm(d_model)
 
-        # Learned CLS token prepended before the transformer.
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
+        # Learned per-slot positional embedding — one d_model vector per slot.
+        # Initialized to zeros; trained to encode slot identity (hand vs my-board
+        # vs op-board, and position within each zone).
+        self.pos_embed = nn.Parameter(torch.zeros(1, MAX_TOKENS, d_model))
 
         # Transformer encoder (batch_first=True throughout).
         encoder_layer = nn.TransformerEncoderLayer(
@@ -90,19 +98,11 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             nn.ReLU(),
         )
 
-        # Approach-C fallback: single learned-query MHA pooling over token outputs.
-        if pool == "attn":
-            self.attn_query = nn.Parameter(torch.zeros(1, 1, d_model))
-            self.attn_pool = nn.MultiheadAttention(
-                embed_dim=d_model,
-                num_heads=n_heads,
-                dropout=0.0,  # pooling head: no dropout
-                batch_first=True,
-            )
-
-        # Final head: fuse CLS/pool output with scalar branch.
+        # Final head: fuse flattened per-slot outputs with scalar branch.
+        # MAX_TOKENS * d_model from the flattened transformer outputs (20 slots,
+        # each d_model wide) + d_model from the scalar branch.
         self.head = nn.Sequential(
-            nn.Linear(2 * d_model, features_dim),
+            nn.Linear(MAX_TOKENS * d_model + d_model, features_dim),
             nn.ReLU(),
         )
 
@@ -111,45 +111,34 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         ids = obs["card_ids"].long()  # (B, 20)
         id_embed = self.id_embed(ids)  # (B, 20, id_dim)
 
-        # 2. Project concatenated numeric + id features to d_model.
-        x = self.proj(torch.cat([obs["tokens"], id_embed], dim=-1))  # (B, 20, d_model)
+        # 2. Project concatenated numeric + id features, then normalize per-token.
+        x = self.token_ln(
+            self.proj(torch.cat([obs["tokens"], id_embed], dim=-1))
+        )  # (B, 20, d_model)
 
-        # 2b. Normalize each token vector (LayerNorm is per-token, so permutation
-        #     invariance is preserved — CLS is NOT normalized here).
-        x = self.token_ln(x)  # (B, 20, d_model)
-
-        # 3. Prepend learned CLS token.
-        B = x.size(0)
-        cls = self.cls_token.expand(B, 1, -1)  # (B, 1, d_model)
-        x = torch.cat([cls, x], dim=1)  # (B, 21, d_model)
+        # 3. Add per-slot positional embedding (breaks pure set-invariance — intended).
+        x = x + self.pos_embed  # (B, 20, d_model)
 
         # 4. Build src_key_padding_mask for TransformerEncoder.
         #    Convention: True = IGNORE this position.
         #    token_mask is 1.0 for real cards, 0.0 for pads → invert for kpm.
-        kpm_tokens = obs["token_mask"] == 0  # (B, 20) True for pads
-        cls_false = torch.zeros(B, 1, dtype=torch.bool, device=x.device)
-        kpm = torch.cat([cls_false, kpm_tokens], dim=1)  # (B, 21)
+        kpm = obs["token_mask"] == 0  # (B, 20) True for pads
 
-        # 5. Run transformer.
-        z = self.transformer(x, src_key_padding_mask=kpm)  # (B, 21, d_model)
+        # All-pad guard: a row where every position is masked makes attention
+        # undefined (query attends to zero keys → NaN). For any fully-padded
+        # row, unmask all positions so attention is well-defined; those slots'
+        # logits are masked at the action level anyway.
+        all_pad = kpm.all(dim=1, keepdim=True)  # (B, 1) True if entire row is pad
+        kpm = kpm & ~all_pad  # unmask all positions for fully-padded rows
 
-        # 6. Pool.
-        if self.pool == "cls":
-            pool_out = z[:, 0]  # (B, d_model)
-        else:  # pool == "attn"
-            # Learned-query MHA over the 20 token outputs (not the CLS slot).
-            token_z = z[:, 1:]  # (B, 20, d_model)
-            q = self.attn_query.expand(B, 1, -1)  # (B, 1, d_model)
-            attn_out, _ = self.attn_pool(
-                q,
-                token_z,
-                token_z,
-                key_padding_mask=kpm_tokens,  # (B, 20)
-            )
-            pool_out = attn_out.squeeze(1)  # (B, d_model)
+        # 5. Run transformer (cross-card relational mixing, slot order preserved).
+        z = self.transformer(x, src_key_padding_mask=kpm)  # (B, 20, d_model)
+
+        # 6. Flatten per-slot outputs: slot s at fixed offset s*d_model.
+        flat = z.reshape(z.size(0), -1)  # (B, 20 * d_model)
 
         # 7. Scalar branch.
         s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
 
         # 8. Head: fuse and project to features_dim.
-        return self.head(torch.cat([pool_out, s], dim=-1))  # (B, features_dim)
+        return self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)

@@ -129,36 +129,45 @@ signal is noisy/stale (same caveat the flat encoder notes for op-board readiness
 class TokenSetExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space, *,
                  d_model=64, n_heads=4, n_layers=2, id_dim=16,
-                 ff_mult=2, dropout=0.1, features_dim=128, pool="cls"):
+                 ff_mult=2, dropout=0.1, features_dim=256):
         ...
 ```
 
 Forward pass (batch `B`):
 
 1. `ids = obs["card_ids"].long()` → `id_embed = nn.Embedding(161, id_dim, padding_idx=0)(ids)` → `(B,20,id_dim)`
-2. `x = proj(cat([obs["tokens"], id_embed], -1))`, `proj = Linear(17+id_dim, d_model)` → `(B,20,d_model)`
-2b. **Input normalization (token branch):** `x = LayerNorm(d_model)(x)` — applied per-token
-    (independently on each of the 20 positions), taming raw magnitudes (cost/attack/defense
-    in the O(1–12) range, board-attack totals O(60)) before they enter the transformer.
-    LayerNorm is per-token so permutation equivariance is preserved. The learned CLS
-    parameter is NOT normalized here.
-3. Prepend a learned **CLS** token → `(B,21,d_model)`; `key_padding_mask` from
-   `obs["token_mask"]` (pad = True), with `False` for the CLS slot.
-4. `z = TransformerEncoder(TransformerEncoderLayer(d_model, n_heads, ff_mult*d_model,
-   dropout, batch_first=True), n_layers)(x, src_key_padding_mask=kpm)`
-5. `cls_out = z[:,0]` (when `pool="cls"`); `s = scalar_mlp(obs["scalars"])`
-   where `scalar_mlp = Sequential(LayerNorm(N_TACTICAL), Linear(S, d_model), ReLU)` —
-   the leading LayerNorm normalizes the raw scalar magnitudes (health≈30, turn≈50,
-   board totals≈60) before the linear projection, fulfilling the §1 "extractor normalizes"
-   promise.
-6. `return head(cat([cls_out, s], -1))`, `head = Linear(2*d_model, features_dim)+ReLU`
+2. `x = token_ln(proj(cat([obs["tokens"], id_embed], -1)))` → `(B,20,d_model)` —
+   `LayerNorm(d_model)` applied per-token tames raw magnitudes (cost/attack/defense
+   O(1–12)) before the transformer; per-token application is fine here because slot
+   identity is established in the next step, not before.
+3. `x = x + pos_embed` where `pos_embed = nn.Parameter(zeros(1, 20, d_model))` is a
+   **learned per-slot positional embedding** — one vector per slot, initialized to zero,
+   trained to encode slot identity (hand positions 0–7, my-board 8–13, op-board 14–19).
+   This intentionally breaks pure set-invariance (see "Why slot-addressable" below).
+4. `kpm = (token_mask == 0)` (B,20), True = pad. **All-pad guard:** `all_pad =
+   kpm.all(dim=1, keepdim=True); kpm = kpm & ~all_pad` — for any fully-padded row,
+   unmask all positions so attention is defined; those slots' logits are masked at
+   the action level.
+5. `z = TransformerEncoder(TransformerEncoderLayer(d_model, n_heads, ff_mult*d_model,
+   dropout, batch_first=True), n_layers, enable_nested_tensor=False)(x, kpm)` → `(B,20,d_model)`
+6. `flat = z.reshape(B, MAX_TOKENS * d_model)` — slot `s` occupies the fixed offset
+   range `[s*d_model : (s+1)*d_model]`, making slot-content associations directly
+   addressable.
+   `s = scalar_mlp(obs["scalars"])` where
+   `scalar_mlp = Sequential(LayerNorm(N_TACTICAL), Linear(S, d_model), ReLU)` —
+   the leading LayerNorm normalizes raw scalar magnitudes (health≈30, turn≈50,
+   board totals≈60), fulfilling the §1 "extractor normalizes" promise.
+7. `return head(cat([flat, s], -1))`,
+   `head = Linear(MAX_TOKENS * d_model + d_model, features_dim) + ReLU`
 
-### Approach-C fallback (one knob set, no rewrite)
-
-The `features_extractor_kwargs` are the only tuning surface. Approach C (single-query
-attention pooling, lighter, lower overfit risk) is reachable by `n_layers=1` and/or a
-`pool="attn"` switch (learned-query MHA pooling instead of CLS). Approach B (DeepSet,
-mean/max pool, no attention) is available only as an ablation, not the headline.
+**Why slot-addressable (not permutation-invariant):** The 155-action space is
+slot-indexed: Summon→`1+s`, Use→`9+s*13+tc`, Attack→`113+a*7+tc`, where `s`/`a`
+are the card's slot position in hand/board. A permutation-invariant pooled feature
+(e.g. CLS pooling over tokens) produces *identical* logits when two cards swap slots,
+so the policy cannot learn slot-content-specific actions. Replacing CLS pooling with
+per-slot positional embedding + flat reshape preserves slot identity in the feature
+vector; the transformer still provides cross-card relational mixing, but the per-slot
+flatten ensures the policy head sees a stable, slot-addressable layout.
 
 ### Policy wiring (`locma/envs/training.py`)
 

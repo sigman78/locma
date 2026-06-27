@@ -63,7 +63,7 @@ def test_forward_shape_and_finite():
 
     out = extractor(obs)
 
-    assert out.shape == (4, 128), f"expected (4, 128), got {out.shape}"
+    assert out.shape == (4, 256), f"expected (4, 256), got {out.shape}"
     assert torch.isfinite(out).all(), "output contains non-finite values"
 
 
@@ -92,47 +92,92 @@ def test_gradients_flow():
 
 
 # ---------------------------------------------------------------------------
-# (c) Permutation / padding invariance (pool="cls", eval mode)
+# (c) Slot-sensitivity test (replaces permutation-invariance test)
 # ---------------------------------------------------------------------------
 
 
-def test_permutation_padding_invariance():
-    """Shuffling the 20 (token-row, card_id, mask) triples leaves CLS output identical.
+def test_slot_sensitivity():
+    """Swapping two DISTINCT cards between slots produces different output features.
 
-    This proves the mask works and the model treats the token set as order-invariant
-    (no positional encoding is added - by design).
+    The action space is slot-indexed (Summon→1+s, Use→9+s*13+tc,
+    Attack→113+a*7+tc), so the policy must distinguish which card occupies which
+    slot. A permutation-invariant pooled encoder would return identical features
+    after the swap. The slot-addressable encoder (positional embedding + per-slot
+    flatten) must NOT be invariant — this test asserts that property.
     """
     torch.manual_seed(42)
     space = token_obs_space()
-    extractor = TokenSetExtractor(space, pool="cls")
+    extractor = TokenSetExtractor(space)
     extractor.eval()
 
-    B, n_real = 1, 7  # 7 real tokens, 13 pads
+    B = 1
 
-    # Build original observation (real tokens in first n_real slots).
-    obs = _make_batch(B=B, n_real=n_real)
+    # Two distinct cards: different card_ids and different random feature rows.
+    card_a_feats = torch.randn(TOKEN_FEATS)
+    card_b_feats = torch.randn(TOKEN_FEATS)
+    card_a_id = 1.0
+    card_b_id = 2.0
+
+    def _obs_with_cards(a_slot: int, b_slot: int):
+        tokens = torch.zeros(B, MAX_TOKENS, TOKEN_FEATS)
+        card_ids = torch.zeros(B, MAX_TOKENS)
+        token_mask = torch.zeros(B, MAX_TOKENS)
+        tokens[0, a_slot] = card_a_feats
+        card_ids[0, a_slot] = card_a_id
+        token_mask[0, a_slot] = 1.0
+        tokens[0, b_slot] = card_b_feats
+        card_ids[0, b_slot] = card_b_id
+        token_mask[0, b_slot] = 1.0
+        return {
+            "tokens": tokens,
+            "card_ids": card_ids,
+            "token_mask": token_mask,
+            "scalars": torch.zeros(B, N_TACTICAL),
+        }
+
+    obs_a = _obs_with_cards(a_slot=0, b_slot=1)  # A in slot 0, B in slot 1
+    obs_b = _obs_with_cards(a_slot=1, b_slot=0)  # A in slot 1, B in slot 0 (swapped)
 
     with torch.no_grad():
-        out_orig = extractor(obs)
+        out_a = extractor(obs_a)
+        out_b = extractor(obs_b)
 
-    # Build a random permutation of all 20 positions and apply to every key.
-    perm = torch.randperm(MAX_TOKENS)
-    obs_perm = {
-        "tokens": obs["tokens"][:, perm, :],
-        "card_ids": obs["card_ids"][:, perm],
-        "token_mask": obs["token_mask"][:, perm],
-        "scalars": obs["scalars"],  # scalars are not permuted
+    assert not torch.allclose(out_a, out_b, atol=1e-4), (
+        "Extractor output is identical after swapping distinct cards between slots — "
+        "the encoder is still permutation-invariant, but the slot-indexed action "
+        "space requires slot-sensitive features."
+    )
+
+
+# ---------------------------------------------------------------------------
+# (d) All-pad guard: no NaN when all tokens are padding
+# ---------------------------------------------------------------------------
+
+
+def test_all_pad_guard_finite():
+    """An input where every slot is padding returns a finite (B, features_dim) tensor.
+
+    The all-pad guard in forward() unmasks all positions for fully-padded rows so
+    the transformer's attention does not produce NaN (attending over zero keys).
+    """
+    space = token_obs_space()
+    extractor = TokenSetExtractor(space)
+    extractor.eval()
+
+    B = 2
+    obs = {
+        "tokens": torch.zeros(B, MAX_TOKENS, TOKEN_FEATS),
+        "card_ids": torch.zeros(B, MAX_TOKENS),
+        "token_mask": torch.zeros(B, MAX_TOKENS),  # all pad — every slot masked
+        "scalars": torch.zeros(B, N_TACTICAL),
     }
 
     with torch.no_grad():
-        out_perm = extractor(obs_perm)
+        out = extractor(obs)
 
-    torch.testing.assert_close(out_orig, out_perm, atol=1e-5, rtol=1e-5)
+    assert out.shape == (B, 256), f"expected ({B}, 256), got {out.shape}"
+    assert torch.isfinite(out).all(), "Output contains NaN/Inf for all-pad input"
 
-
-# ---------------------------------------------------------------------------
-# (d) Smoke: pool="attn" and n_layers=1 produce finite (B, features_dim)
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # (e) Input normalization: large-magnitude real-scale inputs stay finite
@@ -184,18 +229,3 @@ def test_large_magnitude_inputs_finite():
         f"Output contains non-finite values with real-scale inputs; "
         f"min={out.min():.4f}, max={out.max():.4f}"
     )
-
-
-def test_attn_pool_and_single_layer_smoke():
-    """pool='attn' with n_layers=1 produces a finite (B, features_dim) tensor."""
-    space = token_obs_space()
-    extractor = TokenSetExtractor(space, pool="attn", n_layers=1)
-    extractor.eval()
-
-    obs = _make_batch(B=4, n_real=8)
-
-    with torch.no_grad():
-        out = extractor(obs)
-
-    assert out.shape == (4, 128), f"expected (4, 128), got {out.shape}"
-    assert torch.isfinite(out).all(), "attn-pool output contains non-finite values"
