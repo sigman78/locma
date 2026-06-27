@@ -127,13 +127,20 @@ def test_selfplay_value_target_in_valid_set(tmp_path):
 
     oracle_path = _make_token_model(tmp_path)
     out = str(tmp_path / "sp.npz")
-    record_selfplay(oracle_path, out=out, seed=0, **_TINY_PARAMS)
+    manifest = record_selfplay(oracle_path, out=out, seed=0, **_TINY_PARAMS)
 
     data = np.load(out)
     vt = data["value_target"]
     valid = {-1.0, 0.0, 1.0}
     bad = [float(v) for v in vt if float(v) not in valid]
     assert not bad, f"unexpected value_target values: {bad}"
+
+    # run_game always resolves a winner, so outcome_for never returns 0.0 on a
+    # clean game — every z=0 row would be a leaked partial-game row. With no
+    # failed games there must be none.
+    if manifest["failed_games"] == 0:
+        zeros = [float(v) for v in vt if float(v) == 0.0]
+        assert not zeros, f"clean run leaked {len(zeros)} z=0 rows"
 
 
 def test_selfplay_manifest_constants(tmp_path):

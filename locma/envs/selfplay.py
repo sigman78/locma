@@ -180,6 +180,9 @@ class _RecordingBattlePolicy:
                 ctx.rng,
                 root_noise=(self.eps, self.alpha),
             )
+            assert len(counts) == len(total), (
+                f"visit-count length mismatch: {len(counts)} vs {len(total)}"
+            )
             for i in range(len(total)):
                 total[i] += counts[i]
 
@@ -305,6 +308,8 @@ def record_selfplay(
         try:
             result = run_game(pol0, pol1, seed + gid)
         except Exception:  # noqa: BLE001
+            # Discard the partial game's rows (they carry a default z=0 label).
+            del ctx.buffer[start:]
             failed_games += 1
             gid += 1
             continue
@@ -333,6 +338,8 @@ def record_selfplay(
             try:
                 result = run_game(p0, p1, seed + gid)
             except Exception:  # noqa: BLE001
+                # Discard the partial game's rows (they carry a default z=0 label).
+                del ctx.buffer[start:]
                 failed_games += 1
                 gid += 1
                 continue
