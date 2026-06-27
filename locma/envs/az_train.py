@@ -80,7 +80,13 @@ def load_selfplay(paths) -> tuple[dict, dict]:
             )
 
         with np.load(path) as data:
-            arrays = {k: data[k] for k in _SELFPLAY_ARRAY_KEYS if k in data.files}
+            missing = [k for k in _SELFPLAY_ARRAY_KEYS if k not in data.files]
+            if missing:
+                raise ValueError(
+                    f"selfplay file {path!r} is missing required array(s): "
+                    f"{', '.join(missing)}; regenerate the selfplay dataset"
+                )
+            arrays = {k: data[k] for k in _SELFPLAY_ARRAY_KEYS}
 
         # Offset game_id so games from different files don't collide.
         offset = running_max_gid + 1
@@ -237,7 +243,13 @@ def az_train(
         with torch.no_grad():
             dist = model.policy.get_distribution(val_obs, action_masks=val_mask)
             logp = dist.distribution.logits
-            val_policy_ce = float(-(val_target * logp).sum(1).mean().item())
+            # where-guard mirrors the training loss: defends against 0 * -inf.
+            val_policy_ce = float(
+                -(val_target * torch.where(val_target > 0, logp, torch.zeros_like(logp)))
+                .sum(1)
+                .mean()
+                .item()
+            )
 
             v = model.policy.predict_values(val_obs)
             val_value_mse = float(F.mse_loss(v.squeeze(-1), val_value).item())

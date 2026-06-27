@@ -111,6 +111,42 @@ def test_load_selfplay_concat_disjoint_game_ids(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Test 2b: load_selfplay raises on a missing required array
+# ---------------------------------------------------------------------------
+
+
+def test_load_selfplay_rejects_missing_array(tmp_path):
+    """A .npz missing a required key (value_target) → ValueError naming the key."""
+    from locma.envs.az_train import load_selfplay  # noqa: PLC0415
+
+    p = tmp_path / "incomplete.npz"
+    n = 8
+    rng = np.random.default_rng(0)
+    game_id = np.repeat(np.arange(2, dtype=np.int32), n // 2)
+    policy_target = np.zeros((n, ACTION_SIZE), dtype=np.float32)
+    policy_target[:, :_N_LEGAL] = 1.0 / _N_LEGAL
+    mask = np.zeros((n, ACTION_SIZE), dtype=bool)
+    mask[:, :_N_LEGAL] = True
+    # Deliberately omit `value_target`.
+    np.savez(
+        p,
+        obs_tokens=rng.standard_normal((n, MAX_TOKENS, TOKEN_FEATS)).astype(np.float32),
+        obs_card_ids=rng.random((n, MAX_TOKENS)).astype(np.float32),
+        obs_token_mask=np.ones((n, MAX_TOKENS), dtype=np.float32),
+        obs_scalars=rng.standard_normal((n, N_TACTICAL)).astype(np.float32),
+        policy_target=policy_target,
+        mask=mask,
+        seat=np.zeros(n, dtype=np.int8),
+        game_id=game_id,
+    )
+    with open(_manifest_path(str(p)), "w", encoding="utf-8") as f:
+        json.dump(_SELFPLAY_MANIFEST, f)
+
+    with pytest.raises(ValueError, match="value_target"):
+        load_selfplay(str(p))
+
+
+# ---------------------------------------------------------------------------
 # Test 3: az_train smoke (requires sb3_contrib + torch)
 # ---------------------------------------------------------------------------
 
