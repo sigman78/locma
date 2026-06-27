@@ -1146,6 +1146,40 @@ uv run locma tournament ppo:runs/ppo2-token.zip scripted max-guard max-attack \
   --games 200 --seed 0 --matrix
 ```
 
+## Distillation (search teacher → reactive net) — obs is not the ceiling
+
+Behavior-cloning a search teacher's battle decisions into a reactive net (the PR #18
+redo), now with a token mode (`--obs-mode token`), a matched flat control, and a fair
+teacher. Practicum: `mcts:100` / `dmcts`, 156 games/opp × 2 seats, default 10-epoch BC.
+
+| distilled net | teacher | obs | top-1 agreement | avg-hard3 |
+|---------------|---------|-----|-----------------|-----------|
+| flat (matched) | mcts:100 (cheater) | flat  | 0.370 | 0.548 |
+| token          | mcts:100 (cheater) | token | 0.366 | 0.543 |
+| dmcts          | dmcts (fair)       | token | 0.372 | 0.535 |
+| *from-scratch PPO2 (RL)* | — | token | — | *0.588* |
+| *teacher strength* | mcts / dmcts | — | — | *~0.73* |
+
+All distills cluster at **agreement ~0.37 / avg-hard3 ~0.54** — flat across both the
+observation (flat = token, same games) and the teacher (cheating mcts = fair dmcts).
+Every distilled net sits **at/just-below from-scratch RL (0.588, within seed noise)**
+and inherits **~none** of the teacher's ~0.73. **The cap is behavior-cloning a search
+policy into a reactive net itself — not the observation, not the cheating.** (The
+apparent lift over PR #18's 0.25/0.29 is the semantic-action-space/enriched-obs work of
+PR #19, which postdated PR #18's distillation — a cross-run artifact, corrected by the
+matched flat control.) *Caveat:* dmcts was recorded non-deterministically (label noise);
+a deterministic-dmcts practicum is untested.
+
+Reproduce:
+```bash
+# token practicum + distill (obs_mode auto-resolves from the manifest)
+uv run locma record-practicum --teacher mcts:100 --obs-mode token --games 156 \
+  --out runs/practicum-token.npz
+uv run locma distill --data runs/practicum-token.npz --out runs/distilled-token.zip --epochs 10
+uv run locma tournament ppo:runs/distilled-token.zip scripted max-guard max-attack \
+  --games 200 --seed 0 --matrix
+```
+
 ## Replay determinism
 
 `locma play greedy scripted --games 50 --seed 0 --log <file>` then

@@ -312,3 +312,43 @@ fair, overfit-resistant test.
   its bigger promised value is as a substrate for search (§8.4B, untested). Code is
   additive behind `obs_mode="flat"`; flat baseline untouched. See `baseline.md`
   ("PPO2") and `ppo-review.md` §8.4A.
+
+## 2026-06-27 — Distill search → PPO2 (PR #18 redo): the obs is NOT the BC ceiling
+
+Re-ran the PR #18 distillation (behavior-clone a search teacher into a reactive net)
+with the new tokenized obs + a matched flat control + a fair teacher, to find what
+actually caps it. Added a token mode to the practicum/distill pipeline (`--obs-mode
+token`; teacher decisions are obs-independent, so `action`/`mask` are identical to
+flat — verified byte-for-byte).
+
+**All distills land in the same place — agreement ~0.37, avg-hard3 ~0.54:**
+
+| distilled net | teacher | obs | top-1 agreement | avg-hard3 |
+|---|---|---|---|---|
+| flat (matched) | mcts:100 (cheater) | flat | 0.370 | 0.548 |
+| token | mcts:100 (cheater) | token | 0.366 | 0.543 |
+| dmcts | dmcts (fair) | token | 0.372 | 0.535 |
+| from-scratch PPO2 (RL) | — | token | — | **0.588** |
+| teacher strength | mcts / dmcts | — | — | **~0.73** |
+
+- **The observation is not the ceiling.** Flat ≈ token on the *same* 35k mcts games
+  (0.370/0.548 vs 0.366/0.543). The earlier "token lifts 0.25→0.37" was a **cross-run
+  artifact** vs PR #18's old number; the real gain over PR #18 (0.25/0.29) is the
+  **semantic action space + enriched obs (PR #19), which landed *after* PR #18 distilled
+  into the old positional space** — not tokenization. (Matched controls earn their keep.)
+- **The teacher's cheating is not the ceiling either.** The *fair* dmcts distilled no
+  better than the cheating mcts (0.372/0.535 vs 0.366/0.543).
+- **Distill does not beat from-scratch.** Every distilled net sits at/just-below
+  from-scratch RL (0.588, within seed noise) and inherits **~none** of the teacher's
+  ~0.73 edge.
+- **Verdict:** the cap is **behavior-cloning a search policy into a reactive net**
+  itself — base-, obs-, and teacher-fairness-independent. Strengthens §8.3/PR #18: more
+  imitation data won't cross the planning gap; only search-in-the-loop (§8.4B) does.
+- *Caveat / only untested lever:* dmcts was recorded **non-deterministically** (samples
+  determinizations → label noise that can cap agreement). `DMCTSBattlePolicy.deterministic=True`
+  exists for distillation but isn't exposed in the registry spec; a clean deterministic-dmcts
+  practicum is unrun.
+- *Op note:* `mcts:100` recording is now ~30× faster than PR #18's measurement (the fast
+  `_clone_battle` landed after it) — 35k examples in ~75s, not ~40 min. The `random`
+  opponent is excluded from the dmcts practicum (degenerate states, noise, not in avg-hard3).
+  Pipeline additive behind `--obs-mode flat`; see `baseline.md` ("Distillation").
