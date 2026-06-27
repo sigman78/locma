@@ -54,6 +54,32 @@ def _select(node: _Node, root_seat: int, c_puct: float) -> int:
     return best
 
 
+def _mix_root_noise(P: list[float], eps: float, alpha: float, rng) -> list[float]:
+    """Mix Dirichlet noise into root priors using stdlib ``random`` only (no numpy).
+
+    Parameters
+    ----------
+    P:
+        Prior distribution over root edges (length n, sums ≈ 1).
+    eps:
+        Mixing coefficient in [0, 1].  0 → P unchanged; 1 → pure Dirichlet.
+    alpha:
+        Dirichlet concentration parameter (e.g. 0.3 for AZ chess/shogi).
+    rng:
+        A ``random.Random`` instance used for reproducible ``gammavariate`` draws.
+
+    Returns
+    -------
+    list[float]
+        Mixed prior of same length: ``(1 - eps) * P[i] + eps * d[i]``
+        where ``d`` is a Dirichlet(alpha) sample.
+    """
+    g = [rng.gammavariate(alpha, 1.0) for _ in P]
+    s = sum(g) or 1.0
+    d = [x / s for x in g]
+    return [(1.0 - eps) * P[i] + eps * d[i] for i in range(len(P))]
+
+
 def _reward(sim, root_seat: int) -> float:
     """Terminal/turn-cap reward from ``root_seat``'s perspective: ±1 or health-diff sign."""
     if sim.winner is not None:
@@ -63,7 +89,9 @@ def _reward(sim, root_seat: int) -> float:
     return 1.0 if me > op else (-1.0 if me < op else 0.0)
 
 
-def puct_search(root_state, oracle, iterations: int, c_puct: float, rng) -> list[int]:
+def puct_search(
+    root_state, oracle, iterations: int, c_puct: float, rng, root_noise=None
+) -> list[int]:
     """Run PUCT/AlphaZero-style search and return root edge visit counts.
 
     Parameters
@@ -81,8 +109,14 @@ def puct_search(root_state, oracle, iterations: int, c_puct: float, rng) -> list
     c_puct:
         Exploration constant in the PUCT upper-confidence bound.
     rng:
-        A ``random.Random`` instance (reserved for oracle/future use; the PUCT
-        core itself is deterministic given the oracle).
+        A ``random.Random`` instance used for Dirichlet draws when
+        ``root_noise`` is set; otherwise reserved for oracle/future use.
+    root_noise:
+        ``None`` (default) → behaviour is byte-identical to before this
+        parameter was added.  ``(eps, alpha)`` → after the root priors ``P``
+        are built, mix a Dirichlet(alpha) sample in with weight ``eps`` via
+        :func:`_mix_root_noise`.  Applied to the **root node only**; child
+        priors are untouched.  Intended for AlphaZero self-play generation.
 
     Returns
     -------
@@ -92,7 +126,11 @@ def puct_search(root_state, oracle, iterations: int, c_puct: float, rng) -> list
     """
     root_seat = root_state.current
     legal = list(battlemod.battle_legal(root_state))
-    root = _Node(root_seat, legal, oracle.priors(root_state, legal, root_seat))
+    P = oracle.priors(root_state, legal, root_seat)
+    if root_noise is not None:
+        eps, alpha = root_noise
+        P = _mix_root_noise(P, eps, alpha, rng)
+    root = _Node(root_seat, legal, P)
 
     for _ in range(iterations):
         sim = _clone_battle(root_state)
