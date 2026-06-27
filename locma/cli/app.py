@@ -425,6 +425,175 @@ def distill(
     )
 
 
+@app.command("record-selfplay")
+def record_selfplay_cmd(
+    oracle_path: str = typer.Option(..., help="path to the warm/oracle .zip model"),
+    out: str = typer.Option("selfplay.npz", help="output .npz path"),
+    self_play_games: int = typer.Option(240, help="number of self-play games"),
+    baseline_games: int = typer.Option(100, help="number of baseline games vs scripted opponents"),
+    k: int = typer.Option(6, help="determinizations per decision (PUCT worlds)"),
+    i: int = typer.Option(40, help="PUCT iterations per world"),
+    c_puct: float = typer.Option(1.5, help="PUCT exploration constant"),
+    eps: float = typer.Option(0.25, help="Dirichlet noise mixing coefficient"),
+    alpha: float = typer.Option(0.3, help="Dirichlet concentration parameter"),
+    temp_moves: int = typer.Option(10, help="plies with temperature sampling"),
+    seed: int = typer.Option(0, help="RNG seed"),
+):
+    """Generate AlphaZero self-play data (requires the [ml] extra)."""
+    if self_play_games < 0:
+        raise typer.BadParameter("self-play-games must be >= 0")
+    if baseline_games < 0:
+        raise typer.BadParameter("baseline-games must be >= 0")
+    if self_play_games + baseline_games < 1:
+        raise typer.BadParameter("self-play-games + baseline-games must be >= 1")
+    if k < 1:
+        raise typer.BadParameter("k must be >= 1")
+    if i < 1:
+        raise typer.BadParameter("i must be >= 1")
+    try:
+        import locma.envs.selfplay as _selfplay  # noqa: PLC0415 — optional [ml] dep
+
+        manifest = _selfplay.record_selfplay(
+            oracle_path=oracle_path,
+            out=out,
+            self_play_games=self_play_games,
+            baseline_games=baseline_games,
+            K=k,
+            I=i,
+            c_puct=c_puct,
+            eps=eps,
+            alpha=alpha,
+            temp_moves=temp_moves,
+            seed=seed,
+        )
+    except ImportError as e:
+        raise typer.BadParameter(
+            "record-selfplay requires the [ml] extra: uv sync --extra ml"
+        ) from e
+    console.print(
+        f"recorded {manifest['n_examples']} examples "
+        f"({manifest['failed_games']} failed games) -> {out}"
+    )
+
+
+@app.command("az-train")
+def az_train_cmd(
+    data: list[str] = typer.Option(  # noqa: B008
+        [], help="self-play .npz path(s) — repeatable for the sliding window"
+    ),
+    warm_start: str = typer.Option(..., help="path to warm-start token MaskablePPO .zip"),
+    out: str = typer.Option("az.zip", help="output model .zip path"),
+    epochs: int = typer.Option(10, help="training epochs"),
+    batch: int = typer.Option(256, help="mini-batch size"),
+    lr: float = typer.Option(1e-4, help="Adam learning rate"),
+    c_v: float = typer.Option(0.5, help="value loss coefficient"),
+    val_frac: float = typer.Option(0.1, help="fraction of games held out for validation"),
+    seed: int = typer.Option(0, help="RNG seed"),
+):
+    """Fine-tune an AlphaZero net on self-play data (requires the [ml] extra)."""
+    if not data:
+        raise typer.BadParameter("--data must be provided at least once")
+    if epochs < 1:
+        raise typer.BadParameter("epochs must be >= 1")
+    if batch < 1:
+        raise typer.BadParameter("batch must be >= 1")
+    if not 0.0 <= val_frac < 1.0:
+        raise typer.BadParameter("val-frac must be in [0, 1)")
+    try:
+        import locma.envs.az_train as _az_train  # noqa: PLC0415 — optional [ml] dep
+
+        info = _az_train.az_train(
+            data=data,
+            warm_start=warm_start,
+            out=out,
+            epochs=epochs,
+            batch=batch,
+            lr=lr,
+            c_v=c_v,
+            val_frac=val_frac,
+            seed=seed,
+        )
+    except ImportError as e:
+        raise typer.BadParameter("az-train requires the [ml] extra: uv sync --extra ml") from e
+    console.print(
+        f"saved {info['out']}  "
+        f"val_policy_ce={info['val_policy_ce']:.4f} "
+        f"val_value_mse={info['val_value_mse']:.4f} "
+        f"(train={info['n_train']}, val={info['n_val']})"
+    )
+
+
+@app.command("az-selfplay")
+def az_selfplay_cmd(
+    warm_start: str = typer.Option("runs/selfplay-r2.zip", help="initial oracle net path"),
+    prefix: str = typer.Option("runs/az", help="output path prefix"),
+    iterations: int = typer.Option(4, help="maximum self-play/train/eval rounds"),
+    window: int = typer.Option(2, help="rolling window of datasets passed to az-train"),
+    base_seed: int = typer.Option(0, help="base RNG seed"),
+    self_play_games: int = typer.Option(240, help="self-play games per iteration"),
+    baseline_games: int = typer.Option(100, help="baseline games per iteration"),
+    k_gen: int = typer.Option(6, help="PUCT determinizations for generation"),
+    i_gen: int = typer.Option(40, help="PUCT iterations per world for generation"),
+    c_puct: float = typer.Option(1.5, help="PUCT exploration constant"),
+    eps: float = typer.Option(0.25, help="Dirichlet noise mixing coefficient"),
+    alpha: float = typer.Option(0.3, help="Dirichlet concentration parameter"),
+    temp_moves: int = typer.Option(10, help="temperature plies for generation"),
+    epochs: int = typer.Option(10, help="training epochs"),
+    batch: int = typer.Option(256, help="mini-batch size"),
+    lr: float = typer.Option(1e-4, help="Adam learning rate"),
+    c_v: float = typer.Option(0.5, help="value loss coefficient"),
+    k_eval: int = typer.Option(8, help="PUCT determinizations for evaluation"),
+    i_eval: int = typer.Option(40, help="PUCT iterations per world for evaluation"),
+    games_per_opp: int = typer.Option(20, help="games per opponent in avg_hard3"),
+    h2h_games: int = typer.Option(40, help="games for head-to-head evaluation"),
+    h2h_thresh: float = typer.Option(0.53, help="minimum h2h win-rate to adopt candidate"),
+    hard3_eps: float = typer.Option(0.02, help="max score regression allowed for adoption"),
+    max_rejects: int = typer.Option(2, help="early-stop after this many consecutive rejects"),
+):
+    """Run the AlphaZero iterated self-play loop (requires the [ml] extra)."""
+    if iterations < 1:
+        raise typer.BadParameter("iterations must be >= 1")
+    if window < 1:
+        raise typer.BadParameter("window must be >= 1")
+    try:
+        import locma.envs.azloop as _azloop  # noqa: PLC0415 — optional [ml] dep
+
+        res = _azloop.az_selfplay(
+            warm_start=warm_start,
+            prefix=prefix,
+            iterations=iterations,
+            window=window,
+            base_seed=base_seed,
+            self_play_games=self_play_games,
+            baseline_games=baseline_games,
+            K_gen=k_gen,
+            I_gen=i_gen,
+            c_puct=c_puct,
+            eps=eps,
+            alpha=alpha,
+            temp_moves=temp_moves,
+            epochs=epochs,
+            batch=batch,
+            lr=lr,
+            c_v=c_v,
+            K_eval=k_eval,
+            I_eval=i_eval,
+            games_per_opp=games_per_opp,
+            h2h_games=h2h_games,
+            h2h_thresh=h2h_thresh,
+            hard3_eps=hard3_eps,
+            max_rejects=max_rejects,
+        )
+    except ImportError as e:
+        raise typer.BadParameter("az-selfplay requires the [ml] extra: uv sync --extra ml") from e
+    console.print(
+        f"best_net={res['best_net']} "
+        f"best_score={res['best_score']:.3f} "
+        f"final_hard3={res['final_hard3']:.3f} "
+        f"final_h2h={res['final_h2h']:.3f}"
+    )
+
+
 @app.command()
 def serve(
     host: str = "127.0.0.1",
