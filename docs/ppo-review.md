@@ -331,7 +331,7 @@ hyperparameter tuning:
 | **Both-seat training** | ✅ **landed (PR #27)** | Now the default (`--both-seat`); +0.06 / 2× efficiency, **same ceiling** (the 2×2 + 800k retrain confirm it's efficiency+correctness, not a higher ceiling). |
 | **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
 | Observation richness / entropy / normalization / **net size** | ✗ ruled out | §3.4 multi-seed A/B + the net-size×seat 2×2 (`baseline.md`) — all neutral; bigger net *hurts*. |
-| **Richer board encoding** (tokens + relational + tactical scalars) | **open — substrate** | §8.4A: a *different kind* of obs (relations + computed lookahead), so §3.4's flat-scalar null doesn't apply. Sharpens the reactive net and yields a better policy/value net for ↓. |
+| **Richer board encoding** (tokens + self-attention + tactical scalars) | **tested — parity (secondary)** | §8.4A update: a *correctly slot-addressable* token+attention encoding reaches/marginally beats flat under the curriculum (avg-hard3 0.588 vs 0.573, 2 seeds) but within seed noise, at ~4× cost. A real but secondary lever; the relational matrix and its use as a substrate for B remain untested. |
 | **Search in the loop** (AlphaZero-lite) | **open — the real lever** | §8.4B: net guides `dmcts`/MCTS (PUCT priors + value leaf), trained by self-play of the *search*. The only path to MCTS-level *planning*; a bigger build. |
 
 **Recommended order (remaining):** every training-method lever is now spent — reward,
@@ -453,6 +453,51 @@ added *more of the same flat scalars*. Relations, a combat matrix, and computed
 lookahead scalars are a **different kind** of information (derived structure, not raw
 features), so the null result doesn't cover them. Expect this to sharpen the reactive
 net's tactics — and, crucially, to make a far better **policy/value net for path B**.
+
+**Update (2026-06-26): A built and tested — `obs_mode="token"`. Verdict: parity / a
+slight lean ahead under the curriculum, within seed noise. A is a *secondary* lever,
+as the table now reads.** The encoding is per-card *tokens* (zone/type/cost/attack/
+defense/abilities/readiness + a learned **card-id** embedding — `card_id`, which the
+flat obs discards), a handful of computed **tactical scalars** (guard count, reachable
+face damage, lethal-available, mana, board totals), and a **self-attention** extractor
+(`TokenSetExtractor` on `MultiInputPolicy`). Two non-obvious lessons fell out:
+
+1. **The action space is slot-indexed, so the encoder must be slot-*addressable*, not
+   permutation-invariant.** The first build pooled the tokens into a permutation-
+   invariant CLS vector — elegant, and exactly wrong: Summon/Use/Attack logits are
+   indexed by *which hand/board slot* a card occupies, so an order-invariant feature
+   collapses states that differ only by slot and the policy cannot learn slot-specific
+   play (pilot: token 0.46 < flat 0.55). Fix: a per-slot positional embedding +
+   **flatten the per-slot transformer outputs** (each slot at a fixed offset) — keeps
+   attention's cross-card relational mixing while preserving slot identity. (The flat
+   obs had slot-addressability for free, which is why it was a stronger baseline than
+   it looked.)
+2. **The bigger net needs gentler PPO.** At the default LR (3e-4) / 10-epoch updates
+   the token net's `approx_kl` ran to 0.10–0.15 (clip-fraction ~0.4) and it *degraded
+   with training* (0.382 → 0.333 over 300k). Lowering LR to 1e-4 + a `target_kl=0.025`
+   early-stop tamed KL to ~0.015 and recovered it. The flat MLP is small enough to be
+   stable at 3e-4.
+
+**Results (avg-hard3 = mean win rate vs scripted/max-guard/max-attack):**
+- *Single opponent* (300k vs max-attack): flat 0.588, token 0.565 — token slightly
+  **behind**, because the larger net **overfits the lone training opponent** (strong
+  vs max-attack, weaker vs the unseen scripted). The single-opponent pilot is biased
+  against token; the diverse curriculum is the fair test.
+- *Zoo curriculum, full A/B* (200k×4 = 800k/arm, 2 seeds, 400 games/opp): token
+  **0.588 vs flat 0.573** (+0.015; greedy +0.025) — token wins the mean and is most
+  consistently ahead vs greedy, **but the two seeds disagree** (s0 flat 0.592 > 0.562,
+  s1 token 0.614 > 0.555) and the per-seed spread (~0.03–0.04) exceeds the gap. Across
+  three independent curriculum runs token won 2/3 (mean ≈ +0.02).
+
+**Bottom line:** a *correctly* slot-addressable, stably-trained tokenized+attention
+encoding **reaches and marginally exceeds** the flat baseline under the curriculum —
+confirming this row's "a different *kind* of obs can help" premise — but the edge
+(~+0.015–0.02 avg-hard3) is within 2-seed variance, at ~4× the training cost. So A is
+real but **secondary**: on its own it does not lift the reactive net off the ceiling.
+Its larger promised value remains as a **better substrate for B** (the policy/value
+net for search) — still untested, as is the explicit relational/trade matrix. The
+plumbing is additive behind `obs_mode="flat"` (the default), so the flat baseline is
+untouched. See `baseline.md` ("PPO2") and the 2026-06-26 worklog entry.
 
 #### B. AlphaZero-lite — search in the loop (the algorithm)
 

@@ -272,3 +272,43 @@ Two paths remain, and they **compose** — substrate then algorithm:
   doesn't change that — and it especially can't learn to beat a **perfect-foresight
   cheater** reactively. ~95 min at ~35 fps (the search opponent is the cost). Lever
   remains search at play time (`ppo-review.md` §8), not the training opponent.
+
+## 2026-06-26 — PPO2: tokenized observation + self-attention (richer-encoding lever)
+
+Built the `ppo-review.md` §8.4A "richer board encoding" lever as `obs_mode="token"`
+(additive; `obs_mode="flat"` stays the default + A/B control): per-card tokens (+ a
+learned **card-id** embedding the flat obs discards) + computed tactical scalars + a
+self-attention extractor (`TokenSetExtractor` on `MultiInputPolicy`). Two bugs found
+along the way, then a fair A/B. Verdict: **parity / a slight lean ahead under the
+curriculum, within seed noise — a secondary lever.** Full analysis in §8.4A.
+
+### Two non-obvious bugs
+- **Slot-indexed action space ⇒ the encoder must be slot-addressable, not
+  permutation-invariant.** v1 pooled tokens to a permutation-invariant CLS vector, but
+  Summon/Use/Attack are indexed by hand/board *slot*, so order-invariant features
+  can't express slot-specific play (pilot: token 0.46 < flat 0.55). Fix: per-slot
+  positional embedding + **flatten** the per-slot transformer outputs (each slot at a
+  fixed offset) — attention's relational mixing, slot identity preserved.
+- **The bigger net needs gentler PPO.** Default LR 3e-4 drove `approx_kl` to 0.10–0.15
+  (clip ~0.4) and the token net *degraded* with training (0.382 → 0.333 @300k). LR 1e-4
+  + `target_kl=0.025` tamed it (→0.565). Plumbed `learning_rate`/`target_kl` through
+  the trainer + CLI (flat defaults 3e-4/None unchanged).
+
+### Overfitting → the curriculum is the fair test
+Trained vs a single opponent (max-attack) the larger token net **overfits it** (strong
+vs max-attack, weak vs unseen scripted) while the tiny flat MLP generalizes — so
+single-opponent eval is biased against token. The zoo curriculum (4 opponents) is the
+fair, overfit-resistant test.
+
+### A/B verdict (curriculum, avg-hard3 = mean win rate vs scripted/max-guard/max-attack)
+- Full A/B: 200k×4 = 800k/arm, 2 seeds, 400 games/opp. **token 0.588 vs flat 0.573**
+  (+0.015; greedy +0.025) — but seeds disagree (s0 flat 0.592 > 0.562; s1 token
+  0.614 > 0.555); per-seed spread ~0.03–0.04 > the gap, so **not significant at n=2**.
+  Across 3 independent curriculum runs token won 2/3 (mean ≈ +0.02), strongest vs
+  greedy.
+- **Bottom line:** the corrected, stably-trained tokenized+attention encoding **reaches
+  and marginally exceeds flat under the curriculum, but within 2-seed variance, at ~4×
+  train cost.** A real but *secondary* lever — it doesn't break the reactive ceiling;
+  its bigger promised value is as a substrate for search (§8.4B, untested). Code is
+  additive behind `obs_mode="flat"`; flat baseline untouched. See `baseline.md`
+  ("PPO2") and `ppo-review.md` §8.4A.
