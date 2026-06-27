@@ -261,12 +261,17 @@ def train(
     ),
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
+    obs_mode: str = typer.Option(
+        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
         raise typer.BadParameter("steps must be >= 1")
     if n_envs < 1:
         raise typer.BadParameter("n_envs must be >= 1")
+    if obs_mode not in ("flat", "token"):
+        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
     marks = None
     if checkpoints:
         try:
@@ -287,6 +292,7 @@ def train(
             checkpoints=marks,
             ent_coef=ent_coef,
             both_seat=both_seat,
+            obs_mode=obs_mode,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -300,12 +306,17 @@ def train_zoo_cmd(
     seed: int = 0,
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
+    obs_mode: str = typer.Option(
+        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
     [ml] extra."""
     if steps_per_opponent < 1:
         raise typer.BadParameter("steps-per-opponent must be >= 1")
+    if obs_mode not in ("flat", "token"):
+        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -320,6 +331,7 @@ def train_zoo_cmd(
             seed=seed,
             ent_coef=ent_coef,
             both_seat=both_seat,
+            obs_mode=obs_mode,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

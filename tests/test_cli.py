@@ -98,3 +98,15 @@ def test_train_zoo_help_lists_command():
 def test_train_zoo_rejects_zero_steps():
     # The guard fires before any ML import, so this passes with or without [ml].
     assert runner.invoke(app, ["train-zoo", "--steps-per-opponent", "0"]).exit_code != 0
+
+
+def test_train_rejects_bad_obs_mode():
+    # obs_mode validation fires before any ML import; passes without [ml] extra.
+    res = runner.invoke(app, ["train", "--steps", "1", "--obs-mode", "bogus"])
+    assert res.exit_code != 0
+
+
+def test_train_zoo_rejects_bad_obs_mode():
+    # obs_mode validation fires before any ML import; passes without [ml] extra.
+    res = runner.invoke(app, ["train-zoo", "--obs-mode", "bogus"])
+    assert res.exit_code != 0
