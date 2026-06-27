@@ -10,7 +10,14 @@ from __future__ import annotations
 import functools
 
 
-def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0, seat_random: bool = False):
+def _make_battle_env(
+    opponent_spec: str,
+    seed: int,
+    agent_seat: int = 0,
+    seat_random: bool = False,
+    obs_mode: str = "base",
+    reward_mode: str = "sparse",
+):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
     Rebuilds the opponent from its spec string inside each subprocess, so the
@@ -25,6 +32,8 @@ def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0, seat_ra
         seed=seed,
         agent_seat=agent_seat,
         seat_random=seat_random,
+        obs_mode=obs_mode,
+        reward_mode=reward_mode,
     )
 
 
@@ -34,7 +43,14 @@ def _ckpt_path(out: str, steps: int) -> str:
     return f"{base}-{steps}.zip"
 
 
-def _build_env(opponent_spec: str, seed: int, n_envs: int, both_seat: bool = True):
+def _build_env(
+    opponent_spec: str,
+    seed: int,
+    n_envs: int,
+    both_seat: bool = True,
+    obs_mode: str = "base",
+    reward_mode: str = "sparse",
+):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
     randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix)."""
@@ -44,7 +60,9 @@ def _build_env(opponent_spec: str, seed: int, n_envs: int, both_seat: bool = Tru
     )
 
     fns = [
-        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat)
+        functools.partial(
+            _make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode, reward_mode
+        )
         for i in range(n_envs)
     ]
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
@@ -60,6 +78,9 @@ def train_agent(
     checkpoints=None,
     ent_coef: float = 0.02,
     both_seat: bool = True,
+    obs_mode: str = "base",
+    reward_mode: str = "sparse",
+    init_model: str | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -80,8 +101,15 @@ def train_agent(
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat)
-    model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
+    env = _build_env(
+        opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode
+    )
+    if init_model:
+        model = MaskablePPO.load(init_model, env=env, seed=seed)
+        model.verbose = verbose
+        model.ent_coef = ent_coef
+    else:
+        model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
 
     if checkpoints:
         marks = sorted({int(m) for m in checkpoints})
@@ -117,6 +145,9 @@ def train_zoo(
     ent_coef: float = 0.02,
     verbose: int = 1,
     both_seat: bool = True,
+    obs_mode: str = "base",
+    reward_mode: str = "sparse",
+    init_model: str | None = None,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -132,16 +163,33 @@ def train_zoo(
 
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-    model = MaskablePPO(
-        "MlpPolicy",
-        _build_env(opps[0], seed, 1, both_seat=both_seat),
-        verbose=verbose,
-        seed=seed,
-        ent_coef=ent_coef,
+    env = _build_env(
+        opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode
     )
+    if init_model:
+        model = MaskablePPO.load(init_model, env=env, seed=seed)
+        model.verbose = verbose
+        model.ent_coef = ent_coef
+    else:
+        model = MaskablePPO(
+            "MlpPolicy",
+            env,
+            verbose=verbose,
+            seed=seed,
+            ent_coef=ent_coef,
+        )
     for i, opp in enumerate(opps):
         if i > 0:
-            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat))
+            model.set_env(
+                _build_env(
+                    opp,
+                    seed,
+                    1,
+                    both_seat=both_seat,
+                    obs_mode=obs_mode,
+                    reward_mode=reward_mode,
+                )
+            )
         model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
     model.save(out)
     return out

@@ -56,6 +56,14 @@ def test_dmcts_spec_and_selectable():
     assert d.battle.K == 15 and d.battle.I == 30
 
 
+def test_dmcts_deterministic_param():
+    p = make_policy("dmcts:2,3,4,5,1")
+    assert p.battle.K == 2
+    assert p.battle.I == 3
+    assert p.battle.rollout_turns == 5
+    assert p.battle.deterministic is True
+
+
 def test_ppo_default_and_path():
     assert make_policy("ppo").battle.model_path == "model.zip"
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"
@@ -67,6 +75,16 @@ def test_ppo_pairs_balanced_draft():
     from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
 
     assert isinstance(make_policy("ppo:runs/exp1.zip").draft, BalancedDraftPolicy)
+
+
+def test_ppo_tactical_uses_tactical_obs_and_balanced_draft():
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+
+    p = make_policy("ppo-tactical:runs/tactical.zip")
+    assert p.battle.model_path == "runs/tactical.zip"
+    assert p.battle.obs_mode == "tactical"
+    assert isinstance(p.draft, BalancedDraftPolicy)
+    assert "ppo-tactical" not in policy_names()
 
 
 def test_unknown_spec_raises():

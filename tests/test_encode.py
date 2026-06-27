@@ -18,6 +18,14 @@ def test_constants():
     assert OBS_SIZE == 308
 
 
+def test_tactical_encode_constants():
+    from locma.envs.encode_tactical import ACTION_SIZE as TACTICAL_ACTION_SIZE  # noqa: PLC0415
+    from locma.envs.encode_tactical import OBS_SIZE as TACTICAL_OBS_SIZE  # noqa: PLC0415
+
+    assert TACTICAL_ACTION_SIZE == ACTION_SIZE
+    assert TACTICAL_OBS_SIZE > OBS_SIZE
+
+
 def test_encode_length():
     cards = load_cards()
     seen = []
@@ -28,6 +36,22 @@ def test_encode_length():
 
     run_game(make_policy("greedy"), make_policy("greedy"), seed=0, cards=cards, on_pre_step=cb)
     assert seen and all(n == OBS_SIZE for n in seen)
+
+
+def test_tactical_encode_length():
+    from locma.envs.encode_tactical import OBS_SIZE as TACTICAL_OBS_SIZE  # noqa: PLC0415
+    from locma.envs.encode_tactical import encode_battle as encode_tactical  # noqa: PLC0415
+
+    cards = load_cards()
+    seen = []
+
+    def cb(seat, action, gs):
+        view = make_battle_view(gs)
+        legal = battlemod.battle_legal(gs)
+        seen.append(encode_tactical(view, legal).shape[0])
+
+    run_game(make_policy("greedy"), make_policy("greedy"), seed=0, cards=cards, on_pre_step=cb)
+    assert seen and all(n == TACTICAL_OBS_SIZE for n in seen)
 
 
 def test_semantic_action_roundtrip_and_mask():

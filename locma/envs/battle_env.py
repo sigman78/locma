@@ -37,6 +37,17 @@ from locma.envs.encode import (
 )
 
 
+def _encoder(obs_mode: str):
+    if obs_mode == "base":
+        return OBS_SIZE, lambda view, legal: encode_battle(view)
+    if obs_mode == "tactical":
+        from locma.envs.encode_tactical import OBS_SIZE as TACTICAL_OBS_SIZE  # noqa: PLC0415
+        from locma.envs.encode_tactical import encode_battle as encode_tactical  # noqa: PLC0415
+
+        return TACTICAL_OBS_SIZE, encode_tactical
+    raise ValueError(f"unknown obs_mode {obs_mode!r}")
+
+
 class BattleEnv(gym.Env):
     """Single-agent LOCM 1.2 battle environment with a fixed opponent policy.
 
@@ -57,12 +68,25 @@ class BattleEnv(gym.Env):
     metadata: dict = {}
 
     def __init__(
-        self, opponent, seed: int = 0, agent_seat: int = 0, seat_random: bool = False
+        self,
+        opponent,
+        seed: int = 0,
+        agent_seat: int = 0,
+        seat_random: bool = False,
+        obs_mode: str = "base",
+        reward_mode: str = "sparse",
+        reward_scale: float = 0.05,
     ) -> None:
         super().__init__()
         self.opponent = opponent
         self.base_seed = seed
         self.agent_seat = agent_seat
+        self.obs_mode = obs_mode
+        self.reward_mode = reward_mode
+        self.reward_scale = reward_scale
+        self._obs_size, self._encode_battle = _encoder(obs_mode)
+        if reward_mode not in {"sparse", "health", "board"}:
+            raise ValueError(f"unknown reward_mode {reward_mode!r}")
         # seat_random: randomize the agent's seat per episode so it trains as both
         # first AND second player (the seat-2 coin/tempo openings) — eval is mirrored
         # across both seats, so seat-0-only training is a coverage gap.
@@ -70,13 +94,30 @@ class BattleEnv(gym.Env):
         self._seat_rng = random.Random(seed + 777)
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self._obs_size,), dtype=np.float32
         )
         self.action_space = spaces.Discrete(ACTION_SIZE)
 
         self._cards = load_cards()
         self._ep: int = 0  # episode counter for seed diversification
         self.gs: GameState | None = None
+
+    def _obs(self) -> np.ndarray:
+        legal = battlemod.battle_legal(self.gs)
+        return self._encode_battle(make_battle_view(self.gs), legal)
+
+    def _potential(self) -> float:
+        """Small dense reward potential from the agent seat's perspective."""
+        me = self.gs.players[self.agent_seat]
+        op = self.gs.players[1 - self.agent_seat]
+        h = (me.health - op.health) / 30.0
+        if self.reward_mode == "health":
+            return h
+        b = (
+            sum(c.attack + c.defense for c in me.board)
+            - sum(c.attack + c.defense for c in op.board)
+        ) / 20.0
+        return h + 0.5 * b
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -121,7 +162,7 @@ class BattleEnv(gym.Env):
         battlemod.start_battle(self.gs)
         self._opp_play_until_agent()
 
-        obs = encode_battle(make_battle_view(self.gs))
+        obs = self._obs()
         return obs, {}
 
     def action_masks(self) -> np.ndarray:
@@ -143,6 +184,7 @@ class BattleEnv(gym.Env):
         """
         legal = battlemod.battle_legal(self.gs)
         view = make_battle_view(self.gs)
+        before = self._potential() if self.reward_mode != "sparse" else 0.0
         battlemod.apply_battle(self.gs, index_to_action(view, legal, int(idx)))
 
         if self.gs.phase != Phase.ENDED:
@@ -152,10 +194,12 @@ class BattleEnv(gym.Env):
         reward = 0.0
         if terminated:
             reward = 1.0 if self.gs.winner == self.agent_seat else -1.0
+        elif self.reward_mode != "sparse":
+            reward = self.reward_scale * (self._potential() - before)
 
         if terminated:
-            obs = np.zeros(OBS_SIZE, dtype=np.float32)
+            obs = np.zeros(self._obs_size, dtype=np.float32)
         else:
-            obs = encode_battle(make_battle_view(self.gs))
+            obs = self._obs()
 
         return obs, reward, terminated, False, {}

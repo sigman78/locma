@@ -75,15 +75,22 @@ def _azlite(params, spec):
 
 
 def _dmcts(params, spec):
-    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
+    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns,det``."""
     from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
 
     k = int(params[0]) if len(params) > 0 else 15  # determinizations (worlds)
     i = int(params[1]) if len(params) > 1 else 30  # iterations per world
     seed = int(params[2]) if len(params) > 2 else 0
     rollout_turns = int(params[3]) if len(params) > 3 else 3
+    deterministic = bool(int(params[4])) if len(params) > 4 else False
     return Composer(
-        DMCTSBattlePolicy(determinizations=k, iterations=i, seed=seed, rollout_turns=rollout_turns),
+        DMCTSBattlePolicy(
+            determinizations=k,
+            iterations=i,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            deterministic=deterministic,
+        ),
         GreedyDraftPolicy(),
         name=spec,
     )
@@ -102,6 +109,19 @@ def _ppo(params, spec):
     # no retraining.
     return Composer(
         MaskablePPOBattlePolicy(model_path=model_path), BalancedDraftPolicy(), name=spec
+    )
+
+
+def _ppo_tactical(params, spec):
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
+
+    model_path = params[0] if params else "model.zip"
+    return Composer(
+        MaskablePPOBattlePolicy(model_path=model_path, obs_mode="tactical"),
+        BalancedDraftPolicy(),
+        name=spec,
     )
 
 
@@ -128,13 +148,14 @@ _FACTORIES = {
     "azlite": _azlite,
     "dmcts": _dmcts,
     "ppo": _ppo,
+    "ppo-tactical": _ppo_tactical,
     "mixed": _mixed,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
 # `ppo` needs a model artifact + the [ml] extra (use `ppo:path`); `mixed` is a
 # non-stationary training opponent, not a baseline to rank.
-_HIDDEN = {"ppo", "mixed"}
+_HIDDEN = {"ppo", "ppo-tactical", "mixed"}
 
 
 def policy_names() -> list[str]:

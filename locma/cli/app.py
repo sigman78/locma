@@ -188,6 +188,25 @@ def noise_floor(a: str, games: int = 200, seed: int = 0):
     )
 
 
+@app.command("action-stats")
+def action_stats(policy: str, opponent: str = "mixed", games: int = 100, seed: int = 0):
+    """Print tactical action histograms for policy A in mirrored matches."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    from locma.harness.action_stats import policy_action_stats  # noqa: PLC0415
+
+    make_policy(policy)
+    make_policy(opponent)
+    stats = policy_action_stats(policy, opponent, games=games, seed=seed)
+    rates = stats.as_rates()
+    t = Table(title=f"Action stats: {policy} vs {opponent}", box=None)
+    t.add_column("metric")
+    t.add_column("value", justify="right")
+    for k, v in rates.items():
+        t.add_row(k, f"{int(v)}" if k == "decisions" else f"{v:.3f}")
+    console.print(t)
+
+
 @app.command()
 def sprt(
     x: str,
@@ -261,6 +280,9 @@ def train(
     ),
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
+    obs_mode: str = typer.Option("base", help="observation mode: base or tactical"),
+    reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
+    init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -287,6 +309,9 @@ def train(
             checkpoints=marks,
             ent_coef=ent_coef,
             both_seat=both_seat,
+            obs_mode=obs_mode,
+            reward_mode=reward_mode,
+            init_model=init_model,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -300,6 +325,9 @@ def train_zoo_cmd(
     seed: int = 0,
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
+    obs_mode: str = typer.Option("base", help="observation mode: base or tactical"),
+    reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
+    init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -320,6 +348,9 @@ def train_zoo_cmd(
             seed=seed,
             ent_coef=ent_coef,
             both_seat=both_seat,
+            obs_mode=obs_mode,
+            reward_mode=reward_mode,
+            init_model=init_model,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
