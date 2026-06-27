@@ -10,12 +10,19 @@ from __future__ import annotations
 import functools
 
 
-def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0, seat_random: bool = False):
+def _make_battle_env(
+    opponent_spec: str,
+    seed: int,
+    agent_seat: int = 0,
+    seat_random: bool = False,
+    obs_mode: str = "flat",
+):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
     Rebuilds the opponent from its spec string inside each subprocess, so the
     (possibly stateful) opponent never has to be pickled and crosses no process
     boundary. ``seat_random`` trains the agent as both first and second player.
+    ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.registry import make_policy  # noqa: PLC0415
@@ -25,6 +32,7 @@ def _make_battle_env(opponent_spec: str, seed: int, agent_seat: int = 0, seat_ra
         seed=seed,
         agent_seat=agent_seat,
         seat_random=seat_random,
+        obs_mode=obs_mode,
     )
 
 
@@ -34,20 +42,50 @@ def _ckpt_path(out: str, steps: int) -> str:
     return f"{base}-{steps}.zip"
 
 
-def _build_env(opponent_spec: str, seed: int, n_envs: int, both_seat: bool = True):
+def _build_env(
+    opponent_spec: str,
+    seed: int,
+    n_envs: int,
+    both_seat: bool = True,
+    obs_mode: str = "flat",
+):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
-    randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix)."""
+    randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
+    ``obs_mode`` selects the observation encoding: "flat" (default) or "token"."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
     )
 
     fns = [
-        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat)
+        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode)
         for i in range(n_envs)
     ]
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
+
+
+def _make_model(env, *, obs_mode: str, seed: int, verbose: int, ent_coef: float):
+    """Construct a MaskablePPO model, selecting the policy class by obs_mode.
+
+    "flat" → MlpPolicy (unchanged from the baseline).
+    "token" → MultiInputPolicy + TokenSetExtractor (self-attention over card tokens).
+    """
+    from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+    if obs_mode == "token":
+        from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
+
+        return MaskablePPO(
+            "MultiInputPolicy",
+            env,
+            policy_kwargs=dict(features_extractor_class=TokenSetExtractor),
+            verbose=verbose,
+            seed=seed,
+            ent_coef=ent_coef,
+        )
+    # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
+    return MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
 
 
 def train_agent(
@@ -60,6 +98,7 @@ def train_agent(
     checkpoints=None,
     ent_coef: float = 0.02,
     both_seat: bool = True,
+    obs_mode: str = "flat",
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -78,10 +117,8 @@ def train_agent(
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
-    from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
-
-    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat)
-    model = MaskablePPO("MlpPolicy", env, verbose=verbose, seed=seed, ent_coef=ent_coef)
+    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode)
+    model = _make_model(env, obs_mode=obs_mode, seed=seed, verbose=verbose, ent_coef=ent_coef)
 
     if checkpoints:
         marks = sorted({int(m) for m in checkpoints})
@@ -117,6 +154,7 @@ def train_zoo(
     ent_coef: float = 0.02,
     verbose: int = 1,
     both_seat: bool = True,
+    obs_mode: str = "flat",
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -130,18 +168,16 @@ def train_zoo(
     if not opps:
         raise ValueError("train_zoo needs a non-empty opponent list")
 
-    from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
-
-    model = MaskablePPO(
-        "MlpPolicy",
-        _build_env(opps[0], seed, 1, both_seat=both_seat),
-        verbose=verbose,
+    model = _make_model(
+        _build_env(opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode),
+        obs_mode=obs_mode,
         seed=seed,
+        verbose=verbose,
         ent_coef=ent_coef,
     )
     for i, opp in enumerate(opps):
         if i > 0:
-            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat))
+            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat, obs_mode=obs_mode))
         model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
     model.save(out)
     return out
