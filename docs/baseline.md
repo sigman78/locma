@@ -1188,6 +1188,40 @@ uv run locma tournament ppo:runs/distilled-token.zip scripted max-guard max-atta
   --games 200 --seed 0 --matrix
 ```
 
+## netdmcts — fair net-guided search beats the cheaters (AlphaZero-lite Phase 1)
+
+`netdmcts:K,I,c_puct,model_path` runs PUCT over **determinized** worlds (dmcts's fair
+sampling — no hidden info) with a **trained token net** as the `(policy, value)` oracle
+(`NetOracle` reads only the public `BattleView`). Phase 1 uses a *frozen* oracle (the
+self-play net `selfplay-r2`); no AlphaZero training loop yet.
+
+**A/B (avg-hard3 vs scripted/max-guard/max-attack, 2 seeds, 50 games/opp):**
+
+| policy | fair? | seed 0 | seed 1 | mean avg-hard3 |
+|--------|-------|--------|--------|----------------|
+| **netdmcts:8,40** (net oracle) | ✅ | 0.820 | 0.813 | **0.817** |
+| dmcts:15,30 (heuristic oracle) | ✅ | 0.693 | 0.700 | 0.697 |
+| raw net `selfplay-r2`          | ✅ | —      | —      | 0.639 |
+| azlite:100 (cheating ref)      | ❌ | —      | —      | 0.741 |
+| mcts:100 (cheating ref)        | ❌ | —      | —      | ~0.74 |
+
+The net oracle beats the heuristic oracle by **+0.12** on both seeds (at less search
+budget: 8×40=320 vs 15×30=450); search lifts the same net **+0.18** over its bare
+reactive self; and a **fair, no-hidden-info** policy (**0.817**) **tops the
+perfect-foresight cheaters** (0.74). Iteration sweep vs max-attack: I=20 → 0.825,
+I=40 → 0.825, I=80 → 0.875. `netdmcts` is the strongest policy in the kit and is
+deployable on human-parity info (it forward-simulates determinized worlds; it never
+sees the opponent's hand/deck). Full analysis: `ppo-review.md` §8.4B.
+
+Reproduce:
+```bash
+uv run locma tournament ppo:runs/selfplay-r2.zip scripted max-guard max-attack \
+  --games 50 --seed 0 --matrix      # the raw net (oracle) baseline
+# netdmcts (needs the [ml] extra + a trained model as the oracle):
+python -c "from locma.harness.match import run_match; from locma.policies.registry import make_policy as mp; \
+print(run_match(mp('netdmcts:8,40,1.5,runs/selfplay-r2.zip'), mp('max-attack'), games=50, seed=0).win_rate_a)"
+```
+
 ## Replay determinism
 
 `locma play greedy scripted --games 50 --seed 0 --log <file>` then

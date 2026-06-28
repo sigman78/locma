@@ -26,6 +26,8 @@ from locma.core import battle as battlemod
 from locma.core.state import Phase
 from locma.policies.battles import RandomBattlePolicy
 from locma.policies.mcts import _board_power, _clone_battle
+from locma.policies.puct import _reward as _puct_reward
+from locma.policies.puct import puct_search
 
 
 def _leaf_value(sim, seat: int) -> float:
@@ -38,16 +40,17 @@ def _leaf_value(sim, seat: int) -> float:
     return 1.0 if v > 1.0 else (-1.0 if v < -1.0 else v)
 
 
-class _Node:
-    __slots__ = ("seat", "actions", "P", "N", "W", "children")
+class _HeuristicOracle:
+    """Thin adapter exposing AZLiteBattlePolicy's _prior/_value as the oracle protocol."""
 
-    def __init__(self, seat: int, actions: list, P: list[float]):
-        self.seat = seat  # seat to move at this node
-        self.actions = actions
-        self.P = P  # prior per edge
-        self.N = [0] * len(actions)  # edge visit count
-        self.W = [0.0] * len(actions)  # edge cumulative value (ROOT-seat perspective)
-        self.children = [None] * len(actions)
+    def __init__(self, policy: AZLiteBattlePolicy):
+        self._p = policy
+
+    def priors(self, sim, actions: list, seat: int) -> list[float]:
+        return self._p._prior(sim, actions, seat)
+
+    def value(self, sim, root_seat: int) -> float:
+        return self._p._value(sim, root_seat)
 
 
 class AZLiteBattlePolicy:
@@ -93,11 +96,7 @@ class AZLiteBattlePolicy:
         return [e / z for e in exps]
 
     def _reward(self, sim, root_seat: int) -> float:
-        if sim.winner is not None:
-            return 1.0 if sim.winner == root_seat else -1.0
-        me = sim.players[root_seat].health
-        op = sim.players[1 - root_seat].health
-        return 1.0 if me > op else (-1.0 if me < op else 0.0)
+        return _puct_reward(sim, root_seat)
 
     def _value(self, sim, root_seat: int) -> float:
         if self.rollout_turns <= 0:
@@ -114,20 +113,6 @@ class AZLiteBattlePolicy:
             return self._reward(sim, root_seat)
         return _leaf_value(sim, root_seat)
 
-    # -- PUCT selection ------------------------------------------------------
-
-    def _select(self, node: _Node, root_seat: int) -> int:
-        sqrt_sum = math.sqrt(sum(node.N) + 1)
-        sign = 1.0 if node.seat == root_seat else -1.0  # opponent minimises root value
-        best, best_score = 0, -math.inf
-        for i in range(len(node.actions)):
-            q = sign * (node.W[i] / node.N[i]) if node.N[i] > 0 else 0.0
-            u = self.c_puct * node.P[i] * sqrt_sum / (1 + node.N[i])
-            score = q + u
-            if score > best_score:
-                best, best_score = i, score
-        return best
-
     # -- policy interface ----------------------------------------------------
 
     def battle_action(self, view, legal, state=None):
@@ -136,34 +121,8 @@ class AZLiteBattlePolicy:
         if len(legal) == 1:
             return legal[0]
 
-        root_seat = state.current
-        root = _Node(root_seat, list(legal), self._prior(state, list(legal), root_seat))
-
-        for _ in range(self.iterations):
-            sim = _clone_battle(state)
-            node = root
-            path: list[tuple[_Node, int]] = []
-
-            while True:
-                ai = self._select(node, root_seat)
-                path.append((node, ai))
-                battlemod.apply_battle(sim, node.actions[ai])
-                if sim.phase != Phase.BATTLE:
-                    value = self._reward(sim, root_seat)
-                    break
-                child = node.children[ai]
-                if child is None:  # expand + evaluate this leaf
-                    actions = list(battlemod.battle_legal(sim))
-                    node.children[ai] = _Node(
-                        sim.current, actions, self._prior(sim, actions, sim.current)
-                    )
-                    value = self._value(sim, root_seat)
-                    break
-                node = child
-
-            for n, ai in path:
-                n.N[ai] += 1
-                n.W[ai] += value
-
-        best = max(range(len(root.actions)), key=lambda i: root.N[i])
-        return root.actions[best]
+        oracle = _HeuristicOracle(self)
+        visit_counts = puct_search(state, oracle, self.iterations, self.c_puct, self._r)
+        root_actions = list(battlemod.battle_legal(state))
+        best = max(range(len(root_actions)), key=lambda i: visit_counts[i])
+        return root_actions[best]
