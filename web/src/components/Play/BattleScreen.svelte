@@ -90,7 +90,6 @@
     amount: number
     src: { cx: number; cy: number }
     dst: { cx: number; cy: number }
-    face: 'face' | 'face-me' // which defender Player to suppress the static -N on
     key: number
   }
   let btFly: BtFly | null = null
@@ -152,7 +151,7 @@
       if (src && dst) {
         const flyKey = fxToken
         // small delay (~80ms) so the projectile fires near the slide apex
-        setTimeout(() => { btFly = { amount: bht.amount, src, dst, face: faceKey, key: flyKey } }, 80)
+        setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
         // clear AFTER the fade fully completes (80ms delay + 390ms animation-delay + 140ms fade ≈ 610ms)
         setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 640)
       }
@@ -289,8 +288,7 @@
     class:flashing={flashSet.has('face')}
     use:anchor={'face'}
     title="opponent — drag a unit here to attack">
-    <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken}
-      hideFaceDamage={btFly?.face === 'face'} />
+    <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
   </div>
 
   <div class="hand backs">
@@ -337,8 +335,7 @@
 
   <!-- the human's own player panel is the bottom face (the AI's attack target) -->
   <div class="faceplate me" use:anchor={'face-me'}>
-    <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken}
-      hideFaceDamage={btFly?.face === 'face-me'} />
+    <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
   </div>
 
   <div class="controls">
@@ -351,11 +348,12 @@
 </div>
 
 {#if btFly}
-  <!-- Breakthrough overflow number flies from struck blocker → defender face (position:fixed, viewport coords) -->
+  <!-- Breakthrough red blob flies from struck blocker → defender face (position:fixed, viewport coords).
+       No number on the blob; the Player's own floating face-HP "-N" number shows normally. -->
   <div
     class="bt-fly"
     style="left:{btFly.src.cx}px; top:{btFly.src.cy}px; --dx:{btFly.dst.cx - btFly.src.cx}px; --dy:{btFly.dst.cy - btFly.src.cy}px"
-  >-{btFly.amount}</div>
+  ></div>
 {/if}
 
 <style>
@@ -401,18 +399,19 @@
   /* cast flash on the face — reuse the existing brightness/scale pulse */
   .faceplate.flashing { animation: locma-cast 250ms ease-out; }
 
-  /* ---- Breakthrough flying-number cue ---- */
-  /* Red overflow number flies from struck blocker to defender face with back-overshoot spring. */
+  /* ---- Breakthrough flying-blob cue ---- */
+  /* Pure red blob flies from struck blocker to defender face with back-overshoot spring.
+     No number on the blob — the Player's own face-HP "-N" number shows normally. */
   .bt-fly {
     position: fixed;
     transform: translate(-50%, -50%);
-    font-weight: 800;
-    font-size: 22px;
-    color: #ff4444;
-    text-shadow: 0 0 10px rgba(255, 80, 80, 0.95), 0 0 24px rgba(255, 0, 0, 0.6);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff4444;
+    box-shadow: 0 0 10px rgba(255, 80, 80, 0.95), 0 0 24px rgba(255, 0, 0, 0.6);
     pointer-events: none;
     z-index: 999;
-    white-space: nowrap;
     /* springy move + fade-out after arrival */
     animation:
       bt-fly-move 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both,

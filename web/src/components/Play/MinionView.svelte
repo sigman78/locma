@@ -59,10 +59,16 @@
       and z-index: 1 (ward bubble) sit in front, without disturbing the outer
       z-index chain (.minion.attacking z-index:4 still pops above neighbor slots).
 
+      .minion also has isolation: isolate (Fix 2): this contains all child z-indices
+      (stat plates z:2, overlays z:3–7) within .minion's own stacking context, preventing
+      them from escaping to the root SC where they would paint over hand-card tooltips.
+      .minion.attacking { z-index:4 } still works — that sets the SC's own z-index
+      within .minionwrap, letting the attacker pop above neighbour slots as before.
+
       z-order inside sprite-stack (back → front):
         taunt shield  (z:-1)  → sprite img  (block, auto)  → ward bubble  (z:1)
 
-      z-order in .minionwrap (back → front):
+      z-order in .minion (back → front):
         sprite-stack (z:auto) → stat plates/pills (z:2) → sleep (z:3)
         → hit-flash (z:4) → flash-blob (z:5) → locma-dmg (z:6) → death-cross (z:7)
     -->
@@ -134,9 +140,13 @@
     user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
   .minionwrap:hover { z-index: 50; }
 
-  /* frameless sprite — no card background, border, or crosshatch */
+  /* frameless sprite — no card background, border, or crosshatch.
+     isolation: isolate makes .minion a stacking context so all child z-indices
+     (stat plates z:2, overlays z:3–7) are contained here and do not escape to the
+     root SC where they would paint over hand-card tooltips (Fix 2). */
   .minion { position: relative; width: 100%; height: 100%;
-    user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+    user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
+    isolation: isolate; }
 
   /* sprite-stack: isolated stacking context so taunt (z:-1) and ward (z:1) stay
      contained without touching the outer .minionwrap / .minion z-index chain */
@@ -200,10 +210,11 @@
   /* Ward (W): light-blue pulsing barrier bubble over the sprite, under stat plates.
      mix-blend-mode: screen adds light rather than graying the sprite.
      isolation: isolate on .sprite-stack confines the blend to sprite-stack content,
-     so the bubble does NOT lighten stats or pills (which live outside .sprite-stack). */
+     so the bubble does NOT lighten stats or pills (which live outside .sprite-stack).
+     border-radius: 50% gives the elliptical bubble shape (Fix 1). */
   .ward-bubble {
     position: absolute; inset: 0; z-index: 1;
-    border-radius: 4px; pointer-events: none;
+    border-radius: 50%; pointer-events: none;
     box-shadow: inset 0 0 14px 3px rgba(150, 235, 255, 0.85);
     background: radial-gradient(
       circle at 50% 45%,
