@@ -327,7 +327,7 @@ hyperparameter tuning:
 |-------|--------|------|
 | **Draft control** | ✅ **done (PR #21)** | §8.1: the gap was mostly the deck. `ppo:` now drafts `balanced` → beats the ground baselines (~0.55) and is ~even with `mcts:100`. |
 | **Reward shaping** (PBS) | ✗ **ruled out** | §8.2: health-only potential is exactly neutral (= sparse 0.554); adding board advantage *hurts* (→0.50). Sparse ±1 is already adequate. |
-| **Self-play / league** | ✗ **ruled out** | §8.3: warm-started league (PPO snapshots + baselines + `mcts:100`, both-seat training) was **flat over 480k**, then slightly down (vs `mcts` 0.24→0.16). A reactive net can't be self-played into planning. |
+| **Self-play / league** | ✗ ruled out (flat net) · ~ partial (token) | §8.3: the **flat**-net league was flat-then-down over 480k. **Update (token PPO2):** the slot-addressable net *responds* — one round of self+baselines = **+0.03 avg-hard3**, plateauing **~0.64** after 2 rounds (front-loaded, diminishing). Real but modest; still far below search (~0.73). |
 | **Both-seat training** | ✅ **landed (PR #27)** | Now the default (`--both-seat`); +0.06 / 2× efficiency, **same ceiling** (the 2×2 + 800k retrain confirm it's efficiency+correctness, not a higher ceiling). |
 | **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
 | Observation richness / entropy / normalization / **net size** | ✗ ruled out | §3.4 multi-seed A/B + the net-size×seat 2×2 (`baseline.md`) — all neutral; bigger net *hurts*. |
@@ -385,6 +385,29 @@ games** — self-play improves which move the net reflexively picks but adds no
 *planning*, which is exactly MCTS's edge. The only architecture that closes this is
 **search in the loop** (AlphaZero-style: a policy+value net guiding MCTS, trained by
 self-play of the search) — not more self-play of the raw net.
+
+**Update (2026-06-27): the *token* net responds where the flat net decayed — a real
+but front-loaded, plateauing gain.** Re-ran self-play on the slot-addressable PPO2
+(`obs_mode="token"`): warm-start the zoo-curriculum PPO2 (`ab-token-s1`), train one
+round (200k) against a per-episode mix of a *frozen self* + the ground baselines,
+conservative `target_kl=0.025` (inherited from the tuned base). Matched eval (300
+games/opp, seed 0):
+
+| stage | avg-hard3 | Δ |
+|-------|-----------|---|
+| base (`ab-token-s1`) | 0.601 | — |
+| self-play r1 | 0.632 | +0.031 |
+| self-play r2 (self = r1) | 0.639 | +0.007 |
+
+The lift is **consistent across all four opponents** but **front-loaded and
+diminishing** (r1 +0.031 ≈ 2.6σ real; r2 +0.007 within noise) — it **plateaus ~0.64**,
+it does not compound. This *corrects* the flat-net result above for the new
+architecture: the richer net can be sharpened by self-play (capacity + the conservative
+KL cap keeping updates stable), where the flat net decayed. But the ceiling stands —
+even the self-play net (0.64) is well below the search policies (~0.73); self-play
+sharpens the reactive policy a bit more than from-scratch RL (0.588), adding no
+planning. `selfplay-r2` is the strongest reactive net produced. (Probes were throwaway;
+no self-play infra landed.)
 
 ### 8.1 Why the heuristics still win — it's mostly the deck, not the battle
 

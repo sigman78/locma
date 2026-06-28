@@ -140,3 +140,30 @@ def test_train_zoo_help_includes_learning_rate_and_target_kl():
     plain = _strip_ansi(res.output)
     assert "--learning-rate" in plain
     assert "--target-kl" in plain
+
+
+def test_record_practicum_rejects_bad_obs_mode():
+    # Validation fires before any real recording (guard is above the lazy import).
+    # --games is intentionally omitted: validation fires before recording starts.
+    res = runner.invoke(app, ["record-practicum", "--obs-mode", "bogus"])
+    assert res.exit_code != 0
+    assert "obs_mode" in res.output
+
+
+def test_distill_rejects_bad_obs_mode():
+    # Validation fires before any ML import; passes without the [ml] extra.
+    res = runner.invoke(app, ["distill", "--obs-mode", "bogus"])
+    assert res.exit_code != 0
+    assert "obs_mode" in res.output
+
+
+def test_record_practicum_help_includes_obs_mode():
+    res = runner.invoke(app, ["record-practicum", "--help"])
+    assert res.exit_code == 0
+    assert "--obs-mode" in _strip_ansi(res.output)
+
+
+def test_distill_help_includes_obs_mode():
+    res = runner.invoke(app, ["distill", "--help"])
+    assert res.exit_code == 0
+    assert "--obs-mode" in _strip_ansi(res.output)

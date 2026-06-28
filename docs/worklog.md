@@ -312,3 +312,65 @@ fair, overfit-resistant test.
   its bigger promised value is as a substrate for search (§8.4B, untested). Code is
   additive behind `obs_mode="flat"`; flat baseline untouched. See `baseline.md`
   ("PPO2") and `ppo-review.md` §8.4A.
+
+## 2026-06-27 — Distill search → PPO2 (PR #18 redo): the obs is NOT the BC ceiling
+
+Re-ran the PR #18 distillation (behavior-clone a search teacher into a reactive net)
+with the new tokenized obs + a matched flat control + a fair teacher, to find what
+actually caps it. Added a token mode to the practicum/distill pipeline (`--obs-mode
+token`; teacher decisions are obs-independent, so `action`/`mask` are identical to
+flat — verified byte-for-byte).
+
+**All distills land in the same place — agreement ~0.37, avg-hard3 ~0.54:**
+
+| distilled net | teacher | obs | top-1 agreement | avg-hard3 |
+|---|---|---|---|---|
+| flat (matched) | mcts:100 (cheater) | flat | 0.370 | 0.548 |
+| token | mcts:100 (cheater) | token | 0.366 | 0.543 |
+| dmcts | dmcts (fair) | token | 0.372 | 0.535 |
+| from-scratch PPO2 (RL) | — | token | — | **0.588** |
+| teacher strength | mcts / dmcts | — | — | **~0.73** |
+
+- **The observation is not the ceiling.** Flat ≈ token on the *same* 35k mcts games
+  (0.370/0.548 vs 0.366/0.543). The earlier "token lifts 0.25→0.37" was a **cross-run
+  artifact** vs PR #18's old number; the real gain over PR #18 (0.25/0.29) is the
+  **semantic action space + enriched obs (PR #19), which landed *after* PR #18 distilled
+  into the old positional space** — not tokenization. (Matched controls earn their keep.)
+- **The teacher's cheating is not the ceiling either.** The *fair* dmcts distilled no
+  better than the cheating mcts (0.372/0.535 vs 0.366/0.543).
+- **Distill does not beat from-scratch.** Every distilled net sits at/just-below
+  from-scratch RL (0.588, within seed noise) and inherits **~none** of the teacher's
+  ~0.73 edge.
+- **Verdict:** the cap is **behavior-cloning a search policy into a reactive net**
+  itself — base-, obs-, and teacher-fairness-independent. Strengthens §8.3/PR #18: more
+  imitation data won't cross the planning gap; only search-in-the-loop (§8.4B) does.
+- *Caveat / only untested lever:* dmcts was recorded **non-deterministically** (samples
+  determinizations → label noise that can cap agreement). `DMCTSBattlePolicy.deterministic=True`
+  exists for distillation but isn't exposed in the registry spec; a clean deterministic-dmcts
+  practicum is unrun.
+- *Op note:* `mcts:100` recording is now ~30× faster than PR #18's measurement (the fast
+  `_clone_battle` landed after it) — 35k examples in ~75s, not ~40 min. The `random`
+  opponent is excluded from the dmcts practicum (degenerate states, noise, not in avg-hard3).
+  Pipeline additive behind `--obs-mode flat`; see `baseline.md` ("Distillation").
+
+## 2026-06-27 — Self-play of token PPO2: responds where the flat net decayed (then plateaus)
+
+Quick probe (throwaway scripts, no infra): warm-start the zoo-curriculum PPO2
+(`ab-token-s1`) and run self-play rounds — each round trains 200k against a per-episode
+mix of a *frozen self* + the ground baselines (conservative `target_kl=0.025` inherited
+from the tuned base). Matched eval, 300 games/opp, seed 0:
+
+| stage | avg-hard3 | Δ |
+|-------|-----------|---|
+| base (`ab-token-s1`) | 0.601 | — |
+| self-play r1 | 0.632 | +0.031 |
+| self-play r2 (self = r1) | 0.639 | +0.007 |
+
+- **Real but front-loaded + plateauing:** +0.031 (r1, ~2.6σ, consistent across all four
+  opponents) then +0.007 (r2, within noise) → converges ~0.64, does **not** compound.
+- **Corrects §8.3 for the new architecture:** the flat-net league *decayed* under
+  self-play; the slot-addressable token net is *sharpened* by it (capacity + the
+  conservative KL cap keeping updates stable). `selfplay-r2` (0.639) is the **strongest
+  reactive net** produced — above from-scratch RL (0.588) and the curriculum base (0.601).
+- **Ceiling intact:** even 0.64 is well below the search policies (dmcts/azlite ~0.73);
+  self-play adds no planning. See `ppo-review.md` §8.3 update.

@@ -356,17 +356,27 @@ def record_practicum_cmd(
     games: int = typer.Option(200, help="games per opponent (each played in both seats)"),
     out: str = typer.Option("practicum.npz", help="output practicum .npz path"),
     seed: int = 0,
+    obs_mode: str = typer.Option(
+        "flat", help="observation encoding: 'flat' (default) or 'token' (tokenized for PPO2)"
+    ),
 ):
     """Record a practicum of teacher battle decisions for distillation."""
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
+    if obs_mode not in ("flat", "token"):
+        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
     make_policy(teacher)  # validate up front for a friendly error
     for o in opponents:
         make_policy(o)
     from locma.envs.practicum import record_practicum  # noqa: PLC0415
 
     manifest = record_practicum(
-        teacher=teacher, opponents=tuple(opponents), games=games, out=out, seed=seed
+        teacher=teacher,
+        opponents=tuple(opponents),
+        games=games,
+        out=out,
+        seed=seed,
+        obs_mode=obs_mode,
     )
     console.print(
         f"recorded {manifest['n_examples']} examples "
@@ -383,12 +393,17 @@ def distill(
     lr: float = 3e-4,
     val_frac: float = typer.Option(0.1, help="fraction of games held out for agreement"),
     seed: int = 0,
+    obs_mode: str | None = typer.Option(
+        None, help="obs encoding; defaults to the practicum's manifest mode"
+    ),
 ):
     """Behavior-clone a practicum into a MaskablePPO model.zip (requires the [ml] extra)."""
     if epochs < 1:
         raise typer.BadParameter("epochs must be >= 1")
     if not 0.0 <= val_frac < 1.0:
         raise typer.BadParameter("val-frac must be in [0, 1)")
+    if obs_mode is not None and obs_mode not in ("flat", "token"):
+        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
     try:
         from locma.envs.distill import behavior_clone  # noqa: PLC0415 — optional [ml] dep
 
@@ -400,6 +415,7 @@ def distill(
             lr=lr,
             val_frac=val_frac,
             seed=seed,
+            obs_mode=obs_mode,
         )
     except ImportError as e:
         raise typer.BadParameter("distill requires the [ml] extra: uv sync --extra ml") from e
