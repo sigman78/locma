@@ -1105,6 +1105,47 @@ shows on near-threshold comparisons (e.g. a candidate that is only slightly
 better than its baseline), where it stops far earlier than a fixed-n test —
 these reference matchups simply have no ambiguity to resolve.
 
+## PPO2 — tokenized observation + self-attention (richer-encoding lever)
+
+`obs_mode="token"` adds a tokenized board encoding — per-card tokens (zone/type/cost/
+attack/defense/abilities/readiness + a learned **card-id** embedding the flat obs
+discards) + computed tactical scalars (guard count, reachable face damage, lethal,
+mana, board totals) — consumed by a **slot-addressable self-attention** extractor
+(`TokenSetExtractor`) and trained via `MultiInputPolicy`. It is additive:
+`obs_mode="flat"` (default) is byte-identical to the prior baseline and is the A/B
+control. The token arm uses gentler PPO (`--learning-rate 1e-4 --target-kl 0.025`);
+the flat arm keeps the defaults (the bigger net is unstable at 3e-4 — `approx_kl`
+blows up and it degrades with training).
+
+**A/B (zoo curriculum greedy→scripted→max-guard→max-attack, 200k×4 = 800k/arm, 2
+seeds, eval 400 games/opp at seed 0):**
+
+| arm   | seed 0 | seed 1 | mean avg-hard3 | mean vs greedy |
+|-------|--------|--------|----------------|----------------|
+| flat  | 0.592  | 0.555  | **0.573**      | 0.639          |
+| token | 0.562  | 0.614  | **0.588**      | 0.664          |
+
+Token edges flat on the 2-seed mean (avg-hard3 +0.015, greedy +0.025), but the **seeds
+disagree** (seed 0 → flat wins, seed 1 → token wins) and the per-seed spread
+(~0.03–0.04) exceeds the gap, so the win is **not significant at n=2**. Single-opponent
+training (300k vs max-attack) favors flat (0.588 vs token 0.565) because the larger
+token net overfits the lone opponent. **Verdict: parity / a slight lean toward token
+under the curriculum — a secondary lever, within seed noise.** Token costs ~4× the
+training wall-clock. Full analysis in `ppo-review.md` §8.4A.
+
+Reproduce:
+```bash
+# token arm (one seed)
+uv run locma train-zoo --steps-per-opponent 200000 --obs-mode token \
+  --learning-rate 1e-4 --target-kl 0.025 --seed 0 --out runs/ppo2-token.zip
+# flat baseline (one seed)
+uv run locma train-zoo --steps-per-opponent 200000 --obs-mode flat \
+  --seed 0 --out runs/ppo2-flat.zip
+# eval avg-hard3 (token model auto-detected via the loaded obs space)
+uv run locma tournament ppo:runs/ppo2-token.zip scripted max-guard max-attack \
+  --games 200 --seed 0 --matrix
+```
+
 ## Replay determinism
 
 `locma play greedy scripted --games 50 --seed 0 --log <file>` then

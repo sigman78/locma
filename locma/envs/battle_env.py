@@ -33,7 +33,9 @@ from locma.envs.encode import (
     OBS_SIZE,
     action_mask,
     encode_battle,
+    encode_battle_tokens,
     index_to_action,
+    token_obs_space,
 )
 
 
@@ -52,14 +54,27 @@ class BattleEnv(gym.Env):
         Base seed for reproducible episode sequences.
     agent_seat:
         Which player index (0 or 1) the RL agent controls.
+    obs_mode:
+        ``"flat"`` (default) — Box(OBS_SIZE,) float32 vector via
+        ``encode_battle``; ``"token"`` — spaces.Dict tokenized observation via
+        ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars).
     """
 
     metadata: dict = {}
 
     def __init__(
-        self, opponent, seed: int = 0, agent_seat: int = 0, seat_random: bool = False
+        self,
+        opponent,
+        seed: int = 0,
+        agent_seat: int = 0,
+        seat_random: bool = False,
+        obs_mode: str = "flat",
     ) -> None:
         super().__init__()
+        _VALID_OBS_MODES = {"flat", "token"}
+        if obs_mode not in _VALID_OBS_MODES:
+            raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
+        self.obs_mode = obs_mode
         self.opponent = opponent
         self.base_seed = seed
         self.agent_seat = agent_seat
@@ -69,9 +84,12 @@ class BattleEnv(gym.Env):
         self.seat_random = seat_random
         self._seat_rng = random.Random(seed + 777)
 
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
-        )
+        if obs_mode == "flat":
+            self.observation_space = spaces.Box(
+                low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
+            )
+        else:
+            self.observation_space = token_obs_space()
         self.action_space = spaces.Discrete(ACTION_SIZE)
 
         self._cards = load_cards()
@@ -81,6 +99,25 @@ class BattleEnv(gym.Env):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _encode_obs(self):
+        """Build the current observation according to self.obs_mode."""
+        view = make_battle_view(self.gs)
+        if self.obs_mode == "flat":
+            return encode_battle(view)
+        return encode_battle_tokens(view)
+
+    def _zero_obs(self):
+        """Return a correctly-shaped all-zero observation for self.obs_mode.
+
+        Derived generically from self.observation_space so it can never drift
+        out of sync with the declared space.
+        """
+        space = self.observation_space
+        if isinstance(space, spaces.Box):
+            return np.zeros(space.shape, dtype=space.dtype)
+        # spaces.Dict
+        return {k: np.zeros(sub.shape, dtype=sub.dtype) for k, sub in space.spaces.items()}
 
     def _opp_play_until_agent(self) -> None:
         """Advance opponent turns until it is the agent's turn (or game ends)."""
@@ -99,7 +136,9 @@ class BattleEnv(gym.Env):
 
         Returns
         -------
-        obs : np.ndarray of shape (OBS_SIZE,)
+        obs : np.ndarray of shape (OBS_SIZE,) in flat mode, or a dict with
+            keys ``tokens``, ``card_ids``, ``token_mask``, ``scalars`` in token
+            mode (matching ``token_obs_space()``).
         info : dict
         """
         super().reset(seed=seed)
@@ -121,7 +160,7 @@ class BattleEnv(gym.Env):
         battlemod.start_battle(self.gs)
         self._opp_play_until_agent()
 
-        obs = encode_battle(make_battle_view(self.gs))
+        obs = self._encode_obs()
         return obs, {}
 
     def action_masks(self) -> np.ndarray:
@@ -153,9 +192,6 @@ class BattleEnv(gym.Env):
         if terminated:
             reward = 1.0 if self.gs.winner == self.agent_seat else -1.0
 
-        if terminated:
-            obs = np.zeros(OBS_SIZE, dtype=np.float32)
-        else:
-            obs = encode_battle(make_battle_view(self.gs))
+        obs = self._zero_obs() if terminated else self._encode_obs()
 
         return obs, reward, terminated, False, {}
