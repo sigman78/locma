@@ -41,7 +41,7 @@
   $: typeLabel = meta ? (item ? `${item.emoji} ${item.label}` : 'Creature') : ''
 </script>
 
-<!-- root carries the aura class hooks (visuals are Task M2) -->
+<!-- root carries the aura class hooks; M2 implements the three aura visuals below -->
 <div class="minionwrap" class:taunt={split.taunt} class:ward={split.ward} class:lethal={split.lethal}>
   <div
     class="minion"
@@ -53,13 +53,53 @@
     style={slideStyle}
     use:restartAnim={{ cls: animCls, token: fxToken }}
   >
-    {#if imgOk}
-      <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
-    {:else}
-      <div class="placeholder"><span class="nm">{name}</span></div>
-    {/if}
+    <!--
+      sprite-stack: local isolated stacking context for aura layering.
+      isolation: isolate lets z-index: -1 (taunt shield) sit behind the sprite
+      and z-index: 1 (ward bubble) sit in front, without disturbing the outer
+      z-index chain (.minion.attacking z-index:4 still pops above neighbor slots).
 
-    <!-- B/C/D keyword pills — aura keywords (G/L/W) are class-only hooks for M2 -->
+      z-order inside sprite-stack (back → front):
+        taunt shield  (z:-1)  → sprite img  (block, auto)  → ward bubble  (z:1)
+
+      z-order in .minionwrap (back → front):
+        sprite-stack (z:auto) → stat plates/pills (z:2) → sleep (z:3)
+        → hit-flash (z:4) → flash-blob (z:5) → locma-dmg (z:6) → death-cross (z:7)
+    -->
+    <div class="sprite-stack">
+      <!-- M2: Taunt (G) — heater-shield SVG behind the sprite, full card-slot size -->
+      {#if split.taunt}
+      <svg
+        class="taunt-shield"
+        viewBox="0 0 100 130"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <path
+          d="M8,5 L92,5 L92,78 Q92,115 50,126 Q8,115 8,78 Z"
+          fill="#5aa9ff"
+          fill-opacity="0.85"
+          stroke="#3d88dd"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+      </svg>
+      {/if}
+
+      {#if imgOk}
+        <!-- M2: Lethal (L) glow applied via .lethal img CSS (drop-shadow traces alpha cutout) -->
+        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
+      {:else}
+        <div class="placeholder"><span class="nm">{name}</span></div>
+      {/if}
+
+      <!-- M2: Ward (W) — light-blue pulsing barrier bubble over the sprite, under stat plates -->
+      {#if split.ward}
+      <div class="ward-bubble" aria-hidden="true"></div>
+      {/if}
+    </div>
+
+    <!-- B/C/D keyword pills — G/L/W handled above as aura visuals -->
     <div class="abil">
       {#each split.pills as a}
         <span
@@ -97,7 +137,11 @@
   /* frameless sprite — no card background, border, or crosshatch */
   .minion { position: relative; width: 100%; height: 100%;
     user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
-  .minion img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+
+  /* sprite-stack: isolated stacking context so taunt (z:-1) and ward (z:1) stay
+     contained without touching the outer .minionwrap / .minion z-index chain */
+  .sprite-stack { position: relative; width: 100%; height: 100%; isolation: isolate; }
+  .sprite-stack img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
     text-align: center; font-size: 13px; color: #ddd; }
 
@@ -123,7 +167,7 @@
   .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     font-size: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 3px #000); }
 
-  /* combat state filters */
+  /* combat state filters — applied to .minion, so they compose with img's lethal glow */
   .minion.attacked { filter: saturate(0.6); }
   .minion.dim { opacity: 0.5; }
   /* attacker highlight — declared after .attacked so it wins */
@@ -132,4 +176,47 @@
 
   /* reveal the shared Tooltip on hover */
   .minionwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+
+  /* ── M2: Aura keyword visuals ─────────────────────────────────────────────────── */
+
+  /* Taunt (G): heater-shield SVG behind the sprite.
+     z-index: -1 is contained within .sprite-stack (isolation: isolate), so it stays
+     behind the sprite img without bleeding below the .minionwrap background. */
+  .taunt-shield {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* Lethal (L): static green silhouette glow on the sprite img.
+     drop-shadow() traces the alpha cutout of the creature.
+     Existing .minion filters (saturate / brightness) apply to the whole .minion
+     on top of this — lethal glow naturally dims when attacked / brightens when attacking. */
+  .lethal .sprite-stack img {
+    filter: drop-shadow(0 0 6px #4fd97a) drop-shadow(0 0 2px #4fd97a);
+  }
+
+  /* Ward (W): light-blue pulsing barrier bubble over the sprite, under stat plates.
+     mix-blend-mode: screen adds light rather than graying the sprite.
+     isolation: isolate on .sprite-stack confines the blend to sprite-stack content,
+     so the bubble does NOT lighten stats or pills (which live outside .sprite-stack). */
+  .ward-bubble {
+    position: absolute; inset: 0; z-index: 1;
+    border-radius: 4px; pointer-events: none;
+    box-shadow: inset 0 0 14px 3px rgba(150, 235, 255, 0.85);
+    background: radial-gradient(
+      circle at 50% 45%,
+      rgba(150, 235, 255, 0.18) 0%,
+      rgba(100, 200, 255, 0.08) 55%,
+      transparent 80%
+    );
+    mix-blend-mode: screen;
+    animation: ward-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes ward-pulse {
+    0%, 100% { opacity: 0.75; transform: scale(1);    }
+    50%       { opacity: 1;    transform: scale(1.02); }
+  }
 </style>
