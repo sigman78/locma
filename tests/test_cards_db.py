@@ -66,8 +66,13 @@ def test_parse_items():
 
 def _row(type_: str, description: str, **kw) -> dict:
     base = {
-        "type": type_, "description": description,
-        "attack": 0, "defense": 0, "player_hp": 0, "enemy_hp": 0, "card_draw": 0,
+        "type": type_,
+        "description": description,
+        "attack": 0,
+        "defense": 0,
+        "player_hp": 0,
+        "enemy_hp": 0,
+        "card_draw": 0,
     }
     base.update(kw)
     return base
@@ -82,16 +87,18 @@ def test_card_text_creature_special():
     # Blizzard Demon: comma-separated keywords only -> empty
     assert card_text(_row("creature", "2/2 Creature. Charge, Drain.")) == ""
     # Night Howler: comma keywords + a special -> keep only the special
-    assert card_text(
-        _row("creature", "6/5 Creature. Breakthrough, Drain. Summon: You lose 3 health.")
-    ) == "Summon: You lose 3 health."
+    assert (
+        card_text(_row("creature", "6/5 Creature. Breakthrough, Drain. Summon: You lose 3 health."))
+        == "Summon: You lose 3 health."
+    )
 
 
 def test_card_text_item_effect():
     # cleaned description (the "<Colour> Item." preface removed)
-    assert card_text(
-        _row("itemgreen", "Green Item. Give a friendly creature +1/+1 and Breakthrough.")
-    ) == "Give a friendly creature +1/+1 and Breakthrough."
+    assert (
+        card_text(_row("itemgreen", "Green Item. Give a friendly creature +1/+1 and Breakthrough."))
+        == "Give a friendly creature +1/+1 and Breakthrough."
+    )
     # derived stat/HP summary when there is no description text
     assert card_text(_row("itemred", "", defense=-6)) == "0/-6"
     assert card_text(_row("itemblue", "", player_hp=2, enemy_hp=-2)) == "+2♥ · foe -2♥"
