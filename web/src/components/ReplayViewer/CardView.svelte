@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, spellEffectText } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
@@ -40,19 +40,8 @@
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   // spell (item) cards get a dimmed bottom panel tinted with the item colour (8-digit hex alpha)
   $: spellStyle = item ? `--sp-fill:${item.color}3a; --sp-edge:${item.color}cc;` : ''
-  // compact spell-effect text: prefer the printed description, else a derived stat/HP/draw summary
-  const sgn = (n: number) => (n > 0 ? `+${n}` : `${n}`)
-  $: spellEffect = !meta
-    ? ''
-    : meta.description.replace(/^\s*(?:green|red|blue)\s+item\b[\s.:;,–-]*/i, '') ||
-      [
-        meta.attack || meta.defense ? `${sgn(meta.attack)}/${sgn(meta.defense)}` : '',
-        meta.player_hp ? `${sgn(meta.player_hp)}♥` : '',
-        meta.enemy_hp ? `foe ${sgn(meta.enemy_hp)}♥` : '',
-        meta.card_draw ? `draw ${sgn(meta.card_draw)}` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ')
+  // compact spell-effect text (cleaned description / derived summary) lives in lib/cards
+  $: spellEffect = spellEffectText(meta)
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
