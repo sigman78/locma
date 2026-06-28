@@ -54,6 +54,11 @@ export function creatureSpecial(desc: string): string {
   const kept = body
     .split('.')
     .map((s) => s.trim())
-    .filter((s) => s && !CREATURE_KEYWORDS.has(s.toLowerCase()))
+    .filter((s) => {
+      if (!s) return false
+      // drop a sentence whose every comma-separated token is a keyword (e.g. "Charge, Drain")
+      const tokens = s.split(',').map((t) => t.trim()).filter(Boolean)
+      return !(tokens.length > 0 && tokens.every((t) => CREATURE_KEYWORDS.has(t.toLowerCase())))
+    })
   return kept.length ? `${kept.join('. ')}.` : ''
 }

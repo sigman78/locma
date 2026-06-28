@@ -116,7 +116,7 @@
     <!-- B/C/D keyword pills (G/L/W are aura visuals) + ✨ special-effect pill -->
     {#if split.pills.length || special}
       <div class="abil">
-        {#if special}<span class="chip special" title="special effect — hover for details">✨</span>{/if}
+        {#if special}<span class="chip special" title="special effect — hover for details">📜</span>{/if}
         {#each split.pills as a}
           <span
             class="chip"

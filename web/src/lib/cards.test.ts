@@ -52,4 +52,12 @@ describe('creatureSpecial', () => {
   it('keeps a multi-sentence special', () => {
     expect(creatureSpecial('3/3 Creature. Summon: Draw a card. Gain 1 health.')).toBe('Summon: Draw a card. Gain 1 health.')
   })
+  it('drops comma-separated keyword sentences (real cards)', () => {
+    // Blizzard Demon: keywords only, no special → empty (no pill, no bottom text)
+    expect(creatureSpecial('2/2 Creature. Charge, Drain.')).toBe('')
+    // Night Howler: comma keywords + a special → keep only the special
+    expect(creatureSpecial('6/5 Creature. Breakthrough, Drain. Summon: You lose 3 health.')).toBe(
+      'Summon: You lose 3 health.',
+    )
+  })
 })

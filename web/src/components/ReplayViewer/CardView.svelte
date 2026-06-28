@@ -94,7 +94,7 @@
       {/if}
       {#if !item && (abil.length || special)}
         <div class="abil">
-          {#if special}<span class="chip special" title="special effect — hover for details">✨</span>{/if}
+          {#if special}<span class="chip special" title="special effect — hover for details">📜</span>{/if}
           {#each abil as a}
             <span
               class="chip"
