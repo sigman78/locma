@@ -139,7 +139,7 @@
     // → animate a red number flying from the struck/dead blocker to the face.
     // Coords are captured NOW on the still-current DOM (the target may die this step).
     const bht = breakthroughHit(currentAction, splashes, actSeat)
-    if (bht && currentAction && currentAction.t === 'attack') {
+    if (bht && currentAction?.t === 'attack') {
       const src = rectOfKey(currentAction.target)
       const faceKey: AnchorKey = actSeat === you ? 'face' : 'face-me'
       const dst = rectOfKey(faceKey)
@@ -147,8 +147,8 @@
         const flyKey = fxToken
         // small delay (~80ms) so the projectile fires near the slide apex
         setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
-        // clear after flight + fade complete (80ms delay + 300ms move + 150ms fade = 530ms)
-        setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 580)
+        // clear AFTER the fade fully completes (80ms delay + 390ms animation-delay + 140ms fade ≈ 610ms)
+        setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 640)
       }
     }
   }
