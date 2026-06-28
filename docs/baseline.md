@@ -1258,7 +1258,8 @@ diminishing return at small budget. Design: `docs/netdmcts-phase2-design.md`; an
 Reproduce (needs the `[ml]` extra + a token net as the warm-start oracle):
 ```bash
 uv run locma az-selfplay --warm-start runs/selfplay-r2.zip --prefix runs/az \
-  --iterations 3 --self-play-games 100 --baseline-games 40 --k-eval 8 --i-eval 40
+  --iterations 3 --self-play-games 100 --baseline-games 40 \
+  --k-eval 8 --i-eval 40 --games-per-opp 12 --h2h-games 16
 ```
 
 ## Replay determinism
