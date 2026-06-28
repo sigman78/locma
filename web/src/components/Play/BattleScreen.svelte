@@ -50,13 +50,14 @@
   function send(a: ActionDict) {
     drag = null
     snapId = null
+    overField = false
     dispatch('act', a)
   }
 
   // --- anchor registry: board slots + both faces register their DOM node.
   // 'face' = the opponent (top) face (also the drag target); 'face-me' = the
   // human's own (bottom) face, needed so an AI→human-face attack can slide down. ---
-  type AnchorKey = number | 'face' | 'face-me'
+  type AnchorKey = number | 'face' | 'face-me' | 'myfield'
   const anchors = new Map<AnchorKey, HTMLElement>()
   function anchor(node: HTMLElement, id: AnchorKey) {
     anchors.set(id, node)
@@ -170,13 +171,23 @@
   }
 
   // --- drag-to-aim state (unchanged from Slice B) ---
-  type Drag = { kind: 'attack' | 'use'; src: number; from: { x: number; y: number } }
+  type Drag = { kind: 'attack' | 'use' | 'summon'; src: number; from: { x: number; y: number } }
   let drag: Drag | null = null
   let cursor = { x: 0, y: 0 }
   let snapId: number | 'face' | null = null
+  let overField = false // cursor is over the own battlefield during a summon drag
 
   function legalIdsFor(d: Drag): number[] {
-    return d.kind === 'attack' ? attackTargets(legal, d.src) : itemTargets(legal, d.src)
+    if (d.kind === 'attack') return attackTargets(legal, d.src)
+    if (d.kind === 'use') return itemTargets(legal, d.src)
+    return [] // summon drops on the field, not a specific slot target
+  }
+
+  function pointInField(p: { x: number; y: number }): boolean {
+    const el = anchors.get('myfield')
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom
   }
   $: legalKeys = drag
     ? new Set<number | 'face'>(legalIdsFor(drag).map((id) => (id === -1 ? 'face' : id)))
@@ -205,6 +216,15 @@
   }
   function downHand(e: MouseEvent, c: CardState) {
     if (!interactive) return
+    // a summonable creature: drag onto your own battlefield (or click) to summon
+    if (canSummon(legal, c.iid)) {
+      e.preventDefault()
+      drag = { kind: 'summon', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
+      cursor = { x: e.clientX, y: e.clientY }
+      snapId = null
+      overField = false
+      return
+    }
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 0) return
     if (ts.length === 1 && ts[0] === -1) return
@@ -225,6 +245,10 @@
   function onMove(e: MouseEvent) {
     if (!drag) return
     cursor = { x: e.clientX, y: e.clientY }
+    if (drag.kind === 'summon') {
+      overField = pointInField(cursor)
+      return
+    }
     const best = nearestTarget(cursor.x, cursor.y, aimTargets(drag))
     snapId = best ? best.id : null
   }
@@ -234,6 +258,12 @@
     const sid = snapId
     drag = null
     snapId = null
+    if (d.kind === 'summon') {
+      const drop = overField
+      overField = false
+      if (drop) send({ t: 'summon', id: d.src }) // released over the own battlefield
+      return
+    }
     if (sid === null) return
     const target = sid === 'face' ? -1 : sid
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
@@ -243,6 +273,7 @@
     if (e.key === 'Escape') {
       drag = null
       snapId = null
+      overField = false
     }
   }
   $: lineTo = drag
@@ -310,7 +341,10 @@
 
   <hr />
 
-  <div class="field bottom">
+  <div class="field bottom"
+    class:summon-target={drag?.kind === 'summon'}
+    class:summon-over={drag?.kind === 'summon' && overField}
+    use:anchor={'myfield'}>
     {#each displayMe as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
@@ -341,7 +375,7 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, drag an item to its target, click to summon, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
     </span>
     <button class="endturn" on:click={() => send({ t: 'pass' })} disabled={!interactive}>End Turn ⏭</button>
   </div>
@@ -366,6 +400,11 @@
     min-height: calc(var(--card-h) + 12px); padding: 6px;
     background: rgba(255, 255, 255, 0.02); border-radius: 6px;
     width: calc(6 * var(--card-w) + 5 * var(--gap) + 16px); }
+  /* drag-to-summon: highlight the own battlefield as the drop zone */
+  .field.summon-target { outline: 2px dashed #5aa9ff; outline-offset: -3px;
+    background: rgba(90, 169, 255, 0.08); }
+  .field.summon-over { outline: 2px solid #5aa9ff; outline-offset: -3px;
+    background: rgba(90, 169, 255, 0.2); box-shadow: inset 0 0 18px rgba(90, 169, 255, 0.45); }
   .hand { display: flex; gap: var(--gap); justify-content: center; align-items: center; padding: 6px;
     background: #20212b; border: 1px solid #313445; border-radius: 8px;
     width: calc(var(--hand-cols) * var(--card-w) + (var(--hand-cols) - 1) * var(--gap) + 16px);
