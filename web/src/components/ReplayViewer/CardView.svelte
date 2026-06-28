@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta, spellEffectText, creatureSpecial } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
@@ -40,10 +40,10 @@
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   // spell (item) cards get a dimmed bottom panel tinted with the item colour (8-digit hex alpha)
   $: spellStyle = item ? `--sp-fill:${item.color}3a; --sp-edge:${item.color}cc;` : ''
-  // compact spell-effect text (cleaned description / derived summary) lives in lib/cards
-  $: spellEffect = spellEffectText(meta)
-  // creatures with a generic on-summon effect get a ✨ pill on the face (detail in tooltip)
-  $: special = !item && meta ? creatureSpecial(meta.description) : ''
+  // cleaned special/effect text is computed server-side (CardMeta.card_text)
+  $: spellEffect = meta?.card_text ?? ''
+  // creatures with a generic on-summon effect get a 📜 pill on the face (detail in tooltip)
+  $: special = !item ? (meta?.card_text ?? '') : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')

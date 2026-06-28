@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { CardMeta } from '../../lib/api'
   import type { AbilityInfo } from '../../lib/abilities'
-  import { stripItemPreface, creatureSpecial } from '../../lib/cards'
 
   export let name: string
   export let meta: CardMeta | undefined = undefined
@@ -13,9 +12,8 @@
 
   // items: atk/def stats + keyword pills carry no meaning, so hide them for spell cards
   $: isItem = !!meta && meta.type.startsWith('item')
-  // bottom text = the card's special only: items drop the colour preface; creatures drop the
-  // "X/Y Creature." preface + bare keyword sentences (shown above), leaving "Summon: ...".
-  $: desc = !meta ? '' : isItem ? stripItemPreface(meta.description) : creatureSpecial(meta.description)
+  // bottom text = the cleaned special/effect, computed server-side (locma/data/cards_db.py)
+  $: desc = meta?.card_text ?? ''
 </script>
 
 <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>

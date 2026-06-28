@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta, creatureSpecial } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
   import { abilityList, auraSplit } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from '../ReplayViewer/Tooltip.svelte'
@@ -25,8 +25,8 @@
   $: atkDelta = meta ? card.atk - meta.attack : 0
   $: defDelta = meta ? card.def - meta.defense : 0
   $: split = auraSplit(card.abilities)
-  // a generic on-summon effect → ✨ pill on the face (detail in the tooltip)
-  $: special = meta ? creatureSpecial(meta.description) : ''
+  // a generic on-summon effect → 📜 pill on the face (detail in the tooltip); served as card_text
+  $: special = meta?.card_text ?? ''
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''

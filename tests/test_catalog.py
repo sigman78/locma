@@ -10,6 +10,8 @@ def test_catalog_shape():
     assert c1["id"] == 1 and c1["name"] == "Slimer" and c1["type"] == "creature"
     assert c1["cost"] == 1 and c1["attack"] == 2 and c1["defense"] == 1
     assert "Summon" in c1["description"]
+    # raw description is kept; card_text is the cleaned special/effect (Slimer's summon)
+    assert c1["card_text"] == "Summon: You gain 1 health."
     assert set(c1) == {
         "id",
         "name",
@@ -22,4 +24,5 @@ def test_catalog_shape():
         "enemy_hp",
         "card_draw",
         "description",
+        "card_text",
     }
