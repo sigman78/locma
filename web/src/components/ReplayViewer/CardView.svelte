@@ -3,6 +3,7 @@
   import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
+  import Tooltip from './Tooltip.svelte'
 
   export let card: CardState
   export let faceUp = true
@@ -49,6 +50,8 @@
   } as const
   $: item = meta ? (ITEM as Record<string, { color: string; emoji: string; label: string }>)[meta.type] : undefined
   $: typeLabel = meta ? (item ? `${item.emoji} ${item.label}` : 'Creature') : ''
+  $: baseAtk = meta ? meta.attack : card.atk
+  $: baseDef = meta ? meta.defense : card.def
 </script>
 
 {#if !faceUp}
@@ -99,26 +102,7 @@
 
     {#if dim && !card.has_attacked}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
 
-    <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>
-      <div class="tt-head">
-        <span class="tt-name">{meta?.name ?? name}</span>
-        {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
-      </div>
-      {#if meta}<div class="tt-type">{typeLabel}</div>{/if}
-      <!-- tooltip mirrors the printed card (base stats), not the in-play buffed state -->
-      <div class="tt-stats">
-        <span class="atk">⚔ {meta ? meta.attack : card.atk}</span>
-        <span class="def">🛡 {meta ? meta.defense : card.def}</span>
-      </div>
-      {#if baseAbil.length}
-        <div class="tt-keys">
-          {#each baseAbil as a}
-            <div class="tt-key"><span class="chip" style={`border-color:${a.color}`}>{a.emoji}</span> {a.name}</div>
-          {/each}
-        </div>
-      {/if}
-      {#if meta?.description}<div class="tt-desc">{meta.description}</div>{/if}
-    </div>
+    <Tooltip {name} {meta} {baseAbil} {typeLabel} {tip} {baseAtk} {baseDef} />
   </div>
 {/if}
 
@@ -183,24 +167,6 @@
   .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
     box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
 
-  /* hover detail tooltip — centred above (or below) the card, never over a horizontal neighbour */
-  .tooltip { position: absolute; left: 50%; z-index: 100;
-    width: 220px; padding: 8px 10px; border-radius: 8px;
-    background: #0d0f16; border: 1px solid #3a3f55;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.6); color: #ddd;
-    font-size: 12px; line-height: 1.4; text-align: left;
-    opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(4px);
-    transition: opacity 0.12s ease, transform 0.12s ease; pointer-events: none; }
-  .tooltip.tip-above { bottom: calc(100% + 8px); }
-  .tooltip.tip-below { top: calc(100% + 8px); }
-  .cardwrap:hover .tooltip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
-  .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tt-name { font-weight: 700; font-size: 13px; color: #fff; }
-  .tt-cost { color: #6bb8ff; font-weight: 700; white-space: nowrap; }
-  .tt-type { color: #99a; text-transform: capitalize; font-size: 11px; margin-top: 1px; }
-  .tt-stats { display: flex; gap: 14px; margin: 5px 0; font-weight: 700; }
-  .tt-keys { display: flex; flex-direction: column; gap: 3px; margin: 5px 0;
-    border-top: 1px solid #2a2f42; padding-top: 5px; }
-  .tt-key { display: flex; align-items: center; gap: 6px; }
-  .tt-desc { margin-top: 5px; color: #bcbcc8; border-top: 1px solid #2a2f42; padding-top: 5px; }
+  /* reveal the shared Tooltip on hover */
+  .cardwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
 </style>

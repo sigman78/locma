@@ -17,6 +17,7 @@
   import { nearestTarget, type AimTarget } from '../../lib/aim'
   import { dock } from '../../lib/dock'
   import CardView from '../ReplayViewer/CardView.svelte'
+  import MinionView from './MinionView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
   import PointerLine from './PointerLine.svelte'
 
@@ -274,7 +275,7 @@
     {#each displayOp as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         use:anchor={c.iid} in:spring out:deathFx>
-        <CardView card={c} facing="down"
+        <MinionView card={c} facing="down"
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
           flash={flashSet.has(c.iid)} hit={tookDamage(opSeat, c.iid)}
           dying={dyingSet.has(c.iid)} dmgDelay
@@ -290,7 +291,7 @@
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
         on:mousedown={(e) => startAttack(e, c)}>
-        <CardView card={c} facing="up" dim={c.can_attack === false}
+        <MinionView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
           flash={flashSet.has(c.iid)} hit={tookDamage(meSeat, c.iid)}
           dying={dyingSet.has(c.iid)} dmgDelay
