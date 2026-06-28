@@ -38,6 +38,8 @@
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
+  // spell (item) cards tint the card's crosshatch with the item colour (8-digit hex alpha)
+  $: spellStyle = item ? `--sp-wash:${item.color}1f; --sp-line:${item.color}66; --sp-line2:${item.color}38;` : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
@@ -68,7 +70,8 @@
       class:attacking={!!lunge || sliding}
       class:attacked={card.has_attacked}
       class:dim
-      style={slideStyle}
+      class:spell={!!item}
+      style={`${slideStyle}${spellStyle}`}
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
@@ -78,11 +81,12 @@
       {/if}
       {#if showAuras && ward}<div class="ward-tint"></div>{/if}
       {#if meta}<div class="cost" title="mana cost">◆ {meta.cost}</div>{/if}
-      <div class="stats">
-        <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
-        {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
-        <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
-      </div>
+      {#if !item}
+        <div class="stats">
+          <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
+          <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
+        </div>
+      {/if}
       <div class="abil">
         {#each abil as a}
           <span
@@ -125,6 +129,13 @@
     background-image:
       repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 6px),
       repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 6px); }
+  /* spell (item) cards: no stats overlay; the crosshatch + a faint diagonal wash carry a
+     tint of the item's colour (red/green/blue) so the type reads from the card background. */
+  .card.spell {
+    background-image:
+      repeating-linear-gradient(45deg, var(--sp-line) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(-45deg, var(--sp-line2) 0 1px, transparent 1px 6px),
+      linear-gradient(135deg, var(--sp-wash), transparent 70%); }
   .card img { width: 100%; height: 100%; object-fit: cover; }
   .back { display: grid; place-items: center; font-size: 40px; color: #557; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
@@ -156,8 +167,6 @@
   /* live stat deviations from the printed card: green = buffed, red = reduced/damaged */
   .stats .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
   .stats .reduced { color: #ff6b6b; text-shadow: 0 0 6px rgba(255, 107, 107, 0.7); }
-  .item-dot { width: 13px; height: 13px; border-radius: 50%; align-self: center;
-    border: 1px solid rgba(0, 0, 0, 0.6); box-shadow: 0 0 5px rgba(0, 0, 0, 0.7); }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;
