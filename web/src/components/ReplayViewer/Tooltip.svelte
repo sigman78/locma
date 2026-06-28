@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CardMeta } from '../../lib/api'
   import type { AbilityInfo } from '../../lib/abilities'
+  import { stripItemPreface } from '../../lib/cards'
 
   export let name: string
   export let meta: CardMeta | undefined = undefined
@@ -9,6 +10,9 @@
   export let tip: 'above' | 'below' = 'above'
   export let baseAtk = 0
   export let baseDef = 0
+
+  // drop the redundant "Green/Red/Blue item" preface from the printed description
+  $: desc = meta?.description ? stripItemPreface(meta.description) : ''
 </script>
 
 <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>
@@ -29,7 +33,7 @@
       {/each}
     </div>
   {/if}
-  {#if meta?.description}<div class="tt-desc">{meta.description}</div>{/if}
+  {#if desc}<div class="tt-desc">{desc}</div>{/if}
 </div>
 
 <style>
