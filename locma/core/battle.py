@@ -252,8 +252,15 @@ def battle_legal(gs: GameState) -> list[Action]:
             for t in opp.board:
                 actions.append(Use(c.instance_id, t.instance_id))
         else:  # BLUE_ITEM
-            for t in opp.board:
-                actions.append(Use(c.instance_id, t.instance_id))
+            # A blue item may target an enemy creature ONLY when it has negative
+            # defense (the |defense| is dealt to that creature). Blue items with
+            # defense >= 0 (e.g. Healing Potion, the Life Steal potions, Poison)
+            # carry their effect via player_hp/enemy_hp and are no-creature (-1)
+            # only — offering creature targets for them is a no-op on the creature
+            # and surfaces as bogus "aim at the enemy" prompts in the play UI.
+            if c.card.defense < 0:
+                for t in opp.board:
+                    actions.append(Use(c.instance_id, t.instance_id))
             actions.append(Use(c.instance_id, -1))
     guards = _enemy_guards(opp)
     targets = guards if guards else opp.board
