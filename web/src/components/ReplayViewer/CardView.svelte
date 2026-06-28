@@ -44,7 +44,7 @@
   const sgn = (n: number) => (n > 0 ? `+${n}` : `${n}`)
   $: spellEffect = !meta
     ? ''
-    : meta.description ||
+    : meta.description.replace(/^\s*(?:green|red|blue)\s+item\b[\s.:;,–-]*/i, '') ||
       [
         meta.attack || meta.defense ? `${sgn(meta.attack)}/${sgn(meta.defense)}` : '',
         meta.player_hp ? `${sgn(meta.player_hp)}♥` : '',
