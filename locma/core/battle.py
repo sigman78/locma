@@ -172,16 +172,19 @@ def _apply_item(gs, item, target_id, emit=None):
         if tgt:
             tgt.attack = max(0, tgt.attack + item.card.attack)
             tgt.abilities = _merge_abilities(tgt.abilities, item.card.abilities, add=False)
-            before = tgt.defense
-            tgt.defense += item.card.defense
-            if before - tgt.defense > 0:
+            # Defense reduction is DAMAGE: route it through _deal_to_unit so Ward
+            # soaks it and is consumed (same as combat / gym-locm). Keyword removal
+            # above already ran, so a red item that strips Ward (e.g. Decimate)
+            # removes it first and the damage then lands.
+            applied = _deal_to_unit(tgt, -item.card.defense, False)
+            if applied > 0:
                 _emit(
                     emit,
                     {
                         "t": "damage",
                         "seat": gs.opponent(gs.current),
                         "target": tgt.instance_id,
-                        "amount": before - tgt.defense,
+                        "amount": applied,
                         "fatal": tgt.defense <= 0,
                     },
                 )
@@ -210,16 +213,16 @@ def _apply_item(gs, item, target_id, emit=None):
         else:
             tgt = _find_on_board(opp, target_id)
             if tgt:
-                before = tgt.defense
-                tgt.defense += item.card.defense
-                if before - tgt.defense > 0:
+                # Creature damage is Ward-soakable, same as a red item (see above).
+                applied = _deal_to_unit(tgt, -item.card.defense, False)
+                if applied > 0:
                     _emit(
                         emit,
                         {
                             "t": "damage",
                             "seat": gs.opponent(gs.current),
                             "target": tgt.instance_id,
-                            "amount": before - tgt.defense,
+                            "amount": applied,
                             "fatal": tgt.defense <= 0,
                         },
                     )
