@@ -7,6 +7,7 @@
 
   export let card: CardState
   export let facing: 'up' | 'down' | null = null
+  export let lunge: 'up' | 'down' | null = null // ReplayViewer attack anim (Play uses slideX/Y)
   export let slideX = 0
   export let slideY = 0
   export let flash = false
@@ -26,7 +27,7 @@
   $: defDelta = meta ? card.def - meta.defense : 0
   $: split = auraSplit(card.abilities)
   $: sliding = slideX !== 0 || slideY !== 0
-  $: animCls = sliding ? 'sliding' : flash ? 'flashing' : null
+  $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   $: tip = facing === 'down' ? ('below' as const) : ('above' as const)
   $: baseAtk = meta ? meta.attack : card.atk

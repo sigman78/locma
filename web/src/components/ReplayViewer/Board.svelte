@@ -5,7 +5,7 @@
   import type { Fx } from '../../lib/fx'
   import { deathFx } from '../../lib/motion'
   import { mergeDisplayBoard } from '../../lib/stepfx'
-  import CardView from './CardView.svelte'
+  import MinionView from '../Play/MinionView.svelte'
   import Hand from './Hand.svelte'
   import Player from './Player.svelte'
 
@@ -82,7 +82,7 @@
     <div class="field top" class:active={snapshot.current === 1}>
       {#each display1 as c (c.iid)}
         <div out:deathFx>
-          <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
+          <MinionView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
             hit={hitFlash(1, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="down" {fxToken} />
         </div>
@@ -92,7 +92,7 @@
     <div class="field bottom" class:active={snapshot.current === 0}>
       {#each display0 as c (c.iid)}
         <div out:deathFx>
-          <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
+          <MinionView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
             hit={hitFlash(0, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="up" {fxToken} />
         </div>
