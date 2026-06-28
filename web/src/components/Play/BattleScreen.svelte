@@ -4,6 +4,7 @@
   import type { ActionDict, CardState, EventDict, PlayerState } from '../../lib/replay'
   import {
     attackTargets,
+    breakthroughHit,
     canSummon,
     cardDamage,
     itemTargets,
@@ -85,6 +86,8 @@
   let slideMap = new Map<number, { dx: number; dy: number }>()
   let flashSet = new Set<number | 'face'>()
   let lastToken = -1
+  type BtFly = { amount: number; src: { cx: number; cy: number }; dst: { cx: number; cy: number }; key: number }
+  let btFly: BtFly | null = null
 
   function syncDisplay() {
     const ret = (seat: number) =>
@@ -132,6 +135,22 @@
       slideMap = new Map()
       flashSet = new Set()
     }, HOLD_MS)
+    // Breakthrough cue: a minion attack that also overflowed onto the defender face
+    // → animate a red number flying from the struck/dead blocker to the face.
+    // Coords are captured NOW on the still-current DOM (the target may die this step).
+    const bht = breakthroughHit(currentAction, splashes, actSeat)
+    if (bht && currentAction && currentAction.t === 'attack') {
+      const src = rectOfKey(currentAction.target)
+      const faceKey: AnchorKey = actSeat === you ? 'face' : 'face-me'
+      const dst = rectOfKey(faceKey)
+      if (src && dst) {
+        const flyKey = fxToken
+        // small delay (~80ms) so the projectile fires near the slide apex
+        setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
+        // clear after flight + fade complete (80ms delay + 300ms move + 150ms fade = 530ms)
+        setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 580)
+      }
+    }
   }
 
   // run the director once per step (fxToken bump)
@@ -323,6 +342,14 @@
   </div>
 </div>
 
+{#if btFly}
+  <!-- Breakthrough overflow number flies from struck blocker → defender face (position:fixed, viewport coords) -->
+  <div
+    class="bt-fly"
+    style="left:{btFly.src.cx}px; top:{btFly.src.cy}px; --dx:{btFly.dst.cx - btFly.src.cx}px; --dy:{btFly.dst.cy - btFly.src.cy}px"
+  >-{btFly.amount}</div>
+{/if}
+
 <style>
   .battle { --card-w: 100px; --card-h: 140px; --gap: 8px; --hand-cols: 8;
     display: flex; flex-direction: column; gap: 8px; align-items: center;
@@ -365,4 +392,46 @@
     box-shadow: 0 0 16px rgba(255, 93, 93, 0.55); }
   /* cast flash on the face — reuse the existing brightness/scale pulse */
   .faceplate.flashing { animation: locma-cast 250ms ease-out; }
+
+  /* ---- Breakthrough flying-number cue ---- */
+  /* Red overflow number flies from struck blocker to defender face with back-overshoot spring. */
+  .bt-fly {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    font-weight: 800;
+    font-size: 22px;
+    color: #ff4444;
+    text-shadow: 0 0 10px rgba(255, 80, 80, 0.95), 0 0 24px rgba(255, 0, 0, 0.6);
+    pointer-events: none;
+    z-index: 999;
+    white-space: nowrap;
+    /* springy move + fade-out after arrival */
+    animation:
+      bt-fly-move 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+      bt-fly-out  140ms ease-in 390ms both;
+    will-change: transform;
+  }
+  /* trailing glow blob — fades as the number moves, giving a brief afterimage streak */
+  .bt-fly::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 44px; height: 44px;
+    margin: -22px 0 0 -22px;
+    background: rgba(255, 60, 60, 0.5);
+    border-radius: 50%;
+    filter: blur(8px);
+    animation: bt-trail 300ms ease-out both;
+  }
+  @keyframes bt-fly-move {
+    from { transform: translate(-50%, -50%); }
+    to   { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))); }
+  }
+  @keyframes bt-fly-out {
+    to { opacity: 0; }
+  }
+  @keyframes bt-trail {
+    from { opacity: 0.85; transform: scale(1.8); }
+    to   { opacity: 0;    transform: scale(0.3); }
+  }
 </style>
