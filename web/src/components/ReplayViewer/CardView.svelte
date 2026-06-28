@@ -39,7 +39,7 @@
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   // spell (item) cards tint the card's crosshatch with the item colour (8-digit hex alpha)
-  $: spellStyle = item ? `--sp-wash:${item.color}1f; --sp-line:${item.color}66; --sp-line2:${item.color}38;` : ''
+  $: spellStyle = item ? `--sp-wash:${item.color}12; --sp-line:${item.color}33; --sp-line2:${item.color}1a;` : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
