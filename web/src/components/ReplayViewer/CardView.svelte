@@ -166,12 +166,12 @@
   /* spell (item) effect panel: a dimmed bottom bar tinted with the item colour,
      showing compact effect text instead of atk/def stats. */
   .spell-bar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1;
-    padding: 3px 5px; font-size: 10px; font-weight: 700; line-height: 1.2;
+    padding: 3px 5px; font-size: 12px; font-weight: 400; line-height: 1.25;
     text-align: center; color: #fff; text-shadow: 0 1px 2px #000;
     background-color: rgba(8, 8, 12, 0.82);
     background-image: linear-gradient(var(--sp-fill), var(--sp-fill));
     border-top: 1px solid var(--sp-edge);
-    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;
