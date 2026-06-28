@@ -43,3 +43,17 @@ export function spellEffectText(meta: CardMeta | undefined): string {
     .filter(Boolean)
     .join(' · ')
 }
+
+const CREATURE_KEYWORDS = new Set(['breakthrough', 'charge', 'drain', 'guard', 'lethal', 'ward'])
+
+/** A creature's description reduced to its special on-summon/effect text: drops the
+ *  "X/Y Creature." preface and any bare keyword sentences (those are shown as pills).
+ *  Returns "" for a vanilla creature (no special). */
+export function creatureSpecial(desc: string): string {
+  const body = desc.replace(/^\s*\d+\/\d+\s+creature\b[.\s]*/i, '')
+  const kept = body
+    .split('.')
+    .map((s) => s.trim())
+    .filter((s) => s && !CREATURE_KEYWORDS.has(s.toLowerCase()))
+  return kept.length ? `${kept.join('. ')}.` : ''
+}

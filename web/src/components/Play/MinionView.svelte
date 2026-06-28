@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, creatureSpecial } from '../../lib/cards'
   import { abilityList, auraSplit } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from '../ReplayViewer/Tooltip.svelte'
@@ -25,6 +25,8 @@
   $: atkDelta = meta ? card.atk - meta.attack : 0
   $: defDelta = meta ? card.def - meta.defense : 0
   $: split = auraSplit(card.abilities)
+  // a generic on-summon effect → ✨ pill on the face (detail in the tooltip)
+  $: special = meta ? creatureSpecial(meta.description) : ''
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
@@ -111,16 +113,19 @@
       {/if}
     </div>
 
-    <!-- B/C/D keyword pills — G/L/W handled above as aura visuals -->
-    <div class="abil">
-      {#each split.pills as a}
-        <span
-          class="chip"
-          class:granted={!baseLetters.has(a.letter)}
-          style={`border-color:${a.color}`}
-          title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
-      {/each}
-    </div>
+    <!-- B/C/D keyword pills (G/L/W are aura visuals) + ✨ special-effect pill -->
+    {#if split.pills.length || special}
+      <div class="abil">
+        {#if special}<span class="chip special" title="special effect — hover for details">✨</span>{/if}
+        {#each split.pills as a}
+          <span
+            class="chip"
+            class:granted={!baseLetters.has(a.letter)}
+            style={`border-color:${a.color}`}
+            title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
+        {/each}
+      </div>
+    {/if}
 
     <!-- stat mini-plates: atk bottom-left, def bottom-right -->
     <div class="atk-plate" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</div>
@@ -178,6 +183,9 @@
     background: rgba(8, 8, 12, 0.8); border: 1.5px solid #888; }
   .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
     box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
+  /* special on-summon effect indicator — amber attention pill */
+  .chip.special { border-color: #ffd23d; background: rgba(255, 210, 61, 0.2);
+    box-shadow: 0 0 7px rgba(255, 210, 61, 0.6); }
 
   /* sleeping (summoning-sick) indicator */
   .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);

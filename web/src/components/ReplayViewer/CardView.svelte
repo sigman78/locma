@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta, spellEffectText } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, spellEffectText, creatureSpecial } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
@@ -42,6 +42,8 @@
   $: spellStyle = item ? `--sp-fill:${item.color}3a; --sp-edge:${item.color}cc;` : ''
   // compact spell-effect text (cleaned description / derived summary) lives in lib/cards
   $: spellEffect = spellEffectText(meta)
+  // creatures with a generic on-summon effect get a ✨ pill on the face (detail in tooltip)
+  $: special = !item && meta ? creatureSpecial(meta.description) : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
@@ -90,8 +92,9 @@
       {:else if spellEffect}
         <div class="spell-bar">{spellEffect}</div>
       {/if}
-      {#if !item}
+      {#if !item && (abil.length || special)}
         <div class="abil">
+          {#if special}<span class="chip special" title="special effect — hover for details">✨</span>{/if}
           {#each abil as a}
             <span
               class="chip"
@@ -182,6 +185,9 @@
   /* abilities granted in-play (not on the printed card) read as a glowing buff */
   .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
     box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
+  /* special on-summon effect indicator — amber attention pill */
+  .chip.special { border-color: #ffd23d; background: rgba(255, 210, 61, 0.2);
+    box-shadow: 0 0 7px rgba(255, 210, 61, 0.6); }
 
   /* reveal the shared Tooltip on hover */
   .cardwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }

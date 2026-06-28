@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stripItemPreface, spellEffectText } from './cards'
+import { stripItemPreface, spellEffectText, creatureSpecial } from './cards'
 import type { CardMeta } from './api'
 
 const meta = (over: Partial<CardMeta> = {}): CardMeta => ({
@@ -34,5 +34,22 @@ describe('spellEffectText', () => {
   })
   it('returns empty for undefined meta', () => {
     expect(spellEffectText(undefined)).toBe('')
+  })
+})
+
+describe('creatureSpecial', () => {
+  it('drops the "X/Y Creature." preface, leaving the special', () => {
+    expect(creatureSpecial('2/1 Creature. Summon: You gain 1 health.')).toBe('Summon: You gain 1 health.')
+    expect(creatureSpecial('1/2 Creature. Summon: Deal 1 damage to your opponent.')).toBe('Summon: Deal 1 damage to your opponent.')
+  })
+  it('is empty for a vanilla creature or a keyword-only creature', () => {
+    expect(creatureSpecial('2/2 Creature.')).toBe('')
+    expect(creatureSpecial('2/2 Creature. Ward.')).toBe('')
+  })
+  it('drops bare keyword sentences but keeps the special', () => {
+    expect(creatureSpecial('4/3 Creature. Charge. Summon: Deal 2 damage.')).toBe('Summon: Deal 2 damage.')
+  })
+  it('keeps a multi-sentence special', () => {
+    expect(creatureSpecial('3/3 Creature. Summon: Draw a card. Gain 1 health.')).toBe('Summon: Draw a card. Gain 1 health.')
   })
 })
