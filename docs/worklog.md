@@ -440,3 +440,51 @@ Best = `az-net-0` (one round of AZ training). **Final confirm (larger n): avg-ha
   gives diminishing returns at small budget.** A larger run could tighten the CIs but the signal
   is null. See `ppo-review.md` §8.4B, `baseline.md` ("netdmcts Phase 2"),
   `docs/netdmcts-phase2-design.md`.
+
+## 2026-06-28 — draft benchmark (`draft-bench`): isolate deck-building skill; `balanced` is robustly best
+
+New tool `locma draft-bench` (`locma/harness/draft_bench.py`) ranks **draft** policies
+in isolation: both seats are piloted by the SAME battle policy and differ ONLY in
+their draft. Because the draft deals both seats from the same shared, non-depleting
+triplet stream, on a fixed seed both get identical offers — so this is a clean
+**paired comparison** and the win-rate edge is pure deck quality. Calibration: a
+self-duel is **exactly 0.5000** (mirror cancels seat advantage perfectly; verified
+for ground/greedy/azlite pilots). Cleaner than the old "PPO × draft sweep" (which
+played a fixed battle net vs the heterogeneous baselines — conflating draft with the
+battle matchup). Methodology in `docs/draft-benchmark.md`.
+
+**Pilot choice is load-bearing — weak heuristics disagree.** Ranking by avg win
+rate vs field, all 7 built-in drafts:
+
+| draft       | ground (n=600) | ppo deploy (n=160) | dmcts fair (n=50) | azlite (n=120) | greedy-battle (n=600) |
+|-------------|:--------------:|:------------------:|:-----------------:|:--------------:|:---------------------:|
+| balanced    | **0.650** | **0.624** | **0.647** | 0.613 | 0.567 |
+| random      | 0.471 | 0.476 | 0.643 | **0.674** | 0.080 |
+| max-guard   | 0.591 | 0.535 | 0.450 | 0.526 | 0.393 |
+| max-attack  | 0.527 | 0.542 | 0.460 | 0.457 | **0.694** |
+| max-defense | 0.434 | 0.466 | 0.453 | 0.413 | 0.576 |
+| weighted    | 0.414 | 0.407 | 0.420 | 0.428 | 0.574 |
+| greedy      | 0.412 | 0.450 | 0.427 | 0.390 | 0.616 |
+
+- **`balanced` is the robustly best draft** — Condorcet winner (beats all six others
+  head-to-head) under `ground` and `ppo`; #1 by avg win rate under `dmcts` (edging
+  `random` 0.647 vs 0.643, a tie) and close 2nd under `azlite`, though NOT Condorcet
+  there (it loses the `random` head-to-head — see below). The shipped `greedy` draft
+  and `weighted` rank **≤ a random draft** under every serious pilot — a clean,
+  battle-isolated confirmation of "greedy is the worst draft / the deck is the lever."
+- **The `greedy`-battle pilot inverts the ranking** (max-attack #1, max-guard
+  near-last) — a weak heuristic over-rewards its own style. Lesson: rank drafts under
+  a **strong** pilot and report across several; never trust one weak pilot.
+- **`random` is competitive only under the search pilots** (it carries items a
+  searcher uses) and edges `balanced` head-to-head at seed 0 (`balanced` wins 0.40
+  under azlite, 0.44 under dmcts) — but that does **not** replicate: on a fresh seed
+  `balanced` vs `random` is 0.49 / 0.59, a seed-noisy near-tie (~0.5, n≈120–160). So
+  across seeds they are co-leaders under search; `random`'s seed-0 lead was that seed
+  plus it beating the weak heuristics.
+- **No tuning lever robustly beats `balanced`.** A cheaper curve wins only under
+  `ground` (ties under `ppo` — overfit to aggression). A direct item-discount probe
+  (12→0, adding premium removal to `balanced`'s structure) **ties** `balanced` under
+  both `azlite` (n=160) and `dmcts` (n=80) and is no better under `ppo` — so the
+  item-light recipe is robust, not an overfit; those item-variants still beat `random`
+  under `dmcts` (0.59–0.62), i.e. structure is what wins. **`balanced` is the best
+  drafting strategy under current rules.** See `docs/baseline.md` ("Draft-bench").

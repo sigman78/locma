@@ -38,6 +38,23 @@ Round-robin. Ratings table: policy | openskill (ordinal) | elo | p vs reference.
 
 Example: `uv run locma tournament random scripted greedy --games 30 --matrix`
 
+## draft-bench
+`locma draft-bench [DRAFTS...] [--battle SPEC] [--games N] [--seed S]`
+Rank **draft (deck-building) policies in isolation**. Both seats are piloted by the
+SAME `--battle` policy and differ only in their draft, so the win-rate edge is pure
+deck quality (the draft deals both seats identical offers on a fixed seed; a
+self-duel is exactly 0.500). Prints a ranking by average win rate vs the field and
+the pair-score matrix. With no `DRAFTS`, ranks all built-in drafts
+(`random greedy weighted max-attack max-defense max-guard balanced`).
+- `--battle` the pilot for both seats: `ground` (default), `greedy`, `scripted`,
+  `azlite:100` (strong), `dmcts:K,I` (strong + fair), `ppo:PATH` (deployment net).
+- `--games` mirrored game pairs per draft pair (total per pair is `2 × N`).
+
+Choose a **strong** pilot — weak heuristics (`ground` vs `greedy`) disagree on the
+ranking because each imposes its own style. See `docs/draft-benchmark.md`.
+
+Example: `uv run locma draft-bench --battle azlite:100 --games 60`
+
 ## noise-floor
 `locma noise-floor A [--games N] [--seed S]`
 Plays A against an independent copy of itself — the luck baseline. Prints win
