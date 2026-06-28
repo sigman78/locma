@@ -412,13 +412,15 @@
   /* perspective so the dealIn rotateY flip reads in 3D */
   .hand.mine { perspective: 900px; }
   .hand.backs { opacity: 0.85; }
-  .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px;
+  /* highlight via outline (not border) + no padding, so a slot's layout width == --card-w;
+     otherwise the 2px border + 2px padding per slot overflow the hand panel at 8 cards. */
+  .slot { background: none; outline: 2px solid transparent; outline-offset: -2px; border-radius: 8px;
     cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
-  .slot:hover { border-color: #4a4f6a; }
-  .slot.playable { border-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  .slot.armed { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
-  .slot.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
-  .slot.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
+  .slot:hover { outline-color: #4a4f6a; }
+  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
+  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
+  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
+  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
   .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
   .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
