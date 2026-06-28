@@ -414,8 +414,11 @@
   .hand.backs { opacity: 0.85; }
   /* highlight via outline (not border) + no padding, so a slot's layout width == --card-w;
      otherwise the 2px border + 2px padding per slot overflow the hand panel at 8 cards. */
-  .slot { background: none; outline: 2px solid transparent; outline-offset: -2px; border-radius: 8px;
-    cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  /* border:none neutralizes the UA default <button> bevel (the slot is a button) without
+     taking layout space — highlights are drawn via outline, which keeps a slot's width
+     == --card-w so all 8 hand cards still fit the panel. */
+  .slot { background: none; border: none; outline: 2px solid transparent; outline-offset: -2px;
+    border-radius: 8px; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .slot:hover { outline-color: #4a4f6a; }
   .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
   .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
