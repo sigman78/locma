@@ -81,11 +81,17 @@
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
       >
+        <defs>
+          <linearGradient id={`taunt-steel-${card.iid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#a6adb6" />
+            <stop offset="100%" stop-color="#565d67" />
+          </linearGradient>
+        </defs>
         <path
           d="M8,5 L92,5 L92,78 Q92,115 50,126 Q8,115 8,78 Z"
-          fill="#5aa9ff"
-          fill-opacity="0.85"
-          stroke="#3d88dd"
+          fill={`url(#taunt-steel-${card.iid})`}
+          fill-opacity="0.9"
+          stroke="#33383f"
           stroke-width="3"
           stroke-linejoin="round"
         />
