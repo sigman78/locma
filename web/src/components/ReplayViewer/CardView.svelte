@@ -90,15 +90,17 @@
       {:else if spellEffect}
         <div class="spell-bar">{spellEffect}</div>
       {/if}
-      <div class="abil">
-        {#each abil as a}
-          <span
-            class="chip"
-            class:granted={!baseLetters.has(a.letter)}
-            style={`border-color:${a.color}`}
-            title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
-        {/each}
-      </div>
+      {#if !item}
+        <div class="abil">
+          {#each abil as a}
+            <span
+              class="chip"
+              class:granted={!baseLetters.has(a.letter)}
+              style={`border-color:${a.color}`}
+              title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
+          {/each}
+        </div>
+      {/if}
       {#key fxToken}
         {#if flash}<div class="flash-blob"></div>{/if}
         {#if hit}<div class="hit-flash" class:delayed={dmgDelay}></div>{/if}

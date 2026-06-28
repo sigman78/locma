@@ -13,6 +13,8 @@
 
   // drop the redundant "Green/Red/Blue item" preface from the printed description
   $: desc = meta?.description ? stripItemPreface(meta.description) : ''
+  // items: atk/def stats + keyword pills carry no meaning, so hide them for spell cards
+  $: isItem = !!meta && meta.type.startsWith('item')
 </script>
 
 <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>
@@ -21,12 +23,15 @@
     {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
   </div>
   {#if meta}<div class="tt-type">{typeLabel}</div>{/if}
-  <!-- tooltip mirrors the printed card (base stats), not the in-play buffed state -->
-  <div class="tt-stats">
-    <span class="atk">⚔ {baseAtk}</span>
-    <span class="def">🛡 {baseDef}</span>
-  </div>
-  {#if baseAbil.length}
+  <!-- creatures only: spell cards carry no meaningful atk/def stats -->
+  {#if !isItem}
+    <!-- tooltip mirrors the printed card (base stats), not the in-play buffed state -->
+    <div class="tt-stats">
+      <span class="atk">⚔ {baseAtk}</span>
+      <span class="def">🛡 {baseDef}</span>
+    </div>
+  {/if}
+  {#if baseAbil.length && !isItem}
     <div class="tt-keys">
       {#each baseAbil as a}
         <div class="tt-key"><span class="chip" style={`border-color:${a.color}`}>{a.emoji}</span> {a.name}</div>
