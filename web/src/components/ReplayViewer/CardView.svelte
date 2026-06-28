@@ -38,8 +38,21 @@
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
-  // spell (item) cards tint the card's crosshatch with the item colour (8-digit hex alpha)
-  $: spellStyle = item ? `--sp-wash:${item.color}12; --sp-line:${item.color}33; --sp-line2:${item.color}1a;` : ''
+  // spell (item) cards get a dimmed bottom panel tinted with the item colour (8-digit hex alpha)
+  $: spellStyle = item ? `--sp-fill:${item.color}3a; --sp-edge:${item.color}cc;` : ''
+  // compact spell-effect text: prefer the printed description, else a derived stat/HP/draw summary
+  const sgn = (n: number) => (n > 0 ? `+${n}` : `${n}`)
+  $: spellEffect = !meta
+    ? ''
+    : meta.description ||
+      [
+        meta.attack || meta.defense ? `${sgn(meta.attack)}/${sgn(meta.defense)}` : '',
+        meta.player_hp ? `${sgn(meta.player_hp)}♥` : '',
+        meta.enemy_hp ? `foe ${sgn(meta.enemy_hp)}♥` : '',
+        meta.card_draw ? `draw ${sgn(meta.card_draw)}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
@@ -70,7 +83,6 @@
       class:attacking={!!lunge || sliding}
       class:attacked={card.has_attacked}
       class:dim
-      class:spell={!!item}
       style={`${slideStyle}${spellStyle}`}
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
@@ -86,6 +98,8 @@
           <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
           <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
         </div>
+      {:else if spellEffect}
+        <div class="spell-bar">{spellEffect}</div>
       {/if}
       <div class="abil">
         {#each abil as a}
@@ -129,13 +143,6 @@
     background-image:
       repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 6px),
       repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 6px); }
-  /* spell (item) cards: no stats overlay; the crosshatch + a faint diagonal wash carry a
-     tint of the item's colour (red/green/blue) so the type reads from the card background. */
-  .card.spell {
-    background-image:
-      repeating-linear-gradient(45deg, var(--sp-line) 0 1px, transparent 1px 6px),
-      repeating-linear-gradient(-45deg, var(--sp-line2) 0 1px, transparent 1px 6px),
-      linear-gradient(135deg, var(--sp-wash), transparent 70%); }
   .card img { width: 100%; height: 100%; object-fit: cover; }
   .back { display: grid; place-items: center; font-size: 40px; color: #557; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
@@ -167,6 +174,15 @@
   /* live stat deviations from the printed card: green = buffed, red = reduced/damaged */
   .stats .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
   .stats .reduced { color: #ff6b6b; text-shadow: 0 0 6px rgba(255, 107, 107, 0.7); }
+  /* spell (item) effect panel: a dimmed bottom bar tinted with the item colour,
+     showing compact effect text instead of atk/def stats. */
+  .spell-bar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1;
+    padding: 3px 5px; font-size: 10px; font-weight: 700; line-height: 1.2;
+    text-align: center; color: #fff; text-shadow: 0 1px 2px #000;
+    background-color: rgba(8, 8, 12, 0.82);
+    background-image: linear-gradient(var(--sp-fill), var(--sp-fill));
+    border-top: 1px solid var(--sp-edge);
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;
