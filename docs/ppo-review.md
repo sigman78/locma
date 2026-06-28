@@ -332,7 +332,7 @@ hyperparameter tuning:
 | **Longer horizon** (`gamma` 0.99→0.997) | open — Low | Untested; cheap, but unlikely to matter given the above. |
 | Observation richness / entropy / normalization / **net size** | ✗ ruled out | §3.4 multi-seed A/B + the net-size×seat 2×2 (`baseline.md`) — all neutral; bigger net *hurts*. |
 | **Richer board encoding** (tokens + self-attention + tactical scalars) | **tested — parity (secondary)** | §8.4A update: a *correctly slot-addressable* token+attention encoding reaches/marginally beats flat under the curriculum (avg-hard3 0.588 vs 0.573, 2 seeds) but within seed noise, at ~4× cost. A real but secondary lever; the relational matrix and its use as a substrate for B remain untested. |
-| **Search in the loop** (AlphaZero-lite) | **Phase 1 validated** | §8.4B update: fair net-guided determinized PUCT (`netdmcts`, frozen net oracle) hits avg-hard3 **0.82** — beats dmcts (0.70), the raw net (0.64), and even the cheating azlite/mcts (0.74), *fairly*. The real lever, confirmed. Phase 2 = self-play training of the search. |
+| **Search in the loop** (AlphaZero-lite) | **Phase 1 validated; Phase 2 null at budget** | §8.4B: fair net-guided determinized PUCT (`netdmcts`, frozen net oracle) hits avg-hard3 **0.82** — beats dmcts (0.70), the raw net (0.64), and even the cheating azlite/mcts (0.74), *fairly*. The real lever, confirmed. Phase 2 (self-play training *of the search*) built + run: one round nudges to 0.830 / h2h 0.54 vs the frozen oracle — **within noise on both axes, no compounding** at this budget; the frozen oracle is already near the ceiling. |
 
 **Recommended order (remaining):** every training-method lever is now spent — reward,
 obs, opponent diversity, and **self-play** (§8.3) all flat; only the **deck** ever
@@ -577,3 +577,25 @@ planning the reactive net structurally lacks, *fairly*.** Phase 2 (self-play *of
 search*: AZ targets = visit distribution + game outcome, iterated) is the open upside —
 the oracle here was only RL-trained, not search-trained. See `docs/baseline.md`
 ("netdmcts"), `docs/netdmcts-phase1-design.md`, and the 2026-06-27 worklog entry.
+
+**Update (2026-06-27): Phase 2 (self-play training of the search) built and run — null at
+this budget.** The full AlphaZero loop is implemented (`selfplay.record_selfplay` →
+`az_train.az_train` → `azloop.az_selfplay`): fair net-guided-dmcts self-play generates
+`(token-obs, visit-policy, outcome)`; the net's two heads are trained (soft-CE to the visit
+distribution + MSE to the outcome); iterate with a composite gate (adopt iff the new net
+beats its parent head-to-head **and** doesn't regress avg-hard3; keep-best, early-stop).
+Generation adds root Dirichlet noise + temperature move-sampling (`puct_search(root_noise=)`,
+default-off elsewhere). A 3-iteration run (100 self-play + 40 baseline games/iter, gen
+K=6,I=40, eval K=8,I=40) adopted only iteration 0 and early-stopped after iters 1–2 were
+rejected. **Final confirm of the best net (`az-net-0`, one training round): avg-hard3 0.830
+(50/opp) vs the frozen oracle's 0.817, and head-to-head 0.54 vs that oracle over 100 games —
+both within noise** (avg-hard3 95% CI ≈ ±0.06; h2h CI ≈ ±0.10, includes 0.50). The gate's
+0.688 head-to-head was 16-game noise that the 100-game confirm regressed to a coin flip, and
+the gains did not compound (iter-2 avg-hard3 fell to 0.736). **Conclusion: one round of fair
+AZ self-play training neither clearly helps nor hurts at this budget — the frozen-oracle
+`netdmcts` (0.817) is already near this kit's ceiling.** The infrastructure is validated (the
+composite gate behaved correctly, fairness held end-to-end, early-stop fired) and a ~2×
+search speedup shipped (`NetOracle` single combined forward, output-identical). A larger
+run could tighten the CIs but the signal is null; the Phase-1 lever (search-in-the-loop)
+remains the durable win. See `docs/netdmcts-phase2-design.md`, `docs/baseline.md` ("netdmcts
+Phase 2"), and the 2026-06-27 Phase-2 worklog entry.
