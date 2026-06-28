@@ -130,7 +130,9 @@
   /* sleeping (summoning-sick) indicator — sits above the dimmed card */
   .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     font-size: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 3px #000); }
-  .card { position: relative; width: 100%; height: 100%;
+  /* isolation: isolate contains the card's overlays (spell-bar z:1, cost z:2, etc.) in their
+     own stacking context, so in an overlapped strip they never paint over the next card. */
+  .card { position: relative; isolation: isolate; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
     background-color: #1c1c22;
     user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
