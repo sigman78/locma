@@ -4,6 +4,7 @@
   import type { ActionDict, CardState, EventDict, PlayerState } from '../../lib/replay'
   import {
     attackTargets,
+    breakthroughHit,
     canSummon,
     cardDamage,
     itemTargets,
@@ -17,6 +18,7 @@
   import { nearestTarget, type AimTarget } from '../../lib/aim'
   import { dock } from '../../lib/dock'
   import CardView from '../ReplayViewer/CardView.svelte'
+  import MinionView from './MinionView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
   import PointerLine from './PointerLine.svelte'
 
@@ -48,13 +50,14 @@
   function send(a: ActionDict) {
     drag = null
     snapId = null
+    overField = false
     dispatch('act', a)
   }
 
   // --- anchor registry: board slots + both faces register their DOM node.
   // 'face' = the opponent (top) face (also the drag target); 'face-me' = the
   // human's own (bottom) face, needed so an AI→human-face attack can slide down. ---
-  type AnchorKey = number | 'face' | 'face-me'
+  type AnchorKey = number | 'face' | 'face-me' | 'myfield'
   const anchors = new Map<AnchorKey, HTMLElement>()
   function anchor(node: HTMLElement, id: AnchorKey) {
     anchors.set(id, node)
@@ -84,6 +87,13 @@
   let slideMap = new Map<number, { dx: number; dy: number }>()
   let flashSet = new Set<number | 'face'>()
   let lastToken = -1
+  type BtFly = {
+    amount: number
+    src: { cx: number; cy: number }
+    dst: { cx: number; cy: number }
+    key: number
+  }
+  let btFly: BtFly | null = null
 
   function syncDisplay() {
     const ret = (seat: number) =>
@@ -131,6 +141,22 @@
       slideMap = new Map()
       flashSet = new Set()
     }, HOLD_MS)
+    // Breakthrough cue: a minion attack that also overflowed onto the defender face
+    // → animate a red number flying from the struck/dead blocker to the face.
+    // Coords are captured NOW on the still-current DOM (the target may die this step).
+    const bht = breakthroughHit(currentAction, splashes, actSeat)
+    if (bht && currentAction?.t === 'attack') {
+      const src = rectOfKey(currentAction.target)
+      const faceKey: 'face' | 'face-me' = actSeat === you ? 'face' : 'face-me'
+      const dst = rectOfKey(faceKey)
+      if (src && dst) {
+        const flyKey = fxToken
+        // small delay (~80ms) so the projectile fires near the slide apex
+        setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
+        // clear AFTER the fade fully completes (80ms delay + 390ms animation-delay + 140ms fade ≈ 610ms)
+        setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 640)
+      }
+    }
   }
 
   // run the director once per step (fxToken bump)
@@ -145,13 +171,23 @@
   }
 
   // --- drag-to-aim state (unchanged from Slice B) ---
-  type Drag = { kind: 'attack' | 'use'; src: number; from: { x: number; y: number } }
+  type Drag = { kind: 'attack' | 'use' | 'summon'; src: number; from: { x: number; y: number } }
   let drag: Drag | null = null
   let cursor = { x: 0, y: 0 }
   let snapId: number | 'face' | null = null
+  let overField = false // cursor is over the own battlefield during a summon drag
 
   function legalIdsFor(d: Drag): number[] {
-    return d.kind === 'attack' ? attackTargets(legal, d.src) : itemTargets(legal, d.src)
+    if (d.kind === 'attack') return attackTargets(legal, d.src)
+    if (d.kind === 'use') return itemTargets(legal, d.src)
+    return [] // summon drops on the field, not a specific slot target
+  }
+
+  function pointInField(p: { x: number; y: number }): boolean {
+    const el = anchors.get('myfield')
+    if (!el) return false
+    const r = el.getBoundingClientRect()
+    return p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom
   }
   $: legalKeys = drag
     ? new Set<number | 'face'>(legalIdsFor(drag).map((id) => (id === -1 ? 'face' : id)))
@@ -180,6 +216,15 @@
   }
   function downHand(e: MouseEvent, c: CardState) {
     if (!interactive) return
+    // a summonable creature: drag onto your own battlefield (or click) to summon
+    if (canSummon(legal, c.iid)) {
+      e.preventDefault()
+      drag = { kind: 'summon', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
+      cursor = { x: e.clientX, y: e.clientY }
+      snapId = null
+      overField = false
+      return
+    }
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 0) return
     if (ts.length === 1 && ts[0] === -1) return
@@ -200,6 +245,10 @@
   function onMove(e: MouseEvent) {
     if (!drag) return
     cursor = { x: e.clientX, y: e.clientY }
+    if (drag.kind === 'summon') {
+      overField = pointInField(cursor)
+      return
+    }
     const best = nearestTarget(cursor.x, cursor.y, aimTargets(drag))
     snapId = best ? best.id : null
   }
@@ -209,6 +258,12 @@
     const sid = snapId
     drag = null
     snapId = null
+    if (d.kind === 'summon') {
+      const drop = overField
+      overField = false
+      if (drop) send({ t: 'summon', id: d.src }) // released over the own battlefield
+      return
+    }
     if (sid === null) return
     const target = sid === 'face' ? -1 : sid
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
@@ -218,6 +273,7 @@
     if (e.key === 'Escape') {
       drag = null
       snapId = null
+      overField = false
     }
   }
   $: lineTo = drag
@@ -274,7 +330,7 @@
     {#each displayOp as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         use:anchor={c.iid} in:spring out:deathFx>
-        <CardView card={c} facing="down"
+        <MinionView card={c} facing="down"
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
           flash={flashSet.has(c.iid)} hit={tookDamage(opSeat, c.iid)}
           dying={dyingSet.has(c.iid)} dmgDelay
@@ -285,12 +341,15 @@
 
   <hr />
 
-  <div class="field bottom">
+  <div class="field bottom"
+    class:summon-target={drag?.kind === 'summon'}
+    class:summon-over={drag?.kind === 'summon' && overField}
+    use:anchor={'myfield'}>
     {#each displayMe as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
         on:mousedown={(e) => startAttack(e, c)}>
-        <CardView card={c} facing="up" dim={c.can_attack === false}
+        <MinionView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
           flash={flashSet.has(c.iid)} hit={tookDamage(meSeat, c.iid)}
           dying={dyingSet.has(c.iid)} dmgDelay
@@ -316,11 +375,20 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, drag an item to its target, click to summon, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
     </span>
     <button class="endturn" on:click={() => send({ t: 'pass' })} disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
+
+{#if btFly}
+  <!-- Breakthrough red blob flies from struck blocker → defender face (position:fixed, viewport coords).
+       No number on the blob; the Player's own floating face-HP "-N" number shows normally. -->
+  <div
+    class="bt-fly"
+    style="left:{btFly.src.cx}px; top:{btFly.src.cy}px; --dx:{btFly.dst.cx - btFly.src.cx}px; --dy:{btFly.dst.cy - btFly.src.cy}px"
+  ></div>
+{/if}
 
 <style>
   .battle { --card-w: 100px; --card-h: 140px; --gap: 8px; --hand-cols: 8;
@@ -332,6 +400,11 @@
     min-height: calc(var(--card-h) + 12px); padding: 6px;
     background: rgba(255, 255, 255, 0.02); border-radius: 6px;
     width: calc(6 * var(--card-w) + 5 * var(--gap) + 16px); }
+  /* drag-to-summon: highlight the own battlefield as the drop zone */
+  .field.summon-target { outline: 2px dashed #5aa9ff; outline-offset: -3px;
+    background: rgba(90, 169, 255, 0.08); }
+  .field.summon-over { outline: 2px solid #5aa9ff; outline-offset: -3px;
+    background: rgba(90, 169, 255, 0.2); box-shadow: inset 0 0 18px rgba(90, 169, 255, 0.45); }
   .hand { display: flex; gap: var(--gap); justify-content: center; align-items: center; padding: 6px;
     background: #20212b; border: 1px solid #313445; border-radius: 8px;
     width: calc(var(--hand-cols) * var(--card-w) + (var(--hand-cols) - 1) * var(--gap) + 16px);
@@ -339,13 +412,15 @@
   /* perspective so the dealIn rotateY flip reads in 3D */
   .hand.mine { perspective: 900px; }
   .hand.backs { opacity: 0.85; }
-  .slot { background: none; border: 2px solid transparent; border-radius: 8px; padding: 2px;
+  /* highlight via outline (not border) + no padding, so a slot's layout width == --card-w;
+     otherwise the 2px border + 2px padding per slot overflow the hand panel at 8 cards. */
+  .slot { background: none; outline: 2px solid transparent; outline-offset: -2px; border-radius: 8px;
     cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease; }
-  .slot:hover { border-color: #4a4f6a; }
-  .slot.playable { border-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  .slot.armed { border-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
-  .slot.legaltarget { border-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
-  .slot.snapped { border-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
+  .slot:hover { outline-color: #4a4f6a; }
+  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
+  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
+  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
+  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
   .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
   .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
@@ -364,4 +439,47 @@
     box-shadow: 0 0 16px rgba(255, 93, 93, 0.55); }
   /* cast flash on the face — reuse the existing brightness/scale pulse */
   .faceplate.flashing { animation: locma-cast 250ms ease-out; }
+
+  /* ---- Breakthrough flying-blob cue ---- */
+  /* Pure red blob flies from struck blocker to defender face with back-overshoot spring.
+     No number on the blob — the Player's own face-HP "-N" number shows normally. */
+  .bt-fly {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff4444;
+    box-shadow: 0 0 10px rgba(255, 80, 80, 0.95), 0 0 24px rgba(255, 0, 0, 0.6);
+    pointer-events: none;
+    z-index: 999;
+    /* springy move + fade-out after arrival */
+    animation:
+      bt-fly-move 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+      bt-fly-out  140ms ease-in 390ms both;
+    will-change: transform;
+  }
+  /* trailing glow blob — fades as the number moves, giving a brief afterimage streak */
+  .bt-fly::before {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 44px; height: 44px;
+    margin: -22px 0 0 -22px;
+    background: rgba(255, 60, 60, 0.5);
+    border-radius: 50%;
+    filter: blur(8px);
+    animation: bt-trail 300ms ease-out both;
+  }
+  @keyframes bt-fly-move {
+    from { transform: translate(-50%, -50%); }
+    to   { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))); }
+  }
+  @keyframes bt-fly-out {
+    to { opacity: 0; }
+  }
+  @keyframes bt-trail {
+    from { opacity: 0.85; transform: scale(1.8); }
+    to   { opacity: 0;    transform: scale(0.3); }
+  }
 </style>

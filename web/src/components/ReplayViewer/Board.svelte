@@ -5,7 +5,7 @@
   import type { Fx } from '../../lib/fx'
   import { deathFx } from '../../lib/motion'
   import { mergeDisplayBoard } from '../../lib/stepfx'
-  import CardView from './CardView.svelte'
+  import MinionView from '../Play/MinionView.svelte'
   import Hand from './Hand.svelte'
   import Player from './Player.svelte'
 
@@ -67,11 +67,15 @@
   // brief red overlay on any minion that lost HP this step (combat: attacker + defender)
   const hitFlash = (seat: number, iid: number): boolean =>
     !!fx?.splashes.some((x) => x.seat === seat && x.target === iid && x.amount > 0)
-  function lungeDir(seat: number, iid: number): 'up' | 'down' | null {
+  // Fixed attack-nudge for the lunging minion, reusing MinionView's slide animation
+  // (locma-slide peaks at 60% of the vector ≈ 14px, matching the old lunge). Seat 0
+  // sits at the bottom and nudges up (negative); seat 1 at the top nudges down.
+  const SLIDE = 24
+  function slideFor(seat: number, iid: number): number {
     if (fx?.lunge && fx.lunge.seat === seat && fx.lunge.iid === iid) {
-      return seat === 0 ? 'up' : 'down'
+      return seat === 0 ? -SLIDE : SLIDE
     }
-    return null
+    return 0
   }
 </script>
 
@@ -82,7 +86,7 @@
     <div class="field top" class:active={snapshot.current === 1}>
       {#each display1 as c (c.iid)}
         <div out:deathFx>
-          <CardView card={c} lunge={lungeDir(1, c.iid)} damage={dmg(1, c.iid)}
+          <MinionView card={c} slideY={slideFor(1, c.iid)} damage={dmg(1, c.iid)}
             hit={hitFlash(1, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="down" {fxToken} />
         </div>
@@ -92,7 +96,7 @@
     <div class="field bottom" class:active={snapshot.current === 0}>
       {#each display0 as c (c.iid)}
         <div out:deathFx>
-          <CardView card={c} lunge={lungeDir(0, c.iid)} damage={dmg(0, c.iid)}
+          <MinionView card={c} slideY={slideFor(0, c.iid)} damage={dmg(0, c.iid)}
             hit={hitFlash(0, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="up" {fxToken} />
         </div>

@@ -3,6 +3,7 @@ import type { ActionDict, EventDict } from './replay'
 import { computeFx } from './fx'
 import {
   attackTargets,
+  breakthroughHit,
   canSummon,
   cardDamage,
   faceDamage,
@@ -59,5 +60,39 @@ describe('lungeDirFor', () => {
     const mine = computeFx([], attack, 0)
     expect(lungeDirFor(mine, 0, 0, 99)).toBe(null)
     expect(lungeDirFor(null, 0, 0, 7)).toBe(null)
+  })
+})
+
+describe('breakthroughHit', () => {
+  const actSeat = 0 // seat 0 is acting; defender is seat 1
+
+  it('returns {amount} when a minion attack also splashes the defender face', () => {
+    const action: ActionDict = { t: 'attack', a: 3, target: 5 }
+    const splashes = splashesFor([
+      { t: 'damage', seat: 1 - actSeat, target: 'face', amount: 3, fatal: false },
+    ])
+    expect(breakthroughHit(action, splashes, actSeat)).toEqual({ amount: 3 })
+  })
+
+  it('returns null for a direct face attack (target === -1) even with a face splash', () => {
+    const action: ActionDict = { t: 'attack', a: 3, target: -1 }
+    const splashes = splashesFor([
+      { t: 'damage', seat: 1 - actSeat, target: 'face', amount: 5, fatal: false },
+    ])
+    expect(breakthroughHit(action, splashes, actSeat)).toBeNull()
+  })
+
+  it('returns null when a minion attack has no face splash', () => {
+    const action: ActionDict = { t: 'attack', a: 3, target: 5 }
+    const splashes = splashesFor([
+      { t: 'damage', seat: 1 - actSeat, target: 5, amount: 4, fatal: false },
+    ])
+    expect(breakthroughHit(action, splashes, actSeat)).toBeNull()
+  })
+
+  it('returns null for non-attack actions and null action', () => {
+    const splashes = splashesFor([])
+    expect(breakthroughHit(null, splashes, actSeat)).toBeNull()
+    expect(breakthroughHit({ t: 'use', item: 1, target: 2 }, splashes, actSeat)).toBeNull()
   })
 })

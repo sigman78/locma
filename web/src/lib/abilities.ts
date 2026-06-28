@@ -29,3 +29,15 @@ export function abilityList(mask: string | null | undefined): AbilityInfo[] {
 export function hasAura(mask: string | null | undefined, letter: string): boolean {
   return !!mask && mask.includes(letter)
 }
+
+export interface AuraSplit { taunt: boolean; ward: boolean; lethal: boolean; pills: AbilityInfo[] }
+
+/** Split a mask into the three aura booleans (G/L/W) and the remaining B/C/D pills. */
+export function auraSplit(mask: string | null | undefined): AuraSplit {
+  return {
+    taunt: hasAura(mask, 'G'),
+    ward: hasAura(mask, 'W'),
+    lethal: hasAura(mask, 'L'),
+    pills: abilityList(mask).filter((a) => !(AURA_KEYWORDS as readonly string[]).includes(a.letter)),
+  }
+}

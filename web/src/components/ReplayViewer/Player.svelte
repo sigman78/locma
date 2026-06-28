@@ -63,9 +63,11 @@
 <style>
   .player { position: relative; display: flex; gap: 12px; align-items: center;
     padding: 6px 10px; text-align: left; }
-  /* combat damage to the face: brief red wash over the panel (reuses locma-hit) */
+  /* combat damage to the face: brief red wash over the panel (reuses locma-hit).
+     animation-fill-mode: forwards keeps the element at opacity:0 after completing so
+     it does not revert to opacity:1 (fully red) while faceHit remains true (Fix 4). */
   .face-hit { position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
-    z-index: 3; background: rgba(255, 40, 40, 0.6); animation: locma-hit 340ms ease-out; }
+    z-index: 3; background: rgba(255, 40, 40, 0.6); animation: locma-hit 340ms ease-out forwards; }
   .info { text-align: left; }
   .avatar { position: relative; width: 56px; height: 56px; border-radius: 50%;
     display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 26px;

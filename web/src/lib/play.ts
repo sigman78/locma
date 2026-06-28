@@ -106,6 +106,17 @@ export const faceDamage = (sp: Splash[], seat: number): number | null => {
   return s ? s.amount : null
 }
 
+// breakthrough overflow: a minion attack (target !== -1) that also splashed the defender's face
+export const breakthroughHit = (
+  action: ActionDict | null,
+  splashes: Splash[],
+  actSeat: number,
+): { amount: number } | null => {
+  if (!action || action.t !== 'attack' || action.target === -1) return null
+  const amt = faceDamage(splashes, 1 - actSeat) // overflow lands on the DEFENDER's face
+  return amt != null ? { amount: amt } : null
+}
+
 // which direction a lunging card moves in the perspective board:
 // the human's cards sit at the bottom and lunge up; the opponent's lunge down.
 export function lungeDirFor(

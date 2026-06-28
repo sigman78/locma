@@ -3,6 +3,7 @@
   import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
   import { abilityList, hasAura } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
+  import Tooltip from './Tooltip.svelte'
 
   export let card: CardState
   export let faceUp = true
@@ -37,6 +38,12 @@
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
+  // spell (item) cards get a dimmed bottom panel tinted with the item colour (8-digit hex alpha)
+  $: spellStyle = item ? `--sp-fill:${item.color}3a; --sp-edge:${item.color}cc;` : ''
+  // cleaned special/effect text is computed server-side (CardMeta.card_text)
+  $: spellEffect = meta?.card_text ?? ''
+  // creatures with a generic on-summon effect get a 📜 pill on the face (detail in tooltip)
+  $: special = !item ? (meta?.card_text ?? '') : ''
   // tooltip sits above the card by default, below for opponent (top-row) cards,
   // so it never covers a horizontal neighbour; callers can override via tipDir.
   $: tip = tipDir ?? (facing === 'down' ? 'below' : 'above')
@@ -49,6 +56,8 @@
   } as const
   $: item = meta ? (ITEM as Record<string, { color: string; emoji: string; label: string }>)[meta.type] : undefined
   $: typeLabel = meta ? (item ? `${item.emoji} ${item.label}` : 'Creature') : ''
+  $: baseAtk = meta ? meta.attack : card.atk
+  $: baseDef = meta ? meta.defense : card.def
 </script>
 
 {#if !faceUp}
@@ -65,7 +74,7 @@
       class:attacking={!!lunge || sliding}
       class:attacked={card.has_attacked}
       class:dim
-      style={slideStyle}
+      style={`${slideStyle}${spellStyle}`}
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
@@ -75,20 +84,26 @@
       {/if}
       {#if showAuras && ward}<div class="ward-tint"></div>{/if}
       {#if meta}<div class="cost" title="mana cost">◆ {meta.cost}</div>{/if}
-      <div class="stats">
-        <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
-        {#if item}<span class="item-dot" style={`background:${item.color}`} title={item.label}></span>{/if}
-        <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
-      </div>
-      <div class="abil">
-        {#each abil as a}
-          <span
-            class="chip"
-            class:granted={!baseLetters.has(a.letter)}
-            style={`border-color:${a.color}`}
-            title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
-        {/each}
-      </div>
+      {#if !item}
+        <div class="stats">
+          <span class="atk" class:buffed={atkDelta > 0} class:reduced={atkDelta < 0}>{card.atk}</span>
+          <span class="def" class:buffed={defDelta > 0} class:reduced={defDelta < 0}>{card.def}</span>
+        </div>
+      {:else if spellEffect}
+        <div class="spell-bar">{spellEffect}</div>
+      {/if}
+      {#if !item && (abil.length || special)}
+        <div class="abil">
+          {#if special}<span class="chip special" title="special effect — hover for details">📜</span>{/if}
+          {#each abil as a}
+            <span
+              class="chip"
+              class:granted={!baseLetters.has(a.letter)}
+              style={`border-color:${a.color}`}
+              title={baseLetters.has(a.letter) ? a.name : `${a.name} (granted)`}>{a.emoji}</span>
+          {/each}
+        </div>
+      {/if}
       {#key fxToken}
         {#if flash}<div class="flash-blob"></div>{/if}
         {#if hit}<div class="hit-flash" class:delayed={dmgDelay}></div>{/if}
@@ -99,26 +114,7 @@
 
     {#if dim && !card.has_attacked}<div class="sleep" title="summoning sick — can't attack yet">💤</div>{/if}
 
-    <div class="tooltip" class:tip-above={tip === 'above'} class:tip-below={tip === 'below'}>
-      <div class="tt-head">
-        <span class="tt-name">{meta?.name ?? name}</span>
-        {#if meta}<span class="tt-cost">◆ {meta.cost}</span>{/if}
-      </div>
-      {#if meta}<div class="tt-type">{typeLabel}</div>{/if}
-      <!-- tooltip mirrors the printed card (base stats), not the in-play buffed state -->
-      <div class="tt-stats">
-        <span class="atk">⚔ {meta ? meta.attack : card.atk}</span>
-        <span class="def">🛡 {meta ? meta.defense : card.def}</span>
-      </div>
-      {#if baseAbil.length}
-        <div class="tt-keys">
-          {#each baseAbil as a}
-            <div class="tt-key"><span class="chip" style={`border-color:${a.color}`}>{a.emoji}</span> {a.name}</div>
-          {/each}
-        </div>
-      {/if}
-      {#if meta?.description}<div class="tt-desc">{meta.description}</div>{/if}
-    </div>
+    <Tooltip {name} {meta} {baseAbil} {typeLabel} {tip} {baseAtk} {baseDef} />
   </div>
 {/if}
 
@@ -134,7 +130,9 @@
   /* sleeping (summoning-sick) indicator — sits above the dimmed card */
   .sleep { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     font-size: 40px; z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 3px #000); }
-  .card { position: relative; width: 100%; height: 100%;
+  /* isolation: isolate contains the card's overlays (spell-bar z:1, cost z:2, etc.) in their
+     own stacking context, so in an overlapped strip they never paint over the next card. */
+  .card { position: relative; isolation: isolate; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
     background-color: #1c1c22;
     user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
@@ -172,8 +170,15 @@
   /* live stat deviations from the printed card: green = buffed, red = reduced/damaged */
   .stats .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
   .stats .reduced { color: #ff6b6b; text-shadow: 0 0 6px rgba(255, 107, 107, 0.7); }
-  .item-dot { width: 13px; height: 13px; border-radius: 50%; align-self: center;
-    border: 1px solid rgba(0, 0, 0, 0.6); box-shadow: 0 0 5px rgba(0, 0, 0, 0.7); }
+  /* spell (item) effect panel: a dimmed bottom bar tinted with the item colour,
+     showing compact effect text instead of atk/def stats. */
+  .spell-bar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1;
+    padding: 3px 5px; font-size: 12px; font-weight: 400; line-height: 1.25;
+    text-align: center; color: #fff; text-shadow: 0 1px 2px #000;
+    background-color: rgba(8, 8, 12, 0.82);
+    background-image: linear-gradient(var(--sp-fill), var(--sp-fill));
+    border-top: 1px solid var(--sp-edge);
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;
@@ -182,25 +187,10 @@
   /* abilities granted in-play (not on the printed card) read as a glowing buff */
   .chip.granted { border-style: dashed; background: rgba(79, 217, 122, 0.18);
     box-shadow: 0 0 7px rgba(79, 217, 122, 0.8); }
+  /* special on-summon effect indicator — amber attention pill */
+  .chip.special { border-color: #ffd23d; background: rgba(255, 210, 61, 0.2);
+    box-shadow: 0 0 7px rgba(255, 210, 61, 0.6); }
 
-  /* hover detail tooltip — centred above (or below) the card, never over a horizontal neighbour */
-  .tooltip { position: absolute; left: 50%; z-index: 100;
-    width: 220px; padding: 8px 10px; border-radius: 8px;
-    background: #0d0f16; border: 1px solid #3a3f55;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.6); color: #ddd;
-    font-size: 12px; line-height: 1.4; text-align: left;
-    opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(4px);
-    transition: opacity 0.12s ease, transform 0.12s ease; pointer-events: none; }
-  .tooltip.tip-above { bottom: calc(100% + 8px); }
-  .tooltip.tip-below { top: calc(100% + 8px); }
-  .cardwrap:hover .tooltip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
-  .tt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .tt-name { font-weight: 700; font-size: 13px; color: #fff; }
-  .tt-cost { color: #6bb8ff; font-weight: 700; white-space: nowrap; }
-  .tt-type { color: #99a; text-transform: capitalize; font-size: 11px; margin-top: 1px; }
-  .tt-stats { display: flex; gap: 14px; margin: 5px 0; font-weight: 700; }
-  .tt-keys { display: flex; flex-direction: column; gap: 3px; margin: 5px 0;
-    border-top: 1px solid #2a2f42; padding-top: 5px; }
-  .tt-key { display: flex; align-items: center; gap: 6px; }
-  .tt-desc { margin-top: 5px; color: #bcbcc8; border-top: 1px solid #2a2f42; padding-top: 5px; }
+  /* reveal the shared Tooltip on hover */
+  .cardwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
 </style>

@@ -157,6 +157,11 @@
     if (!staged) return
     const s = staged
     staged = null
+    // Pre-update snap to battle phase so the DraftScreen unmounts immediately and the
+    // BattleScreen mounts before AI steps play — prevents draft cards re-flashing during
+    // the AI step playback sequence (Fix 5). applyResponse sets snap again at the end
+    // to the same values, which is harmless.
+    snap = { status: s.response.status, pending: s.response.pending, result: s.response.result }
     await applyResponse(s.response, true)
   }
 

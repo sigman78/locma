@@ -5,7 +5,7 @@ import type { CreatedGame, GameSnapshot, SubmitResponse } from './play'
 export interface CardMeta {
   id: number; name: string; type: string; cost: number; attack: number
   defense: number; abilities: string; player_hp: number; enemy_hp: number
-  card_draw: number; description: string
+  card_draw: number; description: string; card_text: string
 }
 
 async function j<T>(r: Response): Promise<T> {

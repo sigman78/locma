@@ -19,3 +19,6 @@ export function cardName(id: number): string {
 }
 
 export const artUrl = apiArtUrl
+
+// NOTE: a card's cleaned special/effect text is computed server-side in
+// locma/data/cards_db.py and served as `CardMeta.card_text` (raw `description` kept too).
