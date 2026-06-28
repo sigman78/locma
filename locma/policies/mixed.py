@@ -18,10 +18,18 @@ import random
 
 
 class MixedOpponentPolicy:
-    def __init__(self, pool, name: str = "mixed", seed: int = 0):
+    def __init__(self, pool, name: str = "mixed", seed: int = 0, weights=None):
         self.pool = list(pool)
         if not self.pool:
             raise ValueError("MixedOpponentPolicy needs a non-empty pool")
+        self.weights = list(weights) if weights is not None else None
+        if self.weights is not None:
+            if len(self.weights) != len(self.pool):
+                raise ValueError("MixedOpponentPolicy weights must match the pool length")
+            if any(w < 0 for w in self.weights) or sum(self.weights) <= 0:
+                raise ValueError(
+                    "MixedOpponentPolicy weights must be non-negative with positive sum"
+                )
         self.name = name
         self._seed = seed
         self._r = random.Random(seed)
@@ -29,7 +37,7 @@ class MixedOpponentPolicy:
         self._active = self.pool[0]
 
     def _resample(self) -> None:
-        self._active = self._r.choice(self.pool)
+        self._active = self._r.choices(self.pool, weights=self.weights, k=1)[0]
 
     def reset(self, seed=None) -> None:
         s = self._seed if seed is None else seed

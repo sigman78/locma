@@ -1,6 +1,6 @@
 import pytest
 
-from locma.envs.training import ZOO_OPPONENTS, train_zoo
+from locma.envs.training import ZOO_OPPONENTS, train_schedule, train_zoo
 from locma.policies.registry import make_policy
 
 
@@ -15,3 +15,8 @@ def test_train_zoo_rejects_empty_opponents():
     # testable without the [ml] extra.
     with pytest.raises(ValueError, match="non-empty"):
         train_zoo(opponents=[], out="unused.zip")
+
+
+def test_train_schedule_rejects_empty_opponents():
+    with pytest.raises(ValueError, match="non-empty"):
+        train_schedule(opponents=[], out="unused.zip")

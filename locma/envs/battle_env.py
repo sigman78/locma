@@ -128,10 +128,9 @@ class BattleEnv(gym.Env):
         h = (me.health - op.health) / 30.0
         if self.reward_mode == "health":
             return h
-        b = (
-            sum(c.attack + c.defense for c in me.board)
-            - sum(c.attack + c.defense for c in op.board)
-        ) / 20.0
+        my_board = sum(c.attack + c.defense for c in me.board)
+        op_board = sum(c.attack + c.defense for c in op.board)
+        b = (my_board - op_board) / 20.0
         return h + 0.5 * b
 
     # ------------------------------------------------------------------

@@ -64,6 +64,39 @@ def test_dmcts_deterministic_param():
     assert p.battle.deterministic is True
 
 
+def test_puct_ppo_spec_pairs_balanced_draft():
+    from locma.policies.azlite import PUCTPPOBattlePolicy  # noqa: PLC0415
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+
+    assert "puct-ppo" not in policy_names()
+    p = make_policy("puct-ppo:25,runs/ppo-shuffled-pool.zip,1.25,7,2,tactical")
+    assert isinstance(p.battle, PUCTPPOBattlePolicy)
+    assert p.battle.iterations == 25
+    assert p.battle.model_path == "runs/ppo-shuffled-pool.zip"
+    assert p.battle.c_puct == 1.25
+    assert p.battle._seed == 7
+    assert p.battle.rollout_turns == 2
+    assert p.battle.obs_mode == "tactical"
+    assert isinstance(p.draft, BalancedDraftPolicy)
+
+
+def test_dpuct_ppo_spec_pairs_balanced_draft():
+    from locma.policies.azlite import DeterminizedPUCTPPOBattlePolicy  # noqa: PLC0415
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+
+    assert "dpuct-ppo" not in policy_names()
+    p = make_policy("dpuct-ppo:3,8,runs/ppo-shuffled-pool.zip,1.25,7,2,tactical")
+    assert isinstance(p.battle, DeterminizedPUCTPPOBattlePolicy)
+    assert p.battle.K == 3
+    assert p.battle.I == 8
+    assert p.battle.model_path == "runs/ppo-shuffled-pool.zip"
+    assert p.battle.c_puct == 1.25
+    assert p.battle._seed == 7
+    assert p.battle.rollout_turns == 2
+    assert p.battle.obs_mode == "tactical"
+    assert isinstance(p.draft, BalancedDraftPolicy)
+
+
 def test_ppo_default_and_path():
     assert make_policy("ppo").battle.model_path == "model.zip"
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"
@@ -90,3 +123,13 @@ def test_ppo_tactical_uses_tactical_obs_and_balanced_draft():
 def test_unknown_spec_raises():
     with pytest.raises(ValueError):
         make_policy("nope")
+
+
+def test_rich_mixed_specs_are_hidden_training_opponents():
+    from locma.policies.mixed import MixedOpponentPolicy  # noqa: PLC0415
+
+    rich = make_policy("mixed-rich:7")
+    assert isinstance(rich, MixedOpponentPolicy)
+    assert rich._seed == 7
+    assert len(rich.pool) == 6
+    assert "mixed-rich" not in policy_names()

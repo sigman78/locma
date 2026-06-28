@@ -77,7 +77,9 @@ def _tactical_features(view, legal=None) -> list[float]:
     summons = [a for a in legal if isinstance(a, Summon)]
     uses = [a for a in legal if isinstance(a, Use)]
 
-    reachable_face = sum(my_by_id[a.attacker_id].attack for a in face_attacks if a.attacker_id in my_by_id)
+    reachable_face = sum(
+        my_by_id[a.attacker_id].attack for a in face_attacks if a.attacker_id in my_by_id
+    )
     face_blue_damage = 0
     green_uses = red_uses = blue_face_uses = blue_unit_uses = 0
     for a in uses:
@@ -113,7 +115,9 @@ def _tactical_features(view, legal=None) -> list[float]:
         best_trade_delta = max(best_trade_delta, delta)
         favorable_trades += int(delta > 0)
 
-    summon_cards = [hand_by_id[a.card_instance_id] for a in summons if a.card_instance_id in hand_by_id]
+    summon_cards = [
+        hand_by_id[a.card_instance_id] for a in summons if a.card_instance_id in hand_by_id
+    ]
     best_summon_attack = max((c.attack for c in summon_cards), default=0)
     best_summon_defense = max((c.defense for c in summon_cards), default=0)
     cheapest_summon = min((c.cost for c in summon_cards), default=0)

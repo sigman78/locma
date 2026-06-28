@@ -59,7 +59,10 @@ class MaskablePPOBattlePolicy:
 
     def battle_action(self, view, legal, state=None):
         self._ensure()
-        obs = _encode_for(self._model, view) if self._encode_battle is None else self._encode_battle(view, legal)
+        if self._encode_battle is None:
+            obs = _encode_for(self._model, view)
+        else:
+            obs = self._encode_battle(view, legal)
         mask = action_mask(view, legal)
         idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
         return index_to_action(view, legal, int(idx))

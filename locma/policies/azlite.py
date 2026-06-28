@@ -1,31 +1,16 @@
-"""AlphaZero-lite: PUCT-guided MCTS with a heuristic (policy, value) oracle.
-
-A drop-in battle policy that runs AlphaZero-style search on the engine's
-perfect-information forward model — but instead of a self-play-trained network it
-reuses EXISTING heuristics as the ``f(s) -> (policy, value)`` oracle:
-
-- **prior** over a node's legal actions = a 1-ply heuristic lookahead: apply each
-  action and score the resulting position with the same board/health leaf value
-  the MCTS kit already uses, then softmax (temperature ``tau``).
-- **value** at a leaf = that board/health heuristic directly (``rollout_turns=0``,
-  the default — fast and deterministic), or a short heuristic rollout
-  (``rollout_turns>0``) for a less myopic estimate.
-
-PUCT selection focuses simulations on prior-promising actions, so the search
-reaches MCTS-strength play at modest iteration counts while staying a clean
-drop-in (`azlite:iters,c_puct,...`). Perfect-information (cheating) like
-``MCTSBattlePolicy``; deterministic from the state when ``rollout_turns=0``.
-"""
+"""AlphaZero-lite: PUCT-guided MCTS with heuristic or learned policy priors."""
 
 from __future__ import annotations
 
 import math
 import random
+from collections import Counter
 
 from locma.core import battle as battlemod
 from locma.core.state import Phase
+from locma.envs.encode import action_mask, encode_battle, sem_index
 from locma.policies.battles import RandomBattlePolicy
-from locma.policies.mcts import _board_power, _clone_battle
+from locma.policies.mcts import DMCTSBattlePolicy, _board_power, _clone_battle
 from locma.policies.puct import _reward as _puct_reward
 from locma.policies.puct import puct_search
 
@@ -41,7 +26,7 @@ def _leaf_value(sim, seat: int) -> float:
 
 
 class _HeuristicOracle:
-    """Thin adapter exposing AZLiteBattlePolicy's _prior/_value as the oracle protocol."""
+    """Thin adapter exposing AZLiteBattlePolicy's prior/value as the PUCT oracle."""
 
     def __init__(self, policy: AZLiteBattlePolicy):
         self._p = policy
@@ -79,8 +64,6 @@ class AZLiteBattlePolicy:
         self._r = random.Random(s)
         self._rollout.reset(s)
 
-    # -- oracle: prior + value ----------------------------------------------
-
     def _prior(self, sim, actions, seat: int) -> list[float]:
         """1-ply heuristic lookahead softmax: how good each action looks for `seat`."""
         if len(actions) == 1:
@@ -101,7 +84,6 @@ class AZLiteBattlePolicy:
     def _value(self, sim, root_seat: int) -> float:
         if self.rollout_turns <= 0:
             return _leaf_value(sim, root_seat)
-        # short heuristic rollout: random-play a few turn boundaries, then evaluate.
         tc = 0
         while sim.phase == Phase.BATTLE and sim.turn <= self.turn_cap and tc < self.rollout_turns:
             owner = sim.current
@@ -112,8 +94,6 @@ class AZLiteBattlePolicy:
         if sim.phase != Phase.BATTLE:
             return self._reward(sim, root_seat)
         return _leaf_value(sim, root_seat)
-
-    # -- policy interface ----------------------------------------------------
 
     def battle_action(self, view, legal, state=None):
         if state is None:
@@ -126,3 +106,134 @@ class AZLiteBattlePolicy:
         root_actions = list(battlemod.battle_legal(state))
         best = max(range(len(root_actions)), key=lambda i: visit_counts[i])
         return root_actions[best]
+
+
+class PUCTPPOBattlePolicy(AZLiteBattlePolicy):
+    """PUCT search with PPO policy-head priors and the AZ-lite heuristic value."""
+
+    def __init__(
+        self,
+        model_path: str = "model.zip",
+        name: str = "puct-ppo",
+        iterations: int = 100,
+        c_puct: float = 1.5,
+        seed: int = 0,
+        rollout_turns: int = 0,
+        obs_mode: str = "auto",
+        turn_cap: int = 200,
+    ):
+        super().__init__(
+            name=name,
+            iterations=iterations,
+            c_puct=c_puct,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            turn_cap=turn_cap,
+        )
+        self.model_path = model_path
+        self.obs_mode = "flat" if obs_mode == "base" else obs_mode
+        self._model = None
+
+    def _ensure_model(self) -> None:
+        if self._model is None:
+            from sb3_contrib import MaskablePPO  # noqa: PLC0415
+
+            self._model = MaskablePPO.load(self.model_path)
+
+    def _encode_obs(self, view, actions):
+        if self.obs_mode == "tactical":
+            from locma.envs.encode_tactical import encode_battle as encode_tactical  # noqa: PLC0415
+
+            return encode_tactical(view, actions)
+        if self.obs_mode in {"auto", "flat"}:
+            from gymnasium import spaces  # noqa: PLC0415
+
+            observation_space = getattr(self._model, "observation_space", None)
+            if isinstance(observation_space, spaces.Dict):
+                from locma.envs.encode import encode_battle_tokens  # noqa: PLC0415
+
+                return encode_battle_tokens(view)
+            return encode_battle(view)
+        raise ValueError(f"unknown obs_mode {self.obs_mode!r}")
+
+    def _prior(self, sim, actions, seat: int) -> list[float]:
+        if len(actions) == 1:
+            return [1.0]
+
+        from locma.core.engine import make_battle_view  # noqa: PLC0415
+
+        self._ensure_model()
+        view = make_battle_view(sim)
+        mask = action_mask(view, actions)
+        obs = self._encode_obs(view, actions)
+
+        import torch as th  # noqa: PLC0415
+
+        obs_tensor, _ = self._model.policy.obs_to_tensor(obs)
+        with th.no_grad():
+            dist = self._model.policy.get_distribution(obs_tensor, action_masks=mask[None, :])
+            probs = dist.distribution.probs.detach().cpu().numpy()[0]
+
+        priors = [
+            float(probs[idx]) if idx is not None else 0.0
+            for idx in (sem_index(view, a) for a in actions)
+        ]
+        z = sum(priors)
+        if z <= 0.0:
+            return [1.0 / len(actions)] * len(actions)
+        return [p / z for p in priors]
+
+
+class DeterminizedPUCTPPOBattlePolicy:
+    """Fair imperfect-information wrapper around PPO-prior PUCT."""
+
+    def __init__(
+        self,
+        model_path: str = "model.zip",
+        name: str = "dpuct-ppo",
+        determinizations: int = 5,
+        iterations: int = 5,
+        c_puct: float = 1.5,
+        seed: int = 0,
+        rollout_turns: int = 0,
+        obs_mode: str = "auto",
+    ):
+        self.name = name
+        self.K = determinizations
+        self.I = iterations
+        self.c_puct = c_puct
+        self._seed = seed
+        self.rollout_turns = rollout_turns
+        self.obs_mode = obs_mode
+        self._r = random.Random(seed)
+        self._determinizer = DMCTSBattlePolicy(seed=seed, reshuffle_own=True)
+        self._inner = PUCTPPOBattlePolicy(
+            model_path=model_path,
+            iterations=iterations,
+            c_puct=c_puct,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            obs_mode=obs_mode,
+        )
+
+    @property
+    def model_path(self) -> str:
+        return self._inner.model_path
+
+    def reset(self, seed=None):
+        s = self._seed if seed is None else seed
+        self._r = random.Random(s)
+        self._determinizer.reset(s)
+        self._inner.reset(s)
+
+    def battle_action(self, view, legal, state=None):
+        if state is None:
+            raise ValueError("DeterminizedPUCTPPOBattlePolicy requires the forward-model `state`")
+        if len(legal) == 1:
+            return legal[0]
+
+        votes: Counter = Counter()
+        for _ in range(self.K):
+            det = self._determinizer._determinize(state, self._r)
+            votes[self._inner.battle_action(view, legal, det)] += 1
+        return votes.most_common(1)[0][0]

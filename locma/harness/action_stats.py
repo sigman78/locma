@@ -78,7 +78,7 @@ def policy_action_stats(policy: str, opponent: str, games: int = 100, seed: int 
             p0, p1 = (pa, pb) if a_seat == 0 else (pb, pa)
             target_seat = a_seat
 
-            def cb(seat, action, gs):
+            def cb(seat, action, gs, target_seat=target_seat):
                 if seat != target_seat:
                     return
                 legal = battle_legal(gs)

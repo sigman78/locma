@@ -30,6 +30,86 @@ not just the ordinal.
 
 ---
 
+# Baselines — 2026-06-27: current roster with tuned PPO variants
+
+_Date: 2026-06-27_
+
+Current full-roster refresh, now including the two latest useful PPO
+representatives:
+
+- `ppo-base` = `ppo:runs/ppo-shuffled-pool.zip`;
+- `ppo-sparse` = `ppo:runs/ppo-deep-sparse-lr1e4-ent01-300k.zip`;
+- `ppo-richladder` = `ppo:runs/ppo-richladder-lr1e4-ent01-150k.zip`.
+
+Command:
+
+```bash
+uv run locma tournament random scripted greedy max-guard max-attack \
+  mcts:100 azlite:100 dmcts \
+  ppo:runs/ppo-shuffled-pool.zip \
+  ppo:runs/ppo-deep-sparse-lr1e4-ent01-300k.zip \
+  ppo:runs/ppo-richladder-lr1e4-ent01-150k.zip \
+  --games 150 --seed 15000000 --reference random --matrix
+```
+
+This is **300 actual games per pair** because tournament games are mirrored. It
+is still a little lower-sample than the 2026-06-26 `--games 200` matrix, but it is
+large enough to be the current PPO-cluster reference. The purpose is to place the
+new PPOs inside the same bracket as `dmcts`, `mcts:100`, and `azlite:100`.
+
+## Ratings (openskill ordinal / Elo)
+
+| policy | openskill | elo | p vs random |
+|--------|----------:|----:|------------:|
+| `azlite:100` | 28.23 | 1724 | 2.955e-88 |
+| `mcts:100` | 27.73 | 1714 | 9.818e-91 |
+| `dmcts` | 26.76 | 1688 | 9.818e-91 |
+| `ppo-richladder` | 22.25 | 1560 | 9.818e-91 |
+| `ppo-sparse` | 22.15 | 1560 | 2.955e-88 |
+| `ppo-base` | 21.72 | 1542 | 2.955e-88 |
+| `scripted` | 21.54 | 1537 | 4.067e-77 |
+| `max-guard` | 21.25 | 1534 | 1.956e-80 |
+| `max-attack` | 19.53 | 1495 | 1.956e-80 |
+| `greedy` | 16.91 | 1428 | 4.418e-84 |
+| `random` | -16.16 | 718 | — |
+
+## Pair-score matrix (row's win rate vs column)
+
+|                | random | scripted | greedy | max-guard | max-attack | mcts:100 | azlite:100 | dmcts | ppo-base | ppo-sparse | ppo-richladder |
+|----------------|--------|----------|--------|-----------|------------|----------|------------|-------|----------|------------|----------------|
+| random         | —      | 0.02     | 0.01   | 0.02      | 0.02       | 0.00     | 0.00       | 0.00  | 0.00     | 0.00       | 0.00           |
+| scripted       | 0.98   | —        | 0.51   | 0.48      | 0.66       | 0.29     | 0.35       | 0.37  | 0.45     | 0.43       | 0.44           |
+| greedy         | 0.99   | 0.49     | —      | 0.43      | 0.35       | 0.07     | 0.18       | 0.10  | 0.37     | 0.28       | 0.30           |
+| max-guard      | 0.98   | 0.52     | 0.57   | —         | 0.58       | 0.24     | 0.29       | 0.26  | 0.49     | 0.47       | 0.50           |
+| max-attack     | 0.98   | 0.34     | 0.65   | 0.42      | —          | 0.23     | 0.25       | 0.30  | 0.44     | 0.40       | 0.38           |
+| mcts:100       | 1.00   | 0.71     | 0.93   | 0.76      | 0.77       | —        | 0.40       | 0.52  | 0.74     | 0.72       | 0.71           |
+| azlite:100     | 1.00   | 0.65     | 0.82   | 0.71      | 0.75       | 0.60     | —          | 0.64  | 0.77     | 0.75       | 0.70           |
+| dmcts          | 1.00   | 0.63     | 0.90   | 0.74      | 0.70       | 0.48     | 0.36       | —     | 0.73     | 0.71       | 0.69           |
+| ppo-base       | 1.00   | 0.55     | 0.63   | 0.51      | 0.56       | 0.26     | 0.23       | 0.27  | —        | 0.48       | 0.52           |
+| ppo-sparse     | 1.00   | 0.57     | 0.72   | 0.53      | 0.60       | 0.28     | 0.25       | 0.29  | 0.52     | —          | 0.50           |
+| ppo-richladder | 1.00   | 0.56     | 0.70   | 0.50      | 0.62       | 0.29     | 0.30       | 0.31  | 0.48     | 0.50       | —              |
+
+## Read
+
+The new PPO variants are modest improvements over the restored PPO in the rating
+fit, but not decisive head-to-head promotions. The rating order in the learned
+cluster is `ppo-richladder` > `ppo-sparse` > `ppo-base`; direct PPO-vs-PPO cells
+are close: base beats rich-ladder 0.52, sparse beats base 0.52, and sparse vs
+rich-ladder is exactly 0.50. Read this as a small cluster shift, not a clear
+single best learned model.
+
+Against fair search, `ppo-richladder` has the best PPO cell
+(`ppo-richladder` vs `dmcts` 0.31), while `ppo-sparse` is 0.29 and `ppo-base` is
+0.27. The stable conclusion is unchanged: all PPO variants remain clearly below
+`dmcts` and far below the cheating searchers. `dmcts` beats the PPO cluster
+0.69-0.73, `mcts:100` beats it 0.71-0.74, and `azlite:100` beats it 0.70-0.77.
+
+The top of the roster is unchanged: **`azlite:100` > `mcts:100` > `dmcts` >
+PPO cluster > ground baselines > `random`**. `azlite:100` and `mcts:100` are still
+perfect-information searchers; `dmcts` is the fair search reference.
+
+---
+
 # Baselines — 2026-06-26: full-roster tournament (baselines + search + PPO) — azlite tops; rating estimator fixed
 
 _Date: 2026-06-26_

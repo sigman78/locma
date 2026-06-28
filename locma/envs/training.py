@@ -10,6 +10,10 @@ from __future__ import annotations
 import functools
 
 
+def _normalize_obs_mode(obs_mode: str) -> str:
+    return "flat" if obs_mode == "base" else obs_mode
+
+
 def _make_battle_env(
     opponent_spec: str,
     seed: int,
@@ -17,15 +21,9 @@ def _make_battle_env(
     seat_random: bool = False,
     obs_mode: str = "flat",
     reward_mode: str = "sparse",
+    reward_scale: float = 0.05,
 ):
-    """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
-
-    Rebuilds the opponent from its spec string inside each subprocess, so the
-    (possibly stateful) opponent never has to be pickled and crosses no process
-    boundary. ``seat_random`` trains the agent as both first and second player.
-    ``obs_mode`` selects the observation encoding: "flat", "token", or
-    "tactical"; "base" is accepted by BattleEnv as an alias for "flat".
-    """
+    """Top-level env factory (picklable for SubprocVecEnv spawn on Windows)."""
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.registry import make_policy  # noqa: PLC0415
 
@@ -36,6 +34,7 @@ def _make_battle_env(
         seat_random=seat_random,
         obs_mode=obs_mode,
         reward_mode=reward_mode,
+        reward_scale=reward_scale,
     )
 
 
@@ -52,11 +51,9 @@ def _build_env(
     both_seat: bool = True,
     obs_mode: str = "flat",
     reward_mode: str = "sparse",
+    reward_scale: float = 0.05,
 ):
-    """Build a (vectorised) training env. n_envs>1 runs each env in its own
-    process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
-    randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
-    ``obs_mode`` selects the observation encoding."""
+    """Build a vectorized training env."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
@@ -64,7 +61,14 @@ def _build_env(
 
     fns = [
         functools.partial(
-            _make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode, reward_mode
+            _make_battle_env,
+            opponent_spec,
+            seed + i,
+            0,
+            both_seat,
+            obs_mode,
+            reward_mode,
+            reward_scale,
         )
         for i in range(n_envs)
     ]
@@ -82,17 +86,18 @@ def _make_model(
     target_kl: float | None = None,
     init_model: str | None = None,
 ):
-    """Construct or load a MaskablePPO model, selecting policy class by obs_mode."""
+    """Construct or load a MaskablePPO model."""
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
     if init_model:
         model = MaskablePPO.load(init_model, env=env, seed=seed)
         model.verbose = verbose
         model.ent_coef = ent_coef
-        model.learning_rate = learning_rate
+        _set_learning_rate(model, learning_rate)
         model.target_kl = target_kl
         return model
 
+    obs_mode = _normalize_obs_mode(obs_mode)
     if obs_mode == "token":
         from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
 
@@ -127,19 +132,23 @@ def train_agent(
     n_envs: int = 1,
     checkpoints=None,
     ent_coef: float = 0.02,
+    learning_rate: float = 3e-4,
     both_seat: bool = True,
     obs_mode: str = "flat",
     reward_mode: str = "sparse",
-    learning_rate: float = 3e-4,
+    reward_scale: float = 0.05,
     target_kl: float | None = None,
     init_model: str | None = None,
 ):
-    """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
-
-    Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
-    """
+    """Train a seeded MaskablePPO agent against `opponent_spec` and save it."""
     env = _build_env(
-        opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode
+        opponent_spec,
+        seed,
+        n_envs,
+        both_seat=both_seat,
+        obs_mode=obs_mode,
+        reward_mode=reward_mode,
+        reward_scale=reward_scale,
     )
     model = _make_model(
         env,
@@ -171,10 +180,6 @@ def train_agent(
     return out
 
 
-# A small, code-declared "zoo" of opponents to train against back-to-back. This is
-# intentionally a constant for now (no CLI list plumbing); edit it to change the
-# curriculum. Order matters — training proceeds left to right. See docs/cli.md and
-# the future-explorations roadmap in docs/ppo-review.md.
 ZOO_OPPONENTS: tuple[str, ...] = ("greedy", "scripted", "max-guard", "max-attack")
 
 
@@ -184,21 +189,65 @@ def train_zoo(
     out: str = "model.zip",
     seed: int = 0,
     ent_coef: float = 0.02,
+    learning_rate: float = 3e-4,
     verbose: int = 1,
+    n_envs: int = 1,
     both_seat: bool = True,
     obs_mode: str = "flat",
     reward_mode: str = "sparse",
-    learning_rate: float = 3e-4,
+    reward_scale: float = 0.05,
     target_kl: float | None = None,
     init_model: str | None = None,
 ):
-    """Train ONE MaskablePPO model back-to-back against each opponent in turn."""
-    opps = list(opponents)
-    if not opps:
-        raise ValueError("train_zoo needs a non-empty opponent list")
+    """Train one MaskablePPO model back-to-back against each opponent in turn."""
+    return train_schedule(
+        opponents=list(opponents),
+        steps_per_phase=steps_per_opponent,
+        out=out,
+        seed=seed,
+        ent_coef=ent_coef,
+        learning_rate=learning_rate,
+        verbose=verbose,
+        n_envs=n_envs,
+        both_seat=both_seat,
+        obs_mode=obs_mode,
+        reward_mode=reward_mode,
+        reward_scale=reward_scale,
+        target_kl=target_kl,
+        init_model=init_model,
+    )
+
+
+def train_schedule(
+    opponents: list[str],
+    steps_per_phase: int = 100_000,
+    out: str = "model.zip",
+    seed: int = 0,
+    ent_coef: float = 0.02,
+    learning_rate: float = 3e-4,
+    verbose: int = 1,
+    n_envs: int = 1,
+    both_seat: bool = True,
+    obs_mode: str = "flat",
+    reward_mode: str = "sparse",
+    reward_scale: float = 0.05,
+    target_kl: float | None = None,
+    init_model: str | None = None,
+):
+    """Train one PPO model through an explicit opponent schedule."""
+    if not opponents:
+        raise ValueError("train_schedule needs a non-empty opponent list")
 
     model = _make_model(
-        _build_env(opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode, reward_mode=reward_mode),
+        _build_env(
+            opponents[0],
+            seed,
+            n_envs,
+            both_seat=both_seat,
+            obs_mode=obs_mode,
+            reward_mode=reward_mode,
+            reward_scale=reward_scale,
+        ),
         obs_mode=obs_mode,
         seed=seed,
         verbose=verbose,
@@ -207,18 +256,26 @@ def train_zoo(
         target_kl=target_kl,
         init_model=init_model,
     )
-    for i, opp in enumerate(opps):
+    for i, opp in enumerate(opponents):
         if i > 0:
             model.set_env(
                 _build_env(
                     opp,
                     seed,
-                    1,
+                    n_envs,
                     both_seat=both_seat,
                     obs_mode=obs_mode,
                     reward_mode=reward_mode,
+                    reward_scale=reward_scale,
                 )
             )
-        model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
+        model.learn(total_timesteps=steps_per_phase, reset_num_timesteps=(i == 0))
     model.save(out)
     return out
+
+
+def _set_learning_rate(model, learning_rate: float) -> None:
+    from stable_baselines3.common.utils import get_schedule_fn  # noqa: PLC0415
+
+    model.learning_rate = learning_rate
+    model.lr_schedule = get_schedule_fn(learning_rate)

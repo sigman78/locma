@@ -207,6 +207,57 @@ def action_stats(policy: str, opponent: str = "mixed", games: int = 100, seed: i
     console.print(t)
 
 
+@app.command("ppo-scorecard")
+def ppo_scorecard(
+    entries: list[str],
+    games: int = typer.Option(100, help="mirrored games per non-dmcts opponent"),
+    dmcts_games: int = typer.Option(
+        50, help="mirrored games for default dmcts; use 0 to skip dmcts"
+    ),
+    workers: int = typer.Option(1, help="parallel pair workers"),
+    seed: int = 0,
+):
+    """Score PPO-like candidates against the standard no-search/search panel.
+
+    Entries are ``label=policy_spec`` or bare policy specs.
+    """
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    if dmcts_games < 0:
+        raise typer.BadParameter("dmcts-games must be >= 0")
+    if workers < 1:
+        raise typer.BadParameter("workers must be >= 1")
+    if not entries:
+        raise typer.BadParameter("provide at least one policy entry")
+    parsed: list[tuple[str, str]] = []
+    for entry in entries:
+        label, sep, spec = entry.partition("=")
+        if sep:
+            if not label or not spec:
+                raise typer.BadParameter("entries must be label=policy_spec or bare policy_spec")
+            parsed.append((spec, label))
+        else:
+            parsed.append((entry, entry))
+        make_policy(parsed[-1][0])
+
+    from locma.harness.ppo_scorecard import DEFAULT_OPPONENTS, score_policies  # noqa: PLC0415
+
+    rows = score_policies(parsed, games=games, dmcts_games=dmcts_games, seed=seed, workers=workers)
+    opponents = tuple(opp for opp in DEFAULT_OPPONENTS if any(opp in row.scores for row in rows))
+    t = Table(title="PPO Scorecard", box=None)
+    t.add_column("policy")
+    for opp in opponents:
+        t.add_column(opp, justify="right")
+    t.add_column("avg hard3", justify="right")
+    for row in rows:
+        t.add_row(
+            row.label,
+            *(f"{row.scores[o]:.3f}" if o in row.scores else "" for o in opponents),
+            f"{row.avg_hard3:.3f}",
+        )
+    console.print(t)
+
+
 @app.command()
 def sprt(
     x: str,
@@ -279,12 +330,13 @@ def train(
         None, help="comma-separated step marks to save checkpoints at (one trajectory)"
     ),
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: flat/base, token, or tactical"
     ),
     reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
-    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
+    reward_scale: float = typer.Option(0.05, help="dense reward potential scale"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
     init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
@@ -314,10 +366,11 @@ def train(
             n_envs=n_envs,
             checkpoints=marks,
             ent_coef=ent_coef,
+            learning_rate=learning_rate,
             both_seat=both_seat,
             obs_mode=obs_mode,
             reward_mode=reward_mode,
-            learning_rate=learning_rate,
+            reward_scale=reward_scale,
             target_kl=target_kl,
             init_model=init_model,
         )
@@ -331,13 +384,15 @@ def train_zoo_cmd(
     steps_per_opponent: int = typer.Option(200_000, help="timesteps per opponent phase"),
     out: str = "model.zip",
     seed: int = 0,
+    n_envs: int = typer.Option(1, help="parallel envs (CPU speedup)"),
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: flat/base, token, or tactical"
     ),
     reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
-    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
+    reward_scale: float = typer.Option(0.05, help="dense reward potential scale"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
     init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
 ):
@@ -348,6 +403,8 @@ def train_zoo_cmd(
         raise typer.BadParameter("steps-per-opponent must be >= 1")
     if obs_mode not in ("flat", "base", "token", "tactical"):
         raise typer.BadParameter("obs_mode must be flat/base, token, or tactical")
+    if n_envs < 1:
+        raise typer.BadParameter("n-envs must be >= 1")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -361,10 +418,63 @@ def train_zoo_cmd(
             out=out,
             seed=seed,
             ent_coef=ent_coef,
+            learning_rate=learning_rate,
+            n_envs=n_envs,
             both_seat=both_seat,
             obs_mode=obs_mode,
             reward_mode=reward_mode,
+            reward_scale=reward_scale,
+            target_kl=target_kl,
+            init_model=init_model,
+        )
+    except ImportError as e:
+        raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
+    console.print(f"saved {saved}")
+
+
+@app.command("train-schedule")
+def train_schedule_cmd(
+    opponents: list[str],
+    steps_per_phase: int = typer.Option(100_000, help="timesteps per opponent phase"),
+    out: str = "model.zip",
+    seed: int = 0,
+    n_envs: int = typer.Option(1, help="parallel envs (CPU speedup)"),
+    ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
+    learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
+    both_seat: bool = typer.Option(True, help="train as both first AND second player"),
+    obs_mode: str = typer.Option("flat", help="obs encoding: flat/base, token, or tactical"),
+    reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
+    reward_scale: float = typer.Option(0.05, help="dense reward potential scale"),
+    target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
+    init_model: str = typer.Option(None, help="warm-start from an existing model zip"),
+):
+    """Train one MaskablePPO model through an explicit opponent schedule."""
+    if steps_per_phase < 1:
+        raise typer.BadParameter("steps-per-phase must be >= 1")
+    if n_envs < 1:
+        raise typer.BadParameter("n-envs must be >= 1")
+    if obs_mode not in ("flat", "base", "token", "tactical"):
+        raise typer.BadParameter("obs_mode must be flat/base, token, or tactical")
+    if not opponents:
+        raise typer.BadParameter("provide at least one opponent")
+    for o in opponents:
+        make_policy(o)
+    console.print(f"schedule: {' -> '.join(opponents)}")
+    try:
+        from locma.envs.training import train_schedule  # noqa: PLC0415 — optional [ml] dep
+
+        saved = train_schedule(
+            opponents=opponents,
+            steps_per_phase=steps_per_phase,
+            out=out,
+            seed=seed,
+            ent_coef=ent_coef,
             learning_rate=learning_rate,
+            n_envs=n_envs,
+            both_seat=both_seat,
+            obs_mode=obs_mode,
+            reward_mode=reward_mode,
+            reward_scale=reward_scale,
             target_kl=target_kl,
             init_model=init_model,
         )
