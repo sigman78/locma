@@ -97,9 +97,8 @@ def policy_action_stats(policy: str, opponent: str, games: int = 100, seed: int 
                     is_attack and action.target_id != -1 and _has_guard(view, action.target_id)
                 )
                 lethal = _face_damage_available(view, legal) >= view.op_health
-                chosen_face_damage = (
-                    (is_attack and action.target_id == -1)
-                    or (isinstance(action, Use) and action.target_id == -1)
+                chosen_face_damage = (is_attack and action.target_id == -1) or (
+                    isinstance(action, Use) and action.target_id == -1
                 )
                 stats.lethal_available += int(lethal)
                 stats.lethal_taken += int(lethal and chosen_face_damage)

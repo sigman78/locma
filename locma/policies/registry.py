@@ -223,6 +223,7 @@ _RICH_MIXED_POOL: tuple[tuple[str, float], ...] = (
     ("dmcts:4,6,1,3", 1.0),
 )
 
+
 def _weighted_mixed(params, spec, pool_specs):
     from locma.policies.mixed import MixedOpponentPolicy  # noqa: PLC0415
 

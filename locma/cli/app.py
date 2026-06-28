@@ -332,9 +332,7 @@ def train(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
-    obs_mode: str = typer.Option(
-        "flat", help="obs encoding: flat/base, token, or tactical"
-    ),
+    obs_mode: str = typer.Option("flat", help="obs encoding: flat/base, token, or tactical"),
     reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
     reward_scale: float = typer.Option(0.05, help="dense reward potential scale"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
@@ -388,9 +386,7 @@ def train_zoo_cmd(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
-    obs_mode: str = typer.Option(
-        "flat", help="obs encoding: flat/base, token, or tactical"
-    ),
+    obs_mode: str = typer.Option("flat", help="obs encoding: flat/base, token, or tactical"),
     reward_mode: str = typer.Option("sparse", help="reward mode: sparse, health, or board"),
     reward_scale: float = typer.Option(0.05, help="dense reward potential scale"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
