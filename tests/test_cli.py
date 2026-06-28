@@ -103,6 +103,15 @@ def test_train_zoo_help_lists_command():
     assert runner.invoke(app, ["train-zoo", "--help"]).exit_code == 0
 
 
+def test_train_schedule_help_lists_command():
+    assert runner.invoke(app, ["train-schedule", "--help"]).exit_code == 0
+
+
+def test_train_schedule_rejects_zero_steps():
+    result = runner.invoke(app, ["train-schedule", "mixed-rich", "--steps-per-phase", "0"])
+    assert result.exit_code != 0
+
+
 def test_train_zoo_rejects_zero_steps():
     # The guard fires before any ML import, so this passes with or without [ml].
     assert runner.invoke(app, ["train-zoo", "--steps-per-opponent", "0"]).exit_code != 0
@@ -379,3 +388,25 @@ def test_az_selfplay_dispatches(monkeypatch):
     assert captured["K_gen"] == 4
     assert captured["I_eval"] == 20
     assert "0.750" in _strip_ansi(res.output)
+
+
+def test_train_zoo_rejects_zero_envs():
+    # The guard fires before any ML import, so this passes with or without [ml].
+    assert runner.invoke(app, ["train-zoo", "--n-envs", "0"]).exit_code != 0
+
+
+def test_ppo_scorecard_rejects_empty_entries():
+    assert runner.invoke(app, ["ppo-scorecard"]).exit_code != 0
+
+
+def test_ppo_scorecard_help_lists_command():
+    assert runner.invoke(app, ["ppo-scorecard", "--help"]).exit_code == 0
+
+
+def test_ppo_scorecard_allows_zero_dmcts_games():
+    result = runner.invoke(
+        app,
+        ["ppo-scorecard", "scripted", "--games", "1", "--dmcts-games", "0"],
+    )
+    assert result.exit_code == 0
+    assert "dmcts" not in result.stdout

@@ -74,16 +74,78 @@ def _azlite(params, spec):
     )
 
 
+def _puct_ppo(params, spec):
+    """Experimental diagnostic — PPO-prior perfect-info PUCT.
+
+    Spec ``puct-ppo:iterations,model_path,c_puct,seed,turns,obs``. This is
+    hidden from normal policy listings because it is search-at-inference and
+    perfect-information unless wrapped by ``dpuct-ppo``.
+    """
+    from locma.policies.azlite import PUCTPPOBattlePolicy  # noqa: PLC0415
+
+    iters = int(params[0]) if len(params) > 0 else 100
+    model_path = params[1] if len(params) > 1 else "model.zip"
+    c_puct = float(params[2]) if len(params) > 2 else 1.5
+    seed = int(params[3]) if len(params) > 3 else 0
+    rollout_turns = int(params[4]) if len(params) > 4 else 0
+    obs_mode = params[5] if len(params) > 5 else "base"
+    return Composer(
+        PUCTPPOBattlePolicy(
+            iterations=iters,
+            model_path=model_path,
+            c_puct=c_puct,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            obs_mode=obs_mode,
+        ),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
+def _dpuct_ppo(params, spec):
+    """Fair determinized PPO-prior PUCT — ``dpuct-ppo:K,I,model,c_puct,seed,turns,obs``."""
+    from locma.policies.azlite import DeterminizedPUCTPPOBattlePolicy  # noqa: PLC0415
+
+    k = int(params[0]) if len(params) > 0 else 5
+    iters = int(params[1]) if len(params) > 1 else 5
+    model_path = params[2] if len(params) > 2 else "model.zip"
+    c_puct = float(params[3]) if len(params) > 3 else 1.5
+    seed = int(params[4]) if len(params) > 4 else 0
+    rollout_turns = int(params[5]) if len(params) > 5 else 0
+    obs_mode = params[6] if len(params) > 6 else "base"
+    return Composer(
+        DeterminizedPUCTPPOBattlePolicy(
+            determinizations=k,
+            iterations=iters,
+            model_path=model_path,
+            c_puct=c_puct,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            obs_mode=obs_mode,
+        ),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 def _dmcts(params, spec):
-    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
+    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns,det``."""
     from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
 
     k = int(params[0]) if len(params) > 0 else 15  # determinizations (worlds)
     i = int(params[1]) if len(params) > 1 else 30  # iterations per world
     seed = int(params[2]) if len(params) > 2 else 0
     rollout_turns = int(params[3]) if len(params) > 3 else 3
+    deterministic = bool(int(params[4])) if len(params) > 4 else False
     return Composer(
-        DMCTSBattlePolicy(determinizations=k, iterations=i, seed=seed, rollout_turns=rollout_turns),
+        DMCTSBattlePolicy(
+            determinizations=k,
+            iterations=i,
+            seed=seed,
+            rollout_turns=rollout_turns,
+            deterministic=deterministic,
+        ),
         GreedyDraftPolicy(),
         name=spec,
     )
@@ -126,6 +188,20 @@ def _ppo(params, spec):
     )
 
 
+def _ppo_tactical(params, spec):
+    """Experimental eval-only PPO spec for tactical observation artifacts."""
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
+
+    model_path = params[0] if params else "model.zip"
+    return Composer(
+        MaskablePPOBattlePolicy(model_path=model_path, obs_mode="tactical"),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 # The pool of baseline opponents a `mixed` training opponent draws from.
 _MIXED_POOL = ("random", "scripted", "greedy", "max-guard", "max-attack")
 
@@ -138,6 +214,29 @@ def _mixed(params, spec):
     return MixedOpponentPolicy(pool, name=spec, seed=seed)
 
 
+_RICH_MIXED_POOL: tuple[tuple[str, float], ...] = (
+    ("scripted", 2.0),
+    ("greedy", 2.0),
+    ("max-guard", 2.0),
+    ("max-attack", 2.0),
+    ("dmcts:2,3,0,3", 1.0),
+    ("dmcts:4,6,1,3", 1.0),
+)
+
+
+def _weighted_mixed(params, spec, pool_specs):
+    from locma.policies.mixed import MixedOpponentPolicy  # noqa: PLC0415
+
+    seed = int(params[0]) if params else 0
+    specs, weights = zip(*pool_specs, strict=True)
+    pool = [make_policy(s) for s in specs]
+    return MixedOpponentPolicy(pool, name=spec, seed=seed, weights=weights)
+
+
+def _mixed_rich(params, spec):
+    return _weighted_mixed(params, spec, _RICH_MIXED_POOL)
+
+
 # Registration order matters: drives policy_names() and table/tournament order.
 _FACTORIES = {
     "random": _random,
@@ -147,17 +246,28 @@ _FACTORIES = {
     "max-attack": _max_attack,
     "mcts": _mcts,
     "azlite": _azlite,
+    "puct-ppo": _puct_ppo,
+    "dpuct-ppo": _dpuct_ppo,
     "dmcts": _dmcts,
     "netdmcts": _netdmcts,
     "ppo": _ppo,
+    "ppo-tactical": _ppo_tactical,
     "mixed": _mixed,
+    "mixed-rich": _mixed_rich,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo` and `netdmcts` need a model artifact + the [ml] extra (use `ppo:path`
-# or `netdmcts:K,I,c,path`); `mixed` is a non-stationary training opponent,
-# not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts"}
+# `ppo`/`puct-ppo`/`netdmcts` need model artifacts + the [ml] extra (use explicit
+# specs); `mixed` variants are non-stationary training opponents.
+_HIDDEN = {
+    "ppo",
+    "ppo-tactical",
+    "netdmcts",
+    "puct-ppo",
+    "dpuct-ppo",
+    "mixed",
+    "mixed-rich",
+}
 
 
 def policy_names() -> list[str]:

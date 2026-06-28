@@ -19,6 +19,16 @@ def _encode_for(model, view):
     return encode_battle(view)
 
 
+def _encoder(obs_mode: str):
+    if obs_mode in {"auto", "flat", "base"}:
+        return None
+    if obs_mode == "tactical":
+        from locma.envs.encode_tactical import encode_battle as encode_tactical  # noqa: PLC0415
+
+        return encode_tactical
+    raise ValueError(f"unknown obs_mode {obs_mode!r}")
+
+
 class MaskablePPOBattlePolicy:
     """Wraps a saved MaskablePPO model as a Battle Policy.
 
@@ -28,11 +38,17 @@ class MaskablePPOBattlePolicy:
     """
 
     def __init__(
-        self, model_path: str = "model.zip", name: str = "ppo", deterministic: bool = True
+        self,
+        model_path: str = "model.zip",
+        name: str = "ppo",
+        deterministic: bool = True,
+        obs_mode: str = "auto",
     ):
         self.model_path = model_path
         self.name = name
         self.deterministic = deterministic
+        self.obs_mode = obs_mode
+        self._encode_battle = _encoder(obs_mode)
         self._model = None
 
     def _ensure(self) -> None:
@@ -43,7 +59,10 @@ class MaskablePPOBattlePolicy:
 
     def battle_action(self, view, legal, state=None):
         self._ensure()
-        obs = _encode_for(self._model, view)
+        if self._encode_battle is None:
+            obs = _encode_for(self._model, view)
+        else:
+            obs = self._encode_battle(view, legal)
         mask = action_mask(view, legal)
         idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
         return index_to_action(view, legal, int(idx))

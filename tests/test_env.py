@@ -43,6 +43,25 @@ def test_battle_env_seat_fixed_by_default():
         assert env.agent_seat == 0
 
 
+def test_battle_env_tactical_obs_mode():
+    from locma.envs.encode_tactical import OBS_SIZE as TACTICAL_OBS_SIZE  # noqa: PLC0415
+
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    env = BattleEnv(opponent=opp, seed=0, obs_mode="tactical")
+    obs, info = env.reset()
+    assert obs.shape[0] == TACTICAL_OBS_SIZE
+    assert env.observation_space.shape == (TACTICAL_OBS_SIZE,)
+
+
+def test_battle_env_dense_reward_modes_step():
+    opp = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+    env = BattleEnv(opponent=opp, seed=0, reward_mode="health")
+    env.reset()
+    mask = env.action_masks()
+    obs, reward, terminated, truncated, info = env.step(int(np.argmax(mask)))
+    assert isinstance(float(reward), float)
+
+
 def test_search_opponent_works_as_training_opponent():
     """A search opponent (azlite) requires the forward-model ``state``; the env
     must pass it (mirrors the play harness). Without it azlite raises ValueError."""

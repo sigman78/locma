@@ -52,6 +52,16 @@ def test_empty_pool_rejected():
         MixedOpponentPolicy([])
 
 
+def test_weights_must_match_pool():
+    with pytest.raises(ValueError, match="weights"):
+        MixedOpponentPolicy(_pool(2), weights=[1.0])
+
+
+def test_weighted_pool_can_force_a_delegate():
+    p = MixedOpponentPolicy(_pool(3), seed=0, weights=[0.0, 0.0, 1.0])
+    assert _episode_tags(p, 10) == [2] * 10
+
+
 def test_resamples_across_episodes_for_variety():
     p = MixedOpponentPolicy(_pool(3), seed=0)
     tags = _episode_tags(p, 30)
