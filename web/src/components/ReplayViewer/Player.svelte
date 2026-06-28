@@ -10,6 +10,9 @@
   export let active = false
   export let fx: Fx | null = null
   export let fxToken = 0
+  // Play-mode breakthrough cue: when true, suppress the static face -N number
+  // (the flying projectile is the single number). Default false → ReplayViewer unaffected.
+  export let hideFaceDamage = false
 
   // deterministic hue from name+seat
   $: hue = ([...`${name}${seat}`].reduce((a, c) => a + c.charCodeAt(0), 0) * 47) % 360
@@ -45,7 +48,7 @@
       <span class="hp">
         ♥ {player.health}
         {#key fxToken}
-          {#if faceDmg != null}<span class="locma-dmg face">-{faceDmg}</span>{/if}
+          {#if faceDmg != null && !hideFaceDamage}<span class="locma-dmg face">-{faceDmg}</span>{/if}
         {/key}
       </span>
       <span class="mana">◆ {player.mana}/{player.max_mana}</span>

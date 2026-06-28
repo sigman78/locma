@@ -86,7 +86,13 @@
   let slideMap = new Map<number, { dx: number; dy: number }>()
   let flashSet = new Set<number | 'face'>()
   let lastToken = -1
-  type BtFly = { amount: number; src: { cx: number; cy: number }; dst: { cx: number; cy: number }; key: number }
+  type BtFly = {
+    amount: number
+    src: { cx: number; cy: number }
+    dst: { cx: number; cy: number }
+    face: 'face' | 'face-me' // which defender Player to suppress the static -N on
+    key: number
+  }
   let btFly: BtFly | null = null
 
   function syncDisplay() {
@@ -141,12 +147,12 @@
     const bht = breakthroughHit(currentAction, splashes, actSeat)
     if (bht && currentAction?.t === 'attack') {
       const src = rectOfKey(currentAction.target)
-      const faceKey: AnchorKey = actSeat === you ? 'face' : 'face-me'
+      const faceKey: 'face' | 'face-me' = actSeat === you ? 'face' : 'face-me'
       const dst = rectOfKey(faceKey)
       if (src && dst) {
         const flyKey = fxToken
         // small delay (~80ms) so the projectile fires near the slide apex
-        setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
+        setTimeout(() => { btFly = { amount: bht.amount, src, dst, face: faceKey, key: flyKey } }, 80)
         // clear AFTER the fade fully completes (80ms delay + 390ms animation-delay + 140ms fade ≈ 610ms)
         setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 640)
       }
@@ -283,7 +289,8 @@
     class:flashing={flashSet.has('face')}
     use:anchor={'face'}
     title="opponent — drag a unit here to attack">
-    <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
+    <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken}
+      hideFaceDamage={btFly?.face === 'face'} />
   </div>
 
   <div class="hand backs">
@@ -330,7 +337,8 @@
 
   <!-- the human's own player panel is the bottom face (the AI's attack target) -->
   <div class="faceplate me" use:anchor={'face-me'}>
-    <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken} />
+    <Player player={mePlayer} name="You" seat={meSeat as 0 | 1} active={true} {fx} {fxToken}
+      hideFaceDamage={btFly?.face === 'face-me'} />
   </div>
 
   <div class="controls">
