@@ -405,3 +405,38 @@ AZ training yet.
   search*: AZ targets = visit distribution + outcome, iterated; the oracle here was only
   RL-trained). All behind clean refactors (azlite + dmcts tests unchanged). See
   `ppo-review.md` §8.4B, `baseline.md` ("netdmcts").
+
+## 2026-06-27 — netdmcts Phase 2 (AlphaZero self-play of the search): no gain at this budget
+
+Built the full AZ loop: fair net-guided-dmcts self-play generates `(token-obs, search-visit
+policy, game outcome)`; `az_train` warm-starts the net and trains BOTH heads (soft-CE policy →
+visit distribution, MSE value → outcome); `az_selfplay` iterates with a **composite gate**
+(adopt iff the new net beats its parent head-to-head AND doesn't regress avg-hard3; keep-best,
+early-stop). New code: `puct_search(root_noise=)` (Dirichlet, default-off, behaviour-preserving),
+`selfplay.record_selfplay`, `az_train.az_train`, `azloop.az_selfplay`, CLI
+`record-selfplay`/`az-train`/`az-selfplay`. Also `NetOracle` single combined forward (shares the
+self-attention trunk between priors+value → ~2× search speedup, output-identical).
+
+**Run (3 iters; 100 self-play + 40 baseline games/iter; gen K=6,I=40; eval K=8,I=40; 277 min):**
+
+| iter | avg-hard3 (gate, 12/opp) | h2h vs parent (16g) | gate |
+|------|--------------------------|---------------------|------|
+| 0    | 0.806 | 0.688 | ADOPT (best) |
+| 1    | 0.792 | 0.469 | reject |
+| 2    | 0.736 | 0.469 | reject → early-stop |
+
+Best = `az-net-0` (one round of AZ training). **Final confirm (larger n): avg-hard3 0.830
+(50/opp) vs Phase-1 0.817; h2h 0.54 (net-0 vs frozen `selfplay-r2`, 100 games).**
+
+- **Within noise on both axes.** 0.830 vs 0.817 = +0.013 (50/opp 95% CI ≈ ±0.06); h2h 0.54 over
+  100 games (CI ≈ ±0.10, includes 0.50). The gate's 0.688 h2h was 16-game noise; the 100-game
+  confirm regressed it to a coin flip.
+- **No compounding.** Iters 1–2 didn't beat their parent; iter-2 avg-hard3 drifted to 0.736. The
+  composite gate correctly kept the best and early-stopped.
+- **Verdict:** one round of fair AZ self-play training neither clearly helps nor hurts at this
+  budget — frozen-oracle `netdmcts` (0.817) is already near this kit's ceiling. Infrastructure
+  validated (gate disciplined, fairness preserved end-to-end, early-stop fired). Consistent with
+  the project pattern: **search-in-the-loop (Phase 1) was the lever; training the search further
+  gives diminishing returns at small budget.** A larger run could tighten the CIs but the signal
+  is null. See `ppo-review.md` §8.4B, `baseline.md` ("netdmcts Phase 2"),
+  `docs/netdmcts-phase2-design.md`.

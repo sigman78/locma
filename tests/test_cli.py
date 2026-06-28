@@ -167,3 +167,215 @@ def test_distill_help_includes_obs_mode():
     res = runner.invoke(app, ["distill", "--help"])
     assert res.exit_code == 0
     assert "--obs-mode" in _strip_ansi(res.output)
+
+
+# ---------------------------------------------------------------------------
+# record-selfplay
+# ---------------------------------------------------------------------------
+
+
+def test_record_selfplay_rejects_zero_games():
+    # both self-play and baseline are zero → total < 1
+    res = runner.invoke(
+        app,
+        [
+            "record-selfplay",
+            "--oracle-path",
+            "m.zip",
+            "--self-play-games",
+            "0",
+            "--baseline-games",
+            "0",
+        ],
+    )
+    assert res.exit_code != 0
+
+
+def test_record_selfplay_rejects_negative_self_play_games():
+    res = runner.invoke(
+        app,
+        ["record-selfplay", "--oracle-path", "m.zip", "--self-play-games", "-1"],
+    )
+    assert res.exit_code != 0
+
+
+def test_record_selfplay_rejects_zero_k():
+    res = runner.invoke(
+        app,
+        ["record-selfplay", "--oracle-path", "m.zip", "--k", "0"],
+    )
+    assert res.exit_code != 0
+
+
+def test_record_selfplay_rejects_zero_i():
+    res = runner.invoke(
+        app,
+        ["record-selfplay", "--oracle-path", "m.zip", "--i", "0"],
+    )
+    assert res.exit_code != 0
+
+
+def test_record_selfplay_dispatches(monkeypatch):
+    captured = {}
+
+    def fake_record_selfplay(**kwargs):
+        captured.update(kwargs)
+        return {"n_examples": 42, "failed_games": 0}
+
+    monkeypatch.setattr("locma.envs.selfplay.record_selfplay", fake_record_selfplay)
+
+    res = runner.invoke(
+        app,
+        [
+            "record-selfplay",
+            "--oracle-path",
+            "oracle.zip",
+            "--out",
+            "out.npz",
+            "--self-play-games",
+            "10",
+            "--baseline-games",
+            "5",
+            "--k",
+            "3",
+            "--i",
+            "20",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert captured["oracle_path"] == "oracle.zip"
+    assert captured["self_play_games"] == 10
+    assert captured["K"] == 3
+    assert captured["I"] == 20
+    assert "42" in _strip_ansi(res.output)
+
+
+# ---------------------------------------------------------------------------
+# az-train
+# ---------------------------------------------------------------------------
+
+
+def test_az_train_rejects_zero_epochs():
+    res = runner.invoke(
+        app,
+        ["az-train", "--data", "x.npz", "--warm-start", "w.zip", "--epochs", "0"],
+    )
+    assert res.exit_code != 0
+
+
+def test_az_train_rejects_bad_val_frac():
+    res = runner.invoke(
+        app,
+        ["az-train", "--data", "x.npz", "--warm-start", "w.zip", "--val-frac", "1.5"],
+    )
+    assert res.exit_code != 0
+
+
+def test_az_train_rejects_empty_data():
+    # --data not provided at all → validation rejects before import
+    res = runner.invoke(
+        app,
+        ["az-train", "--warm-start", "w.zip"],
+    )
+    assert res.exit_code != 0
+
+
+def test_az_train_rejects_zero_batch():
+    res = runner.invoke(
+        app,
+        ["az-train", "--data", "x.npz", "--warm-start", "w.zip", "--batch", "0"],
+    )
+    assert res.exit_code != 0
+
+
+def test_az_train_dispatches(monkeypatch):
+    captured = {}
+
+    def fake_az_train(**kwargs):
+        captured.update(kwargs)
+        return {
+            "out": "az.zip",
+            "val_policy_ce": 0.1234,
+            "val_value_mse": 0.5678,
+            "n_train": 100,
+            "n_val": 20,
+        }
+
+    monkeypatch.setattr("locma.envs.az_train.az_train", fake_az_train)
+
+    res = runner.invoke(
+        app,
+        [
+            "az-train",
+            "--data",
+            "a.npz",
+            "--data",
+            "b.npz",
+            "--warm-start",
+            "w.zip",
+            "--epochs",
+            "5",
+            "--batch",
+            "128",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert captured["data"] == ["a.npz", "b.npz"]
+    assert captured["warm_start"] == "w.zip"
+    assert captured["epochs"] == 5
+    assert "0.1234" in _strip_ansi(res.output)
+
+
+# ---------------------------------------------------------------------------
+# az-selfplay
+# ---------------------------------------------------------------------------
+
+
+def test_az_selfplay_rejects_zero_iterations():
+    res = runner.invoke(app, ["az-selfplay", "--iterations", "0"])
+    assert res.exit_code != 0
+
+
+def test_az_selfplay_rejects_zero_window():
+    res = runner.invoke(app, ["az-selfplay", "--window", "0"])
+    assert res.exit_code != 0
+
+
+def test_az_selfplay_dispatches(monkeypatch):
+    captured = {}
+
+    def fake_az_selfplay(**kwargs):
+        captured.update(kwargs)
+        return {
+            "best_net": "runs/az-net-2.zip",
+            "best_score": 0.75,
+            "final_hard3": 0.70,
+            "final_h2h": 0.60,
+        }
+
+    monkeypatch.setattr("locma.envs.azloop.az_selfplay", fake_az_selfplay)
+
+    res = runner.invoke(
+        app,
+        [
+            "az-selfplay",
+            "--warm-start",
+            "w.zip",
+            "--prefix",
+            "runs/az",
+            "--iterations",
+            "2",
+            "--window",
+            "1",
+            "--k-gen",
+            "4",
+            "--i-eval",
+            "20",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert captured["warm_start"] == "w.zip"
+    assert captured["iterations"] == 2
+    assert captured["K_gen"] == 4
+    assert captured["I_eval"] == 20
+    assert "0.750" in _strip_ansi(res.output)

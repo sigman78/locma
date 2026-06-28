@@ -1222,6 +1222,46 @@ python -c "from locma.harness.match import run_match; from locma.policies.regist
 print(run_match(mp('netdmcts:8,40,1.5,runs/selfplay-r2.zip'), mp('max-attack'), games=50, seed=0).win_rate_a)"
 ```
 
+## netdmcts Phase 2 — AlphaZero self-play training of the search (no gain at this budget)
+
+Phase 2 closes the AZ loop: fair net-guided-dmcts self-play generates `(token-obs, visit
+policy, outcome)` tuples; `az_train` warm-starts the net and trains **both heads** (soft cross-
+entropy to the visit distribution + MSE to the game outcome); `az_selfplay` iterates with a
+**composite gate** — adopt the new net iff it beats its parent head-to-head **and** doesn't
+regress avg-hard3, keeping the best and early-stopping after two consecutive rejects.
+
+Run: 3 iterations, 100 self-play + 40 baseline games/iter (generation K=6,I=40), evaluated at
+the headline K=8,I=40 for direct comparability to the 0.817 frozen-oracle baseline.
+
+| iter | avg-hard3 (gate, 12/opp) | h2h vs parent (16 games) | gate |
+|------|--------------------------|--------------------------|------|
+| 0    | 0.806 | 0.688 | **ADOPT** (best) |
+| 1    | 0.792 | 0.469 | reject |
+| 2    | 0.736 | 0.469 | reject → early-stop |
+
+**Final confirm (best = `az-net-0`, one round of training):** avg-hard3 **0.830** (50/opp,
+K=8,I=40) vs Phase-1 **0.817**; head-to-head vs the frozen `selfplay-r2` oracle **0.54** (100
+games). Both are **within noise** — avg-hard3 95% CI ≈ ±0.06; h2h CI ≈ ±0.10 (includes 0.50).
+The gate's eye-catching 0.688 head-to-head was 16-game noise that the 100-game confirm
+regressed to a coin flip. Gains did **not** compound: iterations 1–2 failed to beat their
+parent and iter-2's avg-hard3 fell to 0.736 (the gate correctly rejected both).
+
+**Verdict:** one round of fair AZ self-play training neither clearly helps nor hurts at this
+budget — the frozen-oracle `netdmcts` (0.817) is already near this kit's ceiling. The
+infrastructure is validated (composite gate behaved correctly, fairness preserved end-to-end,
+early-stop fired), and a **~2× search speedup** shipped alongside (`NetOracle` single combined
+forward — shares the self-attention trunk between the policy-prior and value calls,
+output-identical). Search-in-the-loop (Phase 1) was the lever; training the search further is a
+diminishing return at small budget. Design: `docs/netdmcts-phase2-design.md`; analysis:
+`ppo-review.md` §8.4B.
+
+Reproduce (needs the `[ml]` extra + a token net as the warm-start oracle):
+```bash
+uv run locma az-selfplay --warm-start runs/selfplay-r2.zip --prefix runs/az \
+  --iterations 3 --self-play-games 100 --baseline-games 40 \
+  --k-eval 8 --i-eval 40 --games-per-opp 12 --h2h-games 16
+```
+
 ## Replay determinism
 
 `locma play greedy scripted --games 50 --seed 0 --log <file>` then
