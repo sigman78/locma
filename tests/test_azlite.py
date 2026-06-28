@@ -80,7 +80,7 @@ def test_puct_ppo_constructs_without_loading_model():
 
 
 def test_puct_ppo_returns_a_legal_action_with_fake_prior():
-    import torch as th  # noqa: PLC0415
+    th = pytest.importorskip("torch")
 
     from locma.envs.encode import ACTION_SIZE  # noqa: PLC0415
     from locma.policies.azlite import PUCTPPOBattlePolicy  # noqa: PLC0415
@@ -111,7 +111,7 @@ def test_puct_ppo_returns_a_legal_action_with_fake_prior():
 
 
 def test_puct_ppo_priors_follow_ppo_semantic_probabilities():
-    import torch as th  # noqa: PLC0415
+    th = pytest.importorskip("torch")
 
     from locma.envs.encode import ACTION_SIZE, sem_index  # noqa: PLC0415
     from locma.policies.azlite import PUCTPPOBattlePolicy  # noqa: PLC0415
@@ -149,7 +149,7 @@ def test_puct_ppo_priors_follow_ppo_semantic_probabilities():
 
 
 def test_dpuct_ppo_returns_a_legal_action_with_fake_prior():
-    import torch as th  # noqa: PLC0415
+    th = pytest.importorskip("torch")
 
     from locma.envs.encode import ACTION_SIZE  # noqa: PLC0415
     from locma.policies.azlite import DeterminizedPUCTPPOBattlePolicy  # noqa: PLC0415
