@@ -37,8 +37,9 @@ A draft played against *itself* (same policy both seats, same pilot) wins
 policies produce the same winner-seat in both mirrored games, so the seat-0 player
 wins exactly one of the mirrored pair. The mirror cancels seat advantage
 *perfectly*. This is an exact, build-time calibration check: any deviation from
-0.500 in a self-duel is a benchmark bug. (Verified for `ground`, `greedy`, and the
-stochastic state-cloning `azlite` pilots — all exactly 0.5000.)
+0.500 in a self-duel is a benchmark bug. (Verified for `ground`, `greedy`, the
+stochastic state-cloning `azlite`, and the net-backed `netdmcts` pilots — all
+exactly 0.5000; the last confirms even a neural oracle plays deterministically.)
 
 ## The method
 
@@ -69,11 +70,17 @@ and it is the single most important methodological point:
   inverts. A single weak pilot is therefore an **unreliable** draft benchmark.
 - **Use a strong pilot** so the ranking reflects deck strength under *skilled*
   play, not a heuristic's quirks. Options, in order of trust:
-  - `dmcts` — the only **fair** strong searcher (public info only). Slowest.
+  - `netdmcts:8,40,1.5,<net>` — the **strongest policy in the kit** *and* fair (PUCT
+    over determinized worlds with a trained net oracle — no hidden info). The most
+    trustworthy verdict: under it `balanced` sweeps every head-to-head and replicates
+    across seeds. Slowest (~13 s/game); parallelize across single-threaded processes
+    (`torch.set_num_threads(1)`; the small net gets no benefit from intra-op threads).
+  - `dmcts` — fair but with a *heuristic* rollout oracle, so weaker than `netdmcts`;
+    it over-credits item-heavy decks (`random` near-ties `balanced`).
   - `azlite:100` — strong and fast (~0.5 s/game). It *cheats* (perfect foresight),
     but **both seats cheat identically**, so the cheat cancels in the mirror and
     what remains is "which deck wins under strong play". Self-duel is still exactly
-    0.5, confirming the symmetry. Good **primary** strong pilot.
+    0.5, confirming the symmetry. Like `dmcts` it tilts toward item decks.
   - `ppo:<model>` — the learned battle net: the **deployment** pilot ("which deck
     is best for the agent we actually ship?").
 - **Report under several pilots.** A draft that is best across `ground`, the
@@ -85,35 +92,41 @@ and it is the single most important methodological point:
 Full pilot-by-pilot matrices are in `docs/baseline.md` ("Draft-bench — 2026-06-28").
 Ranking by average win rate vs field (higher = better deck), all 7 built-in drafts:
 
-| draft       | ground | ppo (deploy) | dmcts (fair) | azlite (foresight) | greedy-battle |
-|-------------|:------:|:------------:|:------------:|:------------------:|:-------------:|
-| **balanced**| **0.650** | **0.624** | **0.647** | 0.613 | 0.567 |
-| random      | 0.471 | 0.476 | 0.643 | **0.674** | 0.080 |
-| max-guard   | 0.591 | 0.535 | 0.450 | 0.526 | 0.393 |
-| max-attack  | 0.527 | 0.542 | 0.460 | 0.457 | **0.694** |
-| max-defense | 0.434 | 0.466 | 0.453 | 0.413 | 0.576 |
-| weighted    | 0.414 | 0.407 | 0.420 | 0.428 | 0.574 |
-| greedy      | 0.412 | 0.450 | 0.427 | 0.390 | 0.616 |
+| draft       | ground | ppo (deploy) | dmcts (fair) | netdmcts (fair, top) | azlite (foresight) | greedy-battle |
+|-------------|:------:|:------------:|:------------:|:--------------------:|:------------------:|:-------------:|
+| **balanced**| **0.650** | **0.624** | **0.647** | **0.610** | 0.613 | 0.567 |
+| random      | 0.471 | 0.476 | 0.643 | 0.543 | **0.674** | 0.080 |
+| max-guard   | 0.591 | 0.535 | 0.450 | 0.453 | 0.526 | 0.393 |
+| max-attack  | 0.527 | 0.542 | 0.460 | 0.463 | 0.457 | **0.694** |
+| max-defense | 0.434 | 0.466 | 0.453 | 0.480 | 0.413 | 0.576 |
+| weighted    | 0.414 | 0.407 | 0.420 | 0.467 | 0.428 | 0.574 |
+| greedy      | 0.412 | 0.450 | 0.427 | 0.483 | 0.390 | 0.616 |
 
 Headline:
 - **`balanced` is the robustly best draft** — the Condorcet winner (beats every
-  other draft head-to-head) under `ground` and `ppo`. Under the search pilots it is
-  #1 by avg win rate (`dmcts`, edging `random` 0.647 vs 0.643 — a tie) and a close
-  2nd under `azlite`, but not the Condorcet winner there (it loses the `random`
+  other draft head-to-head) under `ground`, `ppo`, **and `netdmcts`** (the kit's
+  strongest fair policy, where it sweeps all six head-to-heads 0.56–0.64 and
+  **replicates across two seeds**). Under the two *weaker* search pilots it is #1 by
+  avg win rate (`dmcts`, edging `random` 0.647 vs 0.643 — a tie) and a close 2nd
+  under `azlite`, but not the Condorcet winner there (it loses the `random`
   head-to-head; see below).
 - The shipped reference `greedy` draft and `weighted` rank **at or below a random
   draft** under every serious pilot — confirming the long-standing finding that
   `greedy` is the worst draft and the deck is the lever.
 - **Pilot choice changes the ranking — use a strong one.** The weak `greedy`-battle
-  pilot inverts it (max-attack #1); `random` is competitive only under the search
-  pilots (it carries items a searcher uses well) and mediocre under `ground`/`ppo`.
-  `random` edges `balanced` head-to-head at seed 0 (`balanced` wins 0.40 under
-  azlite, 0.44 under dmcts) but that does **not** replicate — on a fresh seed
-  `balanced` vs `random` is 0.49 / 0.59, a seed-noisy near-tie (~0.5). Across seeds
-  they are co-leaders under search.
+  pilot inverts it (max-attack #1); `random` looks competitive only under the
+  *weaker/cheating* searchers (it carries items they use well) and is mediocre under
+  `ground`/`ppo`. It edges `balanced` head-to-head at seed 0 under those weak
+  searchers (`balanced` wins only 0.40 azlite / 0.44 dmcts) but that does **not**
+  replicate (fresh seed 0.49 / 0.59). Under the **strongest fair pilot (`netdmcts`)**
+  the effect vanishes: `random` is a clear #2 and *loses* to `balanced` 0.39 at both
+  seeds — so "random rides its items" is a weak/cheating-searcher artifact, not real
+  deck strength.
 - **No tuning lever robustly beats `balanced`.** A cheaper curve wins only under
   `ground` (ties under `ppo` — overfit). A direct item-content probe (lowering
   `item_discount` to add premium removal) **ties** `balanced` under both `azlite` and
   `dmcts` and is no better under `ppo` — so the item-light recipe is robust, not an
-  overfit. `balanced` is the best drafting strategy under the current rules: #1 or
-  tied-#1 under every credible pilot, un-improvable by the levers tested.
+  overfit. `balanced` is the best drafting strategy under the current rules: the
+  Condorcet winner under `ground`, `ppo`, and the kit's strongest fair searcher
+  (`netdmcts`, replicated across seeds), #1 or tied-#1 under every credible pilot,
+  and un-improvable by the levers tested.
