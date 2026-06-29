@@ -440,3 +440,54 @@ Best = `az-net-0` (one round of AZ training). **Final confirm (larger n): avg-ha
   gives diminishing returns at small budget.** A larger run could tighten the CIs but the signal
   is null. See `ppo-review.md` §8.4B, `baseline.md` ("netdmcts Phase 2"),
   `docs/netdmcts-phase2-design.md`.
+
+## 2026-06-28 — draft benchmark (`draft-bench`): isolate deck-building skill; `balanced` is robustly best
+
+New tool `locma draft-bench` (`locma/harness/draft_bench.py`) ranks **draft** policies
+in isolation: both seats are piloted by the SAME battle policy and differ ONLY in
+their draft. Because the draft deals both seats from the same shared, non-depleting
+triplet stream, on a fixed seed both get identical offers — so this is a clean
+**paired comparison** and the win-rate edge is pure deck quality. Calibration: a
+self-duel is **exactly 0.5000** (mirror cancels seat advantage perfectly; verified
+for ground/greedy/azlite/netdmcts pilots). Cleaner than the old "PPO × draft sweep" (which
+played a fixed battle net vs the heterogeneous baselines — conflating draft with the
+battle matchup). Methodology in `docs/draft-benchmark.md`.
+
+**Pilot choice is load-bearing — weak heuristics disagree.** Ranking by avg win
+rate vs field, all 7 built-in drafts:
+
+| draft       | ground (n=600) | ppo deploy (n=160) | dmcts fair (n=50) | netdmcts fair-top (n=50) | azlite (n=120) | greedy-battle (n=600) |
+|-------------|:--------------:|:------------------:|:-----------------:|:------------------------:|:--------------:|:---------------------:|
+| balanced    | **0.650** | **0.624** | **0.647** | **0.610** | 0.613 | 0.567 |
+| random      | 0.471 | 0.476 | 0.643 | 0.543 | **0.674** | 0.080 |
+| max-guard   | 0.591 | 0.535 | 0.450 | 0.453 | 0.526 | 0.393 |
+| max-attack  | 0.527 | 0.542 | 0.460 | 0.463 | 0.457 | **0.694** |
+| max-defense | 0.434 | 0.466 | 0.453 | 0.480 | 0.413 | 0.576 |
+| weighted    | 0.414 | 0.407 | 0.420 | 0.467 | 0.428 | 0.574 |
+| greedy      | 0.412 | 0.450 | 0.427 | 0.483 | 0.390 | 0.616 |
+
+- **`balanced` is the robustly best draft** — Condorcet winner (beats all six others
+  head-to-head) under `ground`, `ppo`, **and `netdmcts`** (the kit's strongest *fair*
+  policy; it sweeps all six H2H 0.56–0.64 and this **replicates at seeds 0 and 1** —
+  12/12). #1 by avg win rate under the *weaker* `dmcts` (edging `random` 0.647 vs
+  0.643, a tie) and close 2nd under `azlite`, though NOT Condorcet there (it loses
+  the `random` head-to-head — see below). The shipped `greedy` draft and `weighted`
+  rank **≤ a random draft** under every serious pilot — a clean, battle-isolated
+  confirmation of "greedy is the worst draft / the deck is the lever."
+- **The `greedy`-battle pilot inverts the ranking** (max-attack #1, max-guard
+  near-last) — a weak heuristic over-rewards its own style. Lesson: rank drafts under
+  a **strong** pilot and report across several; never trust one weak pilot.
+- **`random`'s strength is a weak/cheating-searcher artifact.** It carries items the
+  searcher uses, so it looks strong under the *weaker* `dmcts` and the *cheating*
+  `azlite`, edging `balanced` head-to-head at seed 0 (`balanced` wins only 0.40
+  azlite, 0.44 dmcts) — but that does **not** replicate (fresh seed 0.49 / 0.59).
+  Under the **strongest fair pilot (`netdmcts`)** the effect collapses: `random` is a
+  clear #2 (0.543) and *loses* to `balanced` 0.39 at both seeds. Genuinely strong
+  *fair* play prefers `balanced`'s structure over a bag of items.
+- **No tuning lever robustly beats `balanced`.** A cheaper curve wins only under
+  `ground` (ties under `ppo` — overfit to aggression). A direct item-discount probe
+  (12→0, adding premium removal to `balanced`'s structure) **ties** `balanced` under
+  both `azlite` (n=160) and `dmcts` (n=80) and is no better under `ppo` — so the
+  item-light recipe is robust, not an overfit; those item-variants still beat `random`
+  under `dmcts` (0.59–0.62), i.e. structure is what wins. **`balanced` is the best
+  drafting strategy under current rules.** See `docs/baseline.md` ("Draft-bench").

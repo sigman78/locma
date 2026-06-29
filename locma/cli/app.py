@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from locma.cli.render import GameRenderer
+from locma.harness.draft_bench import draft_names, make_battle, round_robin
 from locma.harness.match import run_match
 from locma.harness.tournament import run_tournament
 from locma.harness.trace import (
@@ -186,6 +187,66 @@ def noise_floor(a: str, games: int = 200, seed: int = 0):
         f"resolution limit: +/-{half:.3f}  "
         f"[dim](edges smaller than this are indistinguishable from luck)[/]"
     )
+
+
+@app.command("draft-bench")
+def draft_bench_cmd(
+    drafts: list[str] = typer.Argument(  # noqa: B008
+        None, help="draft names (default: all built-in drafts)"
+    ),
+    battle: str = typer.Option(
+        "ground",
+        help="battle policy piloting BOTH seats: ground, greedy, scripted, "
+        "azlite:100, dmcts:K,I, ppo:PATH",
+    ),
+    games: int = typer.Option(100, help="mirrored game pairs per draft pair (2x this total)"),
+    seed: int = 0,
+):
+    """Rank draft (deck-building) policies in isolation.
+
+    Both seats are piloted by the SAME ``--battle`` policy and differ only in their
+    draft, so the win-rate edge is pure deck quality (the draft deals both seats
+    identical offers on a fixed seed; a self-duel is exactly 0.500). Prints a
+    ranking by average win rate vs the field and the pair-score matrix. See
+    docs/experiments.md.
+    """
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    names = list(drafts) if drafts else draft_names()
+    if len(names) < 2:
+        raise typer.BadParameter("need at least 2 drafts to rank")
+    known = draft_names()
+    for n in names:
+        if n not in known:
+            raise typer.BadParameter(f"unknown draft '{n}' (known: {', '.join(known)})")
+    try:
+        make_battle(battle)  # validate the battle spec up front for a clean error
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+    s = round_robin(names, battle=battle, games=games, seed=seed)
+
+    # Resolution limit: Wilson half-width of a single cell at this n.
+    lo, hi = wilson_ci(games, 2 * games)
+    half = (hi - lo) / 2
+    console.print(f"[dim]battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}[/]")
+
+    rank = Table(title=f"Draft ranking (avg win rate vs field, battle={battle})", box=None)
+    rank.add_column("draft")
+    rank.add_column("avg", justify="right")
+    for n in sorted(names, key=lambda k: -s.avg_win_rate[k]):
+        rank.add_row(n, f"{s.avg_win_rate[n]:.3f}")
+    console.print(rank)
+
+    m = Table(title="Pair-score matrix (row win rate vs column)", box=None)
+    m.add_column("")
+    for n in names:
+        m.add_column(n, justify="right")
+    for row in names:
+        cells = [row]
+        for col in names:
+            cells.append("--" if row == col else f"{s.win_matrix[(row, col)]:.2f}")
+        m.add_row(*cells)
+    console.print(m)
 
 
 @app.command()

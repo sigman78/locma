@@ -30,6 +30,107 @@ not just the ordinal.
 
 ---
 
+# Draft-bench — 2026-06-28: ranking draft policies in isolation; the best draft is pilot-dependent
+
+_Date: 2026-06-28_
+
+New tool `locma draft-bench` (`locma/harness/draft_bench.py`, methodology in
+`docs/draft-benchmark.md`) ranks **draft** policies with the battle policy held
+constant on **both** seats — so the win-rate edge is pure deck quality. The draft
+deals both seats the same shared, non-depleting offers on a fixed seed, making it a
+clean **paired comparison**; a self-duel is **exactly 0.500** (mirror cancels seat
+advantage perfectly — verified for ground/greedy/azlite/netdmcts, the last
+confirming the neural oracle is deterministic). This supersedes the older
+"PPO × draft sweep" (below, 2026-06-25), which played a fixed battle net vs the
+heterogeneous *baselines* and so conflated draft quality with the battle matchup.
+
+## The headline: ranking by avg win rate vs field, under six pilots
+
+| draft       | ground | ppo (deploy) | dmcts (fair) | netdmcts (fair, top) | azlite (foresight) | greedy-battle |
+|-------------|:------:|:------------:|:------------:|:--------------------:|:------------------:|:-------------:|
+| **balanced**| **0.650** | **0.624** | **0.647** | **0.610** | 0.613 | 0.567 |
+| random      | 0.471 | 0.476 | 0.643 | 0.543 | **0.674** | 0.080 |
+| max-guard   | 0.591 | 0.535 | 0.450 | 0.453 | 0.526 | 0.393 |
+| max-attack  | 0.527 | 0.542 | 0.460 | 0.463 | 0.457 | **0.694** |
+| max-defense | 0.434 | 0.466 | 0.453 | 0.480 | 0.413 | 0.576 |
+| weighted    | 0.414 | 0.407 | 0.420 | 0.467 | 0.428 | 0.574 |
+| greedy      | 0.412 | 0.450 | 0.427 | 0.483 | 0.390 | 0.616 |
+
+n/pair (mirrored): ground/greedy-battle 600, ppo 160, azlite 120, dmcts/netdmcts
+50; `--seed 0`; pilots: `ground`, `ppo:runs/ppo-shuffled-pool.zip`, `dmcts`,
+`netdmcts:8,40,1.5,runs/selfplay-r2.zip`, `azlite:100`, `greedy`.
+
+`netdmcts:8,40` is the **strongest policy in the kit** and a *fair* one (PUCT over
+determinized worlds with a trained net oracle — no hidden info; see "netdmcts"
+above). It is the cleanest verdict of any pilot: `balanced` is the column leader and
+**sweeps all six head-to-heads** (0.56–0.64), and this **replicates across two
+seeds** (12/12 H2H wins at seeds 0 and 1; vs max-defense 0.560/0.560, vs max-guard
+0.640/0.640). The better the *fair* pilot plays, the more decisively `balanced`
+wins — and `random` falls to a clear #2 (it loses to `balanced` 0.39).
+
+## Findings
+
+1. **`balanced` is the robustly best draft.** It is the Condorcet winner (beats
+   every other draft head-to-head) under `ground`, `ppo`, **and `netdmcts`** — the
+   last being the strongest *fair* policy in the kit, where `balanced` sweeps all six
+   head-to-heads (0.56–0.64) and this **replicates across two seeds** (12/12 H2H
+   wins, seeds 0 and 1). Under the two *weaker* search pilots it is **#1 by avg win
+   rate vs field** (`dmcts` 0.647, edging `random`'s 0.643 — a tie at n=50/pair,
+   resolution ±0.134) and a close **2nd** under `azlite` — but *not* the Condorcet
+   winner there, because it loses the `random` head-to-head (see #3). The shipped
+   reference `greedy` draft and `weighted` rank **at or below a random draft** under
+   every serious pilot — a clean, battle-isolated confirmation of the long-standing
+   "greedy is the worst draft / the deck is the lever."
+2. **The best draft is pilot-dependent — choose a STRONG pilot.** The weak
+   `greedy`-battle pilot *inverts* the ranking (max-attack #1, max-guard near-last):
+   a weak heuristic over-rewards its own style. Rank under a strong pilot and report
+   across several; never trust one weak pilot.
+3. **`random`'s strength is a weak/cheating-searcher artifact, not real.** It
+   carries the ~27% items a searcher can use, so it ranks well under the *weaker*
+   search pilots (azlite/dmcts top cluster) but is mediocre under `ground`/`ppo`
+   (~0.47), where items are dead weight to those reactive pilots. Under those weaker
+   searchers `random` even *is* the seed-0 Condorcet winner (it edges `balanced`:
+   `balanced` wins only **0.40** vs random under azlite, **0.44** under dmcts at seed
+   0) — **but that edge does not replicate** (fresh seed: 0.49 azlite / 0.59 dmcts, a
+   ~0.5 near-tie at n≈120–160). Crucially, under the **strongest fair pilot
+   (`netdmcts`)** the effect collapses entirely: `random` falls to a clear **#2**
+   (0.543) and **loses to `balanced` 0.39** (i.e. balanced 0.61) at *both* seeds. So
+   "random rides its items" is an artifact of heuristic-rollout (dmcts) and
+   perfect-foresight (azlite) play; genuinely strong *fair* play prefers `balanced`'s
+   structure (curve + creatures) over a bag of items.
+4. **No tuned variant robustly beats `balanced` under any pilot.** Two levers tested
+   on held-out seeds:
+   - *Mana curve.* A cheaper curve beats `balanced` +0.08 under the aggressive
+     `ground` pilot (two seeds) but only ties under `ppo` (0.51–0.54, CI incl. 0.5) —
+     overfit to ground's aggression. Guard-floor / attack-preference / creature-target
+     all tie `balanced` under `ppo`.
+   - *Item content (premium removal).* Direct probe — `balanced`'s structure with a
+     lowered `item_discount` (12→0) vs `balanced`: **all ties** under both `azlite`
+     (n=160) and `dmcts` (n=80). Adding removal does not beat `balanced` even for the
+     spell-competent searchers, and under `ppo` it is no better (trends to ~0.45, CIs
+     include 0.5). The item-light recipe is robust, not an overfit. Those same
+     item-variant drafts beat
+     `random` under `dmcts` (0.59–0.62), so structure (curve+creatures) is what
+     separates the top drafts — `random` rode its items, not skill.
+
+   **Bottom line: `balanced` is the best drafting strategy under the current rules** —
+   the Condorcet winner under `ground`, `ppo`, and the kit's strongest fair searcher
+   (`netdmcts`, replicated across two seeds), #1 or statistically tied-#1 under every
+   credible pilot, and un-improvable by the curve / item / Guard / attack levers on
+   held-out seeds.
+
+## Reproduce
+
+```bash
+uv run locma draft-bench --battle ground  --games 300
+uv run locma draft-bench --battle ppo:runs/ppo-shuffled-pool.zip --games 80
+uv run locma draft-bench --battle dmcts   --games 25
+uv run locma draft-bench --battle netdmcts:8,40,1.5,runs/selfplay-r2.zip --games 25
+uv run locma draft-bench --battle azlite:100 --games 60
+```
+
+---
+
 # Baselines — 2026-06-26: full-roster tournament (baselines + search + PPO) — azlite tops; rating estimator fixed
 
 _Date: 2026-06-26_
