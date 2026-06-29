@@ -1,7 +1,13 @@
+import json
+
 import pytest
 
 from locma.policies.composer import Composer
-from locma.policies.drafts import GreedyDraftPolicy, MaxGuardDraftPolicy
+from locma.policies.drafts import (
+    GreedyDraftPolicy,
+    MaxGuardDraftPolicy,
+    WeightedBalancedDraftPolicy,
+)
 from locma.policies.mcts import MCTSBattlePolicy
 from locma.policies.registry import make_policy, policy_names
 
@@ -23,6 +29,13 @@ def test_legacy_preset_is_composer_with_spec_name():
 def test_greedy_preset_pairs_greedy_draft():
     p = make_policy("greedy")
     assert isinstance(p.draft, GreedyDraftPolicy)
+
+
+def test_ground_draft_experimental_spec_pairs_ground_battle_with_named_draft():
+    p = make_policy("ground-draft:weighted-balanced")
+    assert isinstance(p.battle, type(make_policy("max-guard").battle))
+    assert isinstance(p.draft, WeightedBalancedDraftPolicy)
+    assert "ground-draft" not in policy_names()
 
 
 def test_mcts_params_positional_with_defaults():
@@ -62,11 +75,29 @@ def test_ppo_default_and_path():
 
 
 def test_ppo_pairs_balanced_draft():
-    # The draft sweep found `greedy` is the worst partner; `ppo:` now pairs the
-    # learned battle net with `balanced` (docs/baseline.md "PPO × draft sweep").
     from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
 
     assert isinstance(make_policy("ppo:runs/exp1.zip").draft, BalancedDraftPolicy)
+
+
+def test_ppo_draft_spec_is_hidden_and_validates_draft_before_ml_import():
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+
+    assert "ppo-draft" not in policy_names()
+    assert isinstance(make_policy("ppo-draft:balanced,runs/exp1.zip").draft, BalancedDraftPolicy)
+    with pytest.raises(ValueError):
+        make_policy("ppo-draft:missing,runs/exp1.zip")
+
+
+def test_ppo_impact_draft_spec_loads_weights_and_is_hidden(tmp_path):
+    from locma.policies.drafts import ImpactWeightsDraftPolicy  # noqa: PLC0415
+
+    weights_path = tmp_path / "impact.json"
+    weights_path.write_text(json.dumps({"format": 1, "weights": {"1": 0.5}}))
+    assert "ppo-impact-draft" not in policy_names()
+    p = make_policy(f"ppo-impact-draft:{weights_path},runs/exp1.zip,10,3,8")
+    assert isinstance(p.draft, ImpactWeightsDraftPolicy)
+    assert p.draft.weights[1] == 0.5
 
 
 def test_unknown_spec_raises():
