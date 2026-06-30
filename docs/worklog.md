@@ -491,3 +491,48 @@ rate vs field, all 7 built-in drafts:
   item-light recipe is robust, not an overfit; those item-variants still beat `random`
   under `dmcts` (0.59–0.62), i.e. structure is what wins. **`balanced` is the best
   drafting strategy under current rules.** See `docs/baseline.md` ("Draft-bench").
+
+## 2026-06-30 — `locma-replay/3`: compact on-disk replay format
+
+New replay format `locma-replay/3` (`locma/harness/replay_codec.py`,
+`replay_store.py`) shrinks recorded games while staying **byte-for-byte
+lossless** on round-trip (`get_replay(write_replay(rep)) == rep`).
+
+- **Catalog-fill:** card refs compact to `[iid, card_id]` (or `[iid, card_id,
+  dev]` when a field deviates from the printed card — buffs, damage, an
+  unknown `card_id`, or non-default board readiness); `expand_card` refills
+  base stats from the loaded card catalog on read.
+- **Carry-forward delta:** each battle step stores only what changed since the
+  previous full state (`diff_state`/`apply_delta`) instead of a full snapshot;
+  `battle_start` carries one compact keyframe and every later state is
+  reconstructed by replaying deltas forward.
+- **Draft/battle phase framing:** explicit `draft_start`/`draft_end` and
+  `battle_start`/`battle_end` markers replace the old `open`/`close` lines.
+- **`get_replay` rehydration:** maintains a `running` full-state dict, applying
+  each delta in turn and deep-copying out `opening`/`closing`/per-step
+  `state` — so callers see the same shape as `/2` regardless of on-disk
+  format.
+- **`/2` back-compat:** `_encode_v2`/the `open`/`close`/full-`state` read path
+  are untouched; `write_replay` dispatches on `header["format"]`, so existing
+  `/2` files and code paths (and the web viewer, which only ever sees
+  `get_replay`'s expanded dict) are unaffected.
+- **`cardlist_version` guard:** the header records a digest of the printed
+  card stats used as the compression dictionary
+  (`replay_codec.cardlist_version()`); `get_replay` now `warnings.warn`s if a
+  `/3` file's stored digest no longer matches the running catalog (card stats
+  were rebalanced since the replay was recorded), flagging that rehydrated
+  card stats may not match what was actually played.
+- **Size win, measured on the real `replays/` corpus** (28 games recorded
+  under `/2`, re-encoded to `/3` via `get_replay`→`write_replay`):
+  2.27 MB → 0.56 MB, a **~75% reduction** (range 73–77% per file; the
+  brief's ballpark "~86%" was optimistic — delta+catalog-fill compounds less
+  on real battles with frequent board churn than on a synthetic small fixture,
+  but the win is still large and consistent across every sample game).
+
+Tests: `tests/test_replay_codec.py` (compact/expand round-trip, deviation
+fields, unknown-card passthrough, delta apply/diff, `cardlist_version`
+stability), `tests/test_replay_store.py` (`/3` phase framing + delta-only
+turns, `/2` path unchanged, lossless round-trip incl. buffed/damaged/Guard
+cards, `cardlist_version` mismatch warning, `/3` strictly smaller than `/2` on
+a card-bearing fixture), `tests/test_replay_stream.py` (built replays are
+`/3` with a stamped `cardlist_version` and round-trip).
