@@ -362,7 +362,7 @@
     {#each view.me.hand as c (c.iid)}
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
         in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
-        <CardView card={c} showAuras={false} />
+        <CardView card={c} />
       </button>
     {/each}
   </div>

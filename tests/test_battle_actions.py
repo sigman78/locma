@@ -24,7 +24,7 @@ def _creature(iid, cost=2, atk=3, dfn=2, ab=""):
     return CardInstance.from_card(c, iid)
 
 
-def _blue_item(iid, *, defense=0, player_hp=0, enemy_hp=0, cost=2):
+def _blue_item(iid, *, defense=0, player_hp=0, enemy_hp=0, cost=2, card_draw=0):
     c = Card(
         200,
         "Blue",
@@ -35,7 +35,39 @@ def _blue_item(iid, *, defense=0, player_hp=0, enemy_hp=0, cost=2):
         normalize_abilities(""),
         player_hp,
         enemy_hp,
+        card_draw,
+    )
+    return CardInstance.from_card(c, iid)
+
+
+def _red_item(iid, *, defense=-1, cost=2, card_draw=0, ab=""):
+    c = Card(
+        201,
+        "Red",
+        CardType.RED_ITEM,
+        cost,
         0,
+        defense,
+        normalize_abilities(ab),
+        0,
+        0,
+        card_draw,
+    )
+    return CardInstance.from_card(c, iid)
+
+
+def _green_item(iid, *, defense=3, cost=2, card_draw=0, ab=""):
+    c = Card(
+        202,
+        "Green",
+        CardType.GREEN_ITEM,
+        cost,
+        0,
+        defense,
+        normalize_abilities(ab),
+        0,
+        0,
+        card_draw,
     )
     return CardInstance.from_card(c, iid)
 
@@ -104,3 +136,48 @@ def test_blue_item_negative_defense_targets_enemy_creatures_and_face():
     bolt = _blue_item(1, defense=-4)
     gs.players[0].hand.append(bolt)
     assert _use_targets(battle_legal(gs), 1) == {10, 11, -1}
+
+
+# --- card_draw on a played card grants a (deferred, next-turn) bonus draw -----
+# Faithful to gym-locm's _do_use / _do_summon: `bonus_draw += card_draw`, applied
+# for EVERY card type. The draw itself lands at the start of the actor's next turn
+# (consumed in start_turn). Here we assert the bonus_draw accrual at play time.
+
+
+def test_summon_card_draw_grants_bonus_draw():
+    # Regression guard: creatures already accrue it (e.g. Eldritch Cyclops).
+    gs = _bare_battle()
+    cyclops = _creature(1, cost=3)
+    cyclops.card = Card(100, "Drawer", CardType.CREATURE, 3, 3, 5, normalize_abilities(""), 0, 0, 1)
+    gs.players[0].hand.append(cyclops)
+    apply_battle(gs, Summon(1))
+    assert gs.players[0].bonus_draw == 1
+
+
+def test_green_item_card_draw_grants_bonus_draw():
+    # Regression guard: green items already accrue it (e.g. Enchanted Hat).
+    gs = _bare_battle()
+    gs.players[0].board.append(_creature(10))
+    item = _green_item(1, card_draw=1)
+    gs.players[0].hand.append(item)
+    apply_battle(gs, Use(1, 10))
+    assert gs.players[0].bonus_draw == 1
+
+
+def test_red_item_card_draw_grants_bonus_draw():
+    # Quick Shot / Mighty Throwing Axe: "Deal N damage to an enemy creature. Draw a card."
+    gs = _bare_battle()
+    gs.players[1].board.append(_creature(10))
+    item = _red_item(1, defense=-1, card_draw=1)
+    gs.players[0].hand.append(item)
+    apply_battle(gs, Use(1, 10))
+    assert gs.players[0].bonus_draw == 1
+
+
+def test_blue_item_card_draw_grants_bonus_draw():
+    # Poison: "Deal 2 damage to your opponent. Draw a card." (face-targeted blue).
+    gs = _bare_battle()
+    item = _blue_item(1, enemy_hp=-2, card_draw=1)
+    gs.players[0].hand.append(item)
+    apply_battle(gs, Use(1, -1))
+    assert gs.players[0].bonus_draw == 1

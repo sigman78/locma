@@ -87,6 +87,10 @@ export interface Frame {
   seat: number | null;
   turn: number | null;
   events: EventDict[];
+  // Synthetic "start of turn" beat: present only on inserted frames that surface
+  // the start-of-turn draw (base + any deferred bonus_draw) as its own step, so
+  // the hand change is observable and the drawn cards can be highlighted.
+  turnStart?: { seat: number; draws: number[] };
 }
 
 export class Playback {
@@ -122,13 +126,29 @@ export class Playback {
             ? (closing ?? s.state)
             : s.state;
       frames.push({
-        index: i + 1,
+        index: frames.length,
         snapshot: result,
         action: s.action,
         seat: s.seat,
         turn: s.turn,
         events: s.events ?? [],
       });
+      // A turn-ending step carries the opponent's start-of-turn draw (the
+      // `turn_started` event is emitted during its end_turn → start_turn). Surface
+      // it as its own beat: the new player's post-draw hand is the next step's
+      // decision-point snapshot, and `draws` lists the freshly-drawn instance ids.
+      const ts = (s.events ?? []).find((e) => e.t === "turn_started");
+      if (ts && ts.t === "turn_started" && next) {
+        frames.push({
+          index: frames.length,
+          snapshot: next.state,
+          action: null,
+          seat: ts.seat,
+          turn: next.turn,
+          events: [],
+          turnStart: { seat: ts.seat, draws: ts.draws },
+        });
+      }
     });
     this.frames = frames;
     for (const f of this.frames) {

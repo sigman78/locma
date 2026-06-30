@@ -17,10 +17,17 @@ export interface Cast {
   seat: number;
 }
 
+/** Cards freshly drawn at a start-of-turn beat, highlighted in the owner's hand. */
+export interface Drawn {
+  seat: number;
+  iids: number[];
+}
+
 export interface Fx {
   lunge: Lunge | null;
   cast: Cast | null;
   splashes: Splash[];
+  drawn: Drawn | null;
 }
 
 export function computeFx(
@@ -60,5 +67,5 @@ export function computeFx(
   } else if (action?.t === "use") {
     cast = { seat };
   }
-  return { lunge, cast, splashes };
+  return { lunge, cast, splashes, drawn: null };
 }

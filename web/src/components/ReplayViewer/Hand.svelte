@@ -6,10 +6,12 @@
   export let faceUp = true
   export let active = false
   export let tipDir: 'above' | 'below' | null = null
+  export let drawnIids: Set<number> = new Set() // hand cards to glow as freshly drawn
+  export let fxToken = 0 // bump re-triggers the one-shot draw glow
 </script>
 
 <div class="hand" class:active>
-  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} showAuras={false} />{/each}
+  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} drawn={drawnIids.has(c.iid)} {fxToken} />{/each}
 </div>
 
 <style>

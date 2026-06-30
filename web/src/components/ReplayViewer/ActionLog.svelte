@@ -34,6 +34,10 @@
   })()
 
   function describe(f: Frame): string {
+    if (f.turnStart) {
+      const n = f.turnStart.draws.length
+      return `P${f.turnStart.seat} starts turn · draws ${n}`
+    }
     if (!f.action) return 'opening'
     const s = `P${f.seat}`
     const a = f.action

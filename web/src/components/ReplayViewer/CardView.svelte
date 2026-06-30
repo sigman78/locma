@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
   import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
-  import { abilityList, hasAura } from '../../lib/abilities'
+  import { abilityList } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
 
@@ -11,8 +11,7 @@
   export let damage: number | null = null
   export let fxToken = 0
   export let dim = false
-  export let showAuras = true
-  export let facing: 'up' | 'down' | null = null // direction toward the opponent
+  export let facing: 'up' | 'down' | null = null // direction toward the opponent (tooltip side)
   export let tipDir: 'above' | 'below' | null = null // hover-tooltip placement override
   export let slideX = 0 // px toward an attack target (Play only); 0 = no slide
   export let slideY = 0
@@ -20,6 +19,7 @@
   export let hit = false // brief red overlay when this card takes combat damage
   export let dying = false // red cross then removal
   export let dmgDelay = false // delay the damage number so it lands after the slide
+  export let drawn = false // just drawn this step → brief white outline glow that fades
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -31,9 +31,6 @@
   $: baseLetters = new Set([...(meta?.abilities ?? '')].filter((ch) => ch !== '-'))
   $: atkDelta = meta ? card.atk - meta.attack : 0
   $: defDelta = meta ? card.def - meta.defense : 0
-  $: guard = hasAura(card.abilities, 'G')
-  $: ward = hasAura(card.abilities, 'W')
-  $: lethal = hasAura(card.abilities, 'L')
   // Play uses a measured slide; the ReplayViewer uses up/down lunge. Slide wins when set.
   $: sliding = slideX !== 0 || slideY !== 0
   $: animCls = sliding ? 'sliding' : flash ? 'flashing' : lunge ? `lunge-${lunge}` : null
@@ -66,11 +63,6 @@
   <div class="cardwrap">
     <div
       class="card"
-      class:guard={showAuras && guard}
-      class:ward={showAuras && ward}
-      class:lethal={showAuras && lethal}
-      class:face-up={facing === 'up'}
-      class:face-down={facing === 'down'}
       class:attacking={!!lunge || sliding}
       class:attacked={card.has_attacked}
       class:dim
@@ -82,7 +74,6 @@
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
-      {#if showAuras && ward}<div class="ward-tint"></div>{/if}
       {#if meta}<div class="cost" title="mana cost">◆ {meta.cost}</div>{/if}
       {#if !item}
         <div class="stats">
@@ -105,6 +96,7 @@
         </div>
       {/if}
       {#key fxToken}
+        {#if drawn}<div class="draw-glow"></div>{/if}
         {#if flash}<div class="flash-blob"></div>{/if}
         {#if hit}<div class="hit-flash" class:delayed={dmgDelay}></div>{/if}
         {#if damage != null}<div class="locma-dmg" class:delayed={dmgDelay}>-{damage}</div>{/if}
@@ -143,20 +135,9 @@
   .back { display: grid; place-items: center; font-size: 40px; color: #557; }
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
     text-align: center; font-size: 13px; color: #ddd; }
-  /* auras (battlefield only; each on an independent visual channel) */
-  /* Lethal — green outline */
-  .card.lethal { outline: 2px solid #4fd97a; outline-offset: 0; }
-  /* Guard — bold white edge on the opponent-facing side ("shield wall") */
-  .card.guard.face-up { border-top: 4px solid #fff;
-    box-shadow: 0 -2px 7px rgba(255, 255, 255, 0.5); }
-  .card.guard.face-down { border-bottom: 4px solid #fff;
-    box-shadow: 0 2px 7px rgba(255, 255, 255, 0.5); }
-  /* Ward — bright shining protective bubble (screen-blend so it adds light, not gray) */
-  .ward-tint { position: absolute; inset: 0; pointer-events: none; border-radius: 6px;
-    mix-blend-mode: screen;
-    background: radial-gradient(ellipse at 50% 45%,
-      rgba(180, 245, 255, 0.6), rgba(120, 220, 255, 0.2) 55%, transparent 78%);
-    box-shadow: inset 0 0 22px 5px rgba(150, 235, 255, 0.95); }
+  /* Aura visuals (Guard/Ward/Lethal) live on MinionView — the board-minion
+     component. CardView renders hand/draft/deck cards, which carry the keyword
+     only as an informational chip (above), never the battlefield aura overlay. */
   .card.attacked { filter: saturate(0.6); }
   /* summoning-sick / inactive dim — on the card only, so the tooltip stays opaque */
   .card.dim { opacity: 0.5; }
@@ -190,6 +171,19 @@
   /* special on-summon effect indicator — amber attention pill */
   .chip.special { border-color: #ffd23d; background: rgba(255, 210, 61, 0.2);
     box-shadow: 0 0 7px rgba(255, 210, 61, 0.6); }
+
+  /* just-drawn highlight: a white outline + soft glow that fades out once.
+     Re-mounted on each fxToken change (the {#key} block), so it replays per step;
+     animation-fill-mode forwards leaves it invisible after the fade. */
+  .draw-glow { position: absolute; inset: 0; pointer-events: none; z-index: 6;
+    border-radius: 6px; outline: 2px solid rgba(255, 255, 255, 0.95); outline-offset: 0;
+    box-shadow: 0 0 13px 3px rgba(255, 255, 255, 0.85), inset 0 0 9px rgba(255, 255, 255, 0.55);
+    animation: draw-glow-fade 1.15s ease-out forwards; }
+  @keyframes draw-glow-fade {
+    0% { opacity: 1; }
+    70% { opacity: 0.55; }
+    100% { opacity: 0; }
+  }
 
   /* reveal the shared Tooltip on hover */
   .cardwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
