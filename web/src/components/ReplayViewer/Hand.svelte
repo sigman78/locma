@@ -9,7 +9,7 @@
 </script>
 
 <div class="hand" class:active>
-  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} showAuras={false} />{/each}
+  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} />{/each}
 </div>
 
 <style>
