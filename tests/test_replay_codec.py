@@ -1,11 +1,17 @@
 # tests/test_replay_codec.py
 from __future__ import annotations
 
+import copy
+
 from locma.data.cards_db import load_cards
 from locma.harness.replay_codec import (
+    apply_delta,
     cardlist_version,
     compact_card,
+    compact_state,
+    diff_state,
     expand_card,
+    expand_state,
 )
 
 CARDS = {c.id: c for c in load_cards()}
@@ -92,3 +98,56 @@ def test_deviation_is_per_field_independent():
     only_def["def"] = CARDS[3].defense - 1
     assert compact_card(only_def, board=True)[2] == {"def": only_def["def"]}
     assert expand_card(compact_card(only_def, board=True), board=True) == only_def
+
+
+def _state(current, p0, p1):
+    def player(health, hand, board):
+        return {
+            "health": health,
+            "mana": 1,
+            "max_mana": 1,
+            "damage_counter": 0,
+            "bonus_draw": 0,
+            "deck_count": 20,
+            "hand": hand,
+            "board": board,
+        }
+
+    return {"current": current, "players": [player(*p0), player(*p1)]}
+
+
+def test_state_keyframe_roundtrip():
+    s = _state(0, (30, [_base_hand_card(3)], []), (28, [], [_base_board_card(5)]))
+    assert expand_state(compact_state(s)) == s
+
+
+def test_delta_scalar_change_only():
+    prev = _state(0, (30, [], []), (30, [], []))
+    cur = copy.deepcopy(prev)
+    cur["players"][1]["health"] = 25
+    cur["players"][1]["bonus_draw"] = 1
+    d = diff_state(prev, cur)
+    assert d == {"p": [{"seat": 1, "s": {"health": 25, "bonus_draw": 1}}]}
+    running = copy.deepcopy(prev)
+    apply_delta(running, d)
+    assert running == cur
+
+
+def test_delta_summon_moves_card_hand_to_board_and_buffs():
+    prev = _state(0, (30, [_base_hand_card(3)], []), (30, [], []))
+    cur = copy.deepcopy(prev)
+    summoned = cur["players"][0]["hand"].pop()
+    summoned = {**summoned, "can_attack": True, "has_attacked": False, "atk": summoned["atk"] + 1}
+    cur["players"][0]["board"] = [summoned]
+    d = diff_state(prev, cur)
+    running = copy.deepcopy(prev)
+    apply_delta(running, d)
+    assert running == cur
+
+
+def test_no_change_yields_empty_delta():
+    prev = _state(0, (30, [_base_hand_card(3)], []), (30, [], []))
+    assert diff_state(prev, copy.deepcopy(prev)) == {}
+    running = copy.deepcopy(prev)
+    apply_delta(running, {})
+    assert running == prev

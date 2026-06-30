@@ -70,3 +70,70 @@ def expand_card(ref: list, *, board: bool) -> dict:
         out["can_attack"] = dev.get("can_attack", True)
         out["has_attacked"] = dev.get("has_attacked", False)
     return out
+
+
+def _compact_zone(cards: list, *, board: bool) -> list:
+    return [compact_card(c, board=board) for c in cards]
+
+
+def _expand_zone(refs: list, *, board: bool) -> list:
+    return [expand_card(r, board=board) for r in refs]
+
+
+def compact_state(state: dict) -> dict:
+    """Full state -> compact keyframe (all scalars + catalog-filled zones)."""
+    players = []
+    for p in state["players"]:
+        op = {k: p[k] for k in SCALARS}
+        op["hand"] = _compact_zone(p["hand"], board=False)
+        op["board"] = _compact_zone(p["board"], board=True)
+        players.append(op)
+    return {"current": state["current"], "players": players}
+
+
+def expand_state(compact: dict) -> dict:
+    players = []
+    for p in compact["players"]:
+        op = {k: p[k] for k in SCALARS}
+        op["hand"] = _expand_zone(p["hand"], board=False)
+        op["board"] = _expand_zone(p["board"], board=True)
+        players.append(op)
+    return {"current": compact["current"], "players": players}
+
+
+def diff_state(prev: dict, cur: dict) -> dict:
+    """Delta of full state `cur` vs full state `prev`."""
+    d: dict = {}
+    if cur["current"] != prev["current"]:
+        d["cur"] = cur["current"]
+    seats = []
+    for seat in (0, 1):
+        pc, pp = cur["players"][seat], prev["players"][seat]
+        entry: dict = {}
+        s = {k: pc[k] for k in SCALARS if pc[k] != pp[k]}
+        if s:
+            entry["s"] = s
+        if pc["hand"] != pp["hand"]:
+            entry["hand"] = _compact_zone(pc["hand"], board=False)
+        if pc["board"] != pp["board"]:
+            entry["board"] = _compact_zone(pc["board"], board=True)
+        if entry:
+            entry["seat"] = seat
+            seats.append(entry)
+    if seats:
+        d["p"] = seats
+    return d
+
+
+def apply_delta(running: dict, d: dict) -> None:
+    """Apply delta `d` to full state `running` in place."""
+    if "cur" in d:
+        running["current"] = d["cur"]
+    for entry in d.get("p", []):
+        p = running["players"][entry["seat"]]
+        for k, v in entry.get("s", {}).items():
+            p[k] = v
+        if "hand" in entry:
+            p["hand"] = _expand_zone(entry["hand"], board=False)
+        if "board" in entry:
+            p["board"] = _expand_zone(entry["board"], board=True)
