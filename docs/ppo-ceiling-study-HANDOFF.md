@@ -24,6 +24,34 @@ It was authored on a machine without CUDA; execution is meant to happen on the
 5. CI gate before every commit: `uv run --extra dev ruff check . && uv run --extra dev
    ruff format --check . && uv run --extra dev pytest -q`.
 
+## Opening prompt for the fresh session
+
+After the pick-up procedure above, open `claude` in this repo and paste this verbatim:
+
+```
+I'm continuing the "PPO Ceiling Study." The full design and a bite-sized TDD
+implementation plan are already committed on this branch (feat/ppo-ceiling-study).
+
+Read these first, in order:
+  docs/ppo-ceiling-study-HANDOFF.md
+  docs/ppo-ceiling-study-design.md
+  docs/ppo-ceiling-study-plan.md
+
+Then execute the plan task-by-task using the superpowers:subagent-driven-development
+skill. Build and verify Tasks 1–11 (the tooling) first; do NOT start the GPU Runbook
+(R0–R6 — the long sweep/training runs) until I tell you the tooling is green.
+
+This machine has a CUDA GPU. Run everything via `uv run` with the --extra ml/dev/sweep
+flags. Before each commit, pass the CI gate:
+  uv run --extra dev ruff check .
+  uv run --extra dev ruff format --check .
+  uv run --extra dev pytest -q
+Commit per task with the messages the plan specifies. Start with Task 1.
+```
+
+To run inline instead of dispatching subagents, swap the skill line for
+"execute with superpowers:executing-plans" (simpler, single-context).
+
 ## The one-line goal
 
 Settle, with a symmetric +0.03 paired-difference verdict, whether the token PPO net's
