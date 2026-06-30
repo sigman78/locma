@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import copy
 import glob
 import json
 import os
 from itertools import groupby
 
-from locma.harness.replay_codec import compact_state, diff_state
+from locma.harness.replay_codec import apply_delta, compact_state, diff_state, expand_state
 
 
 def _full_path(dirpath: str, rid: str) -> str:
@@ -126,6 +127,7 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
     steps: list[dict] = []
     result: dict = {}
     has_draft_lines = False
+    running: dict | None = None
 
     with open(path, encoding="utf-8") as f:
         for raw in f:
@@ -144,20 +146,33 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
                 pool.append(line["pool"])
                 for p in line.get("picks", []):
                     picks.append({"round": r, "seat": p["seat"], "pick": p["pick"]})
-            elif k == "open":
+            elif k in ("draft_start", "draft_end"):
+                continue  # phase markers; seed/source already live in the header
+            elif k == "open":  # /2
                 opening = line["state"]
-            elif k == "close":
+            elif k == "close":  # /2
                 closing = line["state"]
+            elif k == "battle_start":  # /3
+                running = expand_state(line["keyframe"])
+                opening = copy.deepcopy(running)
+            elif k == "battle_end":  # /3
+                apply_delta(running, line["d"])
+                closing = copy.deepcopy(running)
             elif k == "turn":
                 seat = line["seat"]
                 turn = line["turn"]
                 for entry in line.get("actions", []):
+                    if "d" in entry:  # /3 delta
+                        apply_delta(running, entry["d"])
+                        state = copy.deepcopy(running)
+                    else:  # /2 full state
+                        state = entry["state"]
                     steps.append(
                         {
                             "seat": seat,
                             "turn": turn,
                             "action": entry["action"],
-                            "state": entry["state"],
+                            "state": state,
                             "events": entry.get("events", []),
                         }
                     )

@@ -308,3 +308,86 @@ def test_v2_path_unchanged(tmp_path):
     for ln in _read_lines(tmp_path, "r_v2"):
         if ln["k"] == "turn":
             assert all("state" in a for a in ln["actions"])
+
+
+def _v3_with_cards(rid="r_v3cards"):
+    """A /3 replay whose states carry base, buffed, damaged and keyword-changed cards."""
+
+    def hc(iid, cid):
+        c = _CAT[cid]
+        return {
+            "iid": iid,
+            "card_id": cid,
+            "atk": c.attack,
+            "def": c.defense,
+            "abilities": c.abilities,
+        }
+
+    def bc(iid, cid, **over):
+        d = hc(iid, cid)
+        d["can_attack"] = True
+        d["has_attacked"] = False
+        d.update(over)
+        return d
+
+    def state(current, h0, b0, h1, b1):
+        def pl(hand, board):
+            return {
+                "health": 30,
+                "mana": 2,
+                "max_mana": 2,
+                "damage_counter": 0,
+                "bonus_draw": 0,
+                "deck_count": 20,
+                "hand": hand,
+                "board": board,
+            }
+
+        return {"current": current, "players": [pl(h0, b0), pl(h1, b1)]}
+
+    buffed = bc(20, 3)
+    buffed["atk"] = _CAT[3].attack + 2
+    buffed["def"] = _CAT[3].defense + 2
+    damaged = bc(21, 5)
+    damaged["def"] = max(0, _CAT[5].defense - 1)
+    guarded = bc(22, 9)
+    guarded["abilities"] = "---G--"
+
+    opening = state(0, [hc(10, 3), hc(11, 5)], [], [hc(12, 9)], [])
+    s1 = state(0, [hc(11, 5)], [buffed], [hc(12, 9)], [])  # seat0 summoned+buffed 3
+    s2 = state(1, [hc(11, 5)], [buffed], [], [guarded, damaged])  # seat1 board changed
+    closing = state(1, [hc(11, 5)], [buffed], [], [guarded])
+
+    rep = _realistic_replay(rid)
+    rep["header"]["format"] = "locma-replay/3"
+    rep["battle"] = {
+        "opening": opening,
+        "steps": [
+            {"seat": 0, "turn": 1, "action": {"t": "summon", "iid": 20}, "state": s1, "events": []},
+            {
+                "seat": 1,
+                "turn": 2,
+                "action": {"t": "pass"},
+                "state": s2,
+                "events": [{"t": "turn_started", "seat": 1, "draws": [12]}],
+            },
+        ],
+        "closing": closing,
+    }
+    return rep
+
+
+def test_v3_roundtrip_lossless_with_mutable_stats(tmp_path):
+    original = _v3_with_cards()
+    write_replay(str(tmp_path), original)
+    got = get_replay(str(tmp_path), original["header"]["replay_id"])
+    assert got == original
+
+
+def test_v3_no_closing_roundtrip(tmp_path):
+    original = _v3_with_cards("r_v3noclose")
+    original["battle"]["closing"] = None
+    write_replay(str(tmp_path), original)
+    got = get_replay(str(tmp_path), "r_v3noclose")
+    assert got["battle"]["closing"] is None
+    assert got == original
