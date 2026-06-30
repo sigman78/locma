@@ -89,12 +89,12 @@ def test_full_game_finishes_and_produces_replay():
     assert isinstance(r["winner_is_human"], bool)
     assert r["turns"] >= 1
     assert r["replay_id"].startswith("r_")
-    # the assembled replay round-trips through the store in locma-replay/2
+    # the assembled replay round-trips through the store in locma-replay/3
     with tempfile.TemporaryDirectory() as d:
         path = write_replay(d, g._replay)
         assert path.endswith(".jsonl")
         rep = get_replay(d, r["replay_id"])
-        assert rep["header"]["format"] == "locma-replay/2"
+        assert rep["header"]["format"] == "locma-replay/3"
         assert rep["header"]["policy_a"] == "human"
         assert rep["header"]["a_seat"] == 0
         assert len(rep["battle"]["steps"]) >= 1

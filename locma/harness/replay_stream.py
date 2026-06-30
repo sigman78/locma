@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from locma.core.actions import action_to_dict
 from locma.core.engine import run_game
 from locma.core.state import Phase
+from locma.harness.replay_codec import cardlist_version
 from locma.harness.trace import trace_hash
 
 
@@ -131,7 +132,7 @@ def assemble_replay(
     source: str,
     created_at: str | None = None,
 ) -> dict:
-    """Build a locma-replay/2 dict from an already-populated StreamRecorder.
+    """Build a locma-replay/3 dict from an already-populated StreamRecorder.
 
     Used by build_replay (after run_game) and by the interactive session driver
     (which drives the recorder's hooks live during a human game).
@@ -142,8 +143,9 @@ def assemble_replay(
         "replay_id": "r_" + h.split(":")[1][:12],
         "created_at": created_at,
         "source": source,
-        "format": "locma-replay/2",
+        "format": "locma-replay/3",
         "engine_version": _engine_version(),
+        "cardlist_version": cardlist_version(),
         "policy_a": policy_a,
         "policy_b": policy_b,
         "seed": seed,
