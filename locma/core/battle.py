@@ -198,6 +198,7 @@ def _apply_item(gs, item, target_id, emit=None):
         _change_health(
             gs, gs.opponent(gs.current), -item.card.enemy_hp, from_opponent=True, emit=emit
         )
+        p.bonus_draw += item.card.card_draw
     else:  # BLUE_ITEM
         if target_id == -1:
             # Blue items targeting face reuse card.defense as face damage (it is
@@ -236,6 +237,7 @@ def _apply_item(gs, item, target_id, emit=None):
         _change_health(
             gs, gs.opponent(gs.current), -item.card.enemy_hp, from_opponent=True, emit=emit
         )
+        p.bonus_draw += item.card.card_draw
 
 
 def battle_legal(gs: GameState) -> list[Action]:
