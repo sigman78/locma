@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 
 import pytest
 
@@ -391,3 +392,24 @@ def test_v3_no_closing_roundtrip(tmp_path):
     got = get_replay(str(tmp_path), "r_v3noclose")
     assert got["battle"]["closing"] is None
     assert got == original
+
+
+def test_cardlist_version_mismatch_warns(tmp_path):
+    rep = _v3_with_cards("r_skew")
+    rep["header"]["cardlist_version"] = "cl_deadbeef0000"  # wrong on purpose
+    write_replay(str(tmp_path), rep)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        get_replay(str(tmp_path), "r_skew")
+    assert any("cardlist_version" in str(w.message) for w in caught)
+
+
+def test_v3_is_far_smaller_than_v2(tmp_path):
+    v3 = _v3_with_cards("r_size_v3")
+    v2 = json.loads(json.dumps(v3))
+    v2["header"] = {**v2["header"], "format": "locma-replay/2", "replay_id": "r_size_v2"}
+    write_replay(str(tmp_path), v3)
+    write_replay(str(tmp_path), v2)
+    sz3 = (tmp_path / "r_size_v3.jsonl").stat().st_size
+    sz2 = (tmp_path / "r_size_v2.jsonl").stat().st_size
+    assert sz3 < sz2  # compact form is strictly smaller on this card-bearing fixture

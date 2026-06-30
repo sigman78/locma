@@ -4,9 +4,16 @@ import copy
 import glob
 import json
 import os
+import warnings
 from itertools import groupby
 
-from locma.harness.replay_codec import apply_delta, compact_state, diff_state, expand_state
+from locma.harness.replay_codec import (
+    apply_delta,
+    cardlist_version,
+    compact_state,
+    diff_state,
+    expand_state,
+)
 
 
 def _full_path(dirpath: str, rid: str) -> str:
@@ -182,6 +189,14 @@ def get_replay(dirpath: str, replay_id: str) -> dict:
     # If no draft lines were seen, pool stays None and picks stays []
     if not has_draft_lines:
         pool = None
+
+    clv = (header or {}).get("cardlist_version")
+    if clv is not None and clv != cardlist_version():
+        warnings.warn(
+            f"replay {replay_id} cardlist_version {clv} != current {cardlist_version()}; "
+            "rehydrated card stats may differ from the original catalog",
+            stacklevel=2,
+        )
 
     return {
         "header": header,

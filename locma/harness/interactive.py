@@ -31,7 +31,7 @@ class InteractiveGame:
 
     The driver pauses whenever the current seat is the human's. AI seats resolve
     inline. It mirrors run_game's loop and reuses the same engine primitives and
-    recording hooks so a finished game is a standard locma-replay/2.
+    recording hooks so a finished game is a standard locma-replay/3.
     """
 
     def __init__(self, game_id, ai_policy, seed, human_seat, cards):
