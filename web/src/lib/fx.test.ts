@@ -61,6 +61,7 @@ describe("computeFx", () => {
       lunge: null,
       cast: null,
       splashes: [],
+      drawn: null,
     });
   });
 

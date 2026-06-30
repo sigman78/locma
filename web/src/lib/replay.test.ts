@@ -78,6 +78,70 @@ describe('Playback', () => {
     expect(pb.cursor).toBe(0) // no earlier turn → stays at frame 0
   })
 
+  it('inserts a turn-start beat frame surfacing the start-of-turn draw', () => {
+    const s0 = snap(0)
+    const s1 = snap(1)
+    const rep: Replay = {
+      header: {} as any,
+      draft: { pool: [], picks: [] },
+      battle: {
+        opening: snap(0),
+        steps: [
+          {
+            seat: 0,
+            turn: 1,
+            action: { t: 'pass' },
+            state: s0,
+            events: [
+              { t: 'turn_ended', seat: 0 },
+              { t: 'turn_started', seat: 1, draws: [50, 51] },
+            ],
+          },
+          { seat: 1, turn: 2, action: { t: 'pass' }, state: s1, events: [] },
+        ],
+        closing: snap(0),
+      },
+      result: { winner: 0, turns: 2 },
+    }
+    const pb = new Playback(rep)
+    // opening, P0 pass, [synthetic P1 turn-start], P1 pass
+    expect(pb.frames.length).toBe(4)
+    const ts = pb.frames[2]
+    expect(ts.turnStart).toEqual({ seat: 1, draws: [50, 51] })
+    expect(ts.seat).toBe(1)
+    expect(ts.turn).toBe(2)
+    expect(ts.action).toBeNull()
+    // shows the new player's POST-draw decision-point snapshot
+    expect(ts.snapshot).toBe(s1)
+    // frame indices stay sequential after insertion
+    expect(pb.frames.map((f) => f.index)).toEqual([0, 1, 2, 3])
+  })
+
+  it('does not insert a turn-start beat when there is no following step', () => {
+    const rep: Replay = {
+      header: {} as any,
+      draft: { pool: [], picks: [] },
+      battle: {
+        opening: snap(0),
+        steps: [
+          {
+            seat: 0,
+            turn: 1,
+            action: { t: 'pass' },
+            state: snap(0),
+            // a turn_started with no next step (e.g. drawing player decks out) must
+            // not synthesize a dangling beat
+            events: [{ t: 'turn_started', seat: 1, draws: [7] }],
+          },
+        ],
+      },
+      result: { winner: 1, turns: 1 },
+    }
+    const pb = new Playback(rep)
+    expect(pb.frames.length).toBe(2) // opening + the pass only
+    expect(pb.frames.some((f) => f.turnStart)).toBe(false)
+  })
+
   it('maps instance ids to catalog card ids across frames', () => {
     const withCard = (iid: number, cardId: number): any => ({
       current: 0,

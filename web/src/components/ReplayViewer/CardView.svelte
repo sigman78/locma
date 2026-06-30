@@ -19,6 +19,7 @@
   export let hit = false // brief red overlay when this card takes combat damage
   export let dying = false // red cross then removal
   export let dmgDelay = false // delay the damage number so it lands after the slide
+  export let drawn = false // just drawn this step → brief white outline glow that fades
 
   let imgOk = true
   $: name = cardName(card.card_id)
@@ -95,6 +96,7 @@
         </div>
       {/if}
       {#key fxToken}
+        {#if drawn}<div class="draw-glow"></div>{/if}
         {#if flash}<div class="flash-blob"></div>{/if}
         {#if hit}<div class="hit-flash" class:delayed={dmgDelay}></div>{/if}
         {#if damage != null}<div class="locma-dmg" class:delayed={dmgDelay}>-{damage}</div>{/if}
@@ -169,6 +171,19 @@
   /* special on-summon effect indicator — amber attention pill */
   .chip.special { border-color: #ffd23d; background: rgba(255, 210, 61, 0.2);
     box-shadow: 0 0 7px rgba(255, 210, 61, 0.6); }
+
+  /* just-drawn highlight: a white outline + soft glow that fades out once.
+     Re-mounted on each fxToken change (the {#key} block), so it replays per step;
+     animation-fill-mode forwards leaves it invisible after the fade. */
+  .draw-glow { position: absolute; inset: 0; pointer-events: none; z-index: 6;
+    border-radius: 6px; outline: 2px solid rgba(255, 255, 255, 0.95); outline-offset: 0;
+    box-shadow: 0 0 13px 3px rgba(255, 255, 255, 0.85), inset 0 0 9px rgba(255, 255, 255, 0.55);
+    animation: draw-glow-fade 1.15s ease-out forwards; }
+  @keyframes draw-glow-fade {
+    0% { opacity: 1; }
+    70% { opacity: 0.55; }
+    100% { opacity: 0; }
+  }
 
   /* reveal the shared Tooltip on hover */
   .cardwrap:hover :global(.tooltip) { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }

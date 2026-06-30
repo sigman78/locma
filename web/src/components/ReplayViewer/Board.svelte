@@ -19,6 +19,11 @@
   $: p0 = snapshot.players[0]
   $: p1 = snapshot.players[1]
 
+  // freshly-drawn hand cards to glow this step (only the owning seat's hand)
+  const NO_DRAWN = new Set<number>()
+  $: drawn0 = fx?.drawn && fx.drawn.seat === 0 ? new Set(fx.drawn.iids) : NO_DRAWN
+  $: drawn1 = fx?.drawn && fx.drawn.seat === 1 ? new Set(fx.drawn.iids) : NO_DRAWN
+
   // how long a dead unit lingers (showing the red cross) before its removal plays.
   const CROSS_MS = 300
 
@@ -81,7 +86,8 @@
 
 <div class="board">
   <Player player={p1} name={nameB} seat={1} active={snapshot.current === 1} {fx} {fxToken} />
-  <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} tipDir="below" />
+  <Hand cards={p1.hand} faceUp={true} active={snapshot.current === 1} tipDir="below"
+    drawnIids={drawn1} {fxToken} />
   <div class="battlefield">
     <div class="field top" class:active={snapshot.current === 1}>
       {#each display1 as c (c.iid)}
@@ -103,7 +109,8 @@
       {/each}
     </div>
   </div>
-  <Hand cards={p0.hand} faceUp={true} active={snapshot.current === 0} tipDir="above" />
+  <Hand cards={p0.hand} faceUp={true} active={snapshot.current === 0} tipDir="above"
+    drawnIids={drawn0} {fxToken} />
   <Player player={p0} name={nameA} seat={0} active={snapshot.current === 0} {fx} {fxToken} />
 </div>
 

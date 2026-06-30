@@ -49,6 +49,8 @@
     const next = pb.current
     if (next.index === prev.index + 1 && next.seat !== null) {
       fx = computeFx(next.events, next.action, next.seat)
+      // a synthetic turn-start beat carries the freshly-drawn cards to highlight
+      if (next.turnStart) fx = { ...fx, drawn: { seat: next.turnStart.seat, iids: next.turnStart.draws } }
       dyingCards = dyingFrom(next.events, prev.snapshot)
       fxToken++
       pulse()
