@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from locma.data.cards_db import load_cards as _load_cards
 from locma.harness.replay_store import get_replay, list_headers, write_replay
 
 # ---------------------------------------------------------------------------
@@ -270,3 +271,40 @@ def test_nonconsecutive_same_seat_turn_preserved(tmp_path):
     got = get_replay(str(tmp_path), "r_nonconsec")
     assert got["battle"]["steps"] == original["battle"]["steps"]
     assert got == original
+
+
+_CAT = {c.id: c for c in _load_cards()}
+
+
+def _v3_replay(rid="r_v3"):
+    rep = _realistic_replay(rid)
+    rep["header"]["format"] = "locma-replay/3"
+    return rep
+
+
+def _read_lines(tmp_path, rid):
+    text = (tmp_path / f"{rid}.jsonl").read_text(encoding="utf-8")
+    return [json.loads(x) for x in text.splitlines() if x.strip()]
+
+
+def test_v3_emits_phase_framing_and_deltas(tmp_path):
+    write_replay(str(tmp_path), _v3_replay())
+    kinds = [ln["k"] for ln in _read_lines(tmp_path, "r_v3")]
+    assert kinds.count("draft_start") == 1 and kinds.count("draft_end") == 1
+    assert "battle_start" in kinds and "battle_end" in kinds
+    assert "open" not in kinds and "close" not in kinds
+    # turn actions carry "d" deltas, never a full "state"
+    for ln in _read_lines(tmp_path, "r_v3"):
+        if ln["k"] == "turn":
+            for a in ln["actions"]:
+                assert "d" in a and "state" not in a
+
+
+def test_v2_path_unchanged(tmp_path):
+    # an explicit /2 dict must still emit the legacy open/turn-with-state lines
+    write_replay(str(tmp_path), _realistic_replay("r_v2"))
+    kinds = [ln["k"] for ln in _read_lines(tmp_path, "r_v2")]
+    assert "open" in kinds and "draft_start" not in kinds
+    for ln in _read_lines(tmp_path, "r_v2"):
+        if ln["k"] == "turn":
+            assert all("state" in a for a in ln["actions"])
