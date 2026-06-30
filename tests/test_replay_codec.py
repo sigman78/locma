@@ -66,3 +66,29 @@ def test_board_readiness_default_omitted_else_carried():
 def test_cardlist_version_is_stable_and_prefixed():
     v = cardlist_version()
     assert v.startswith("cl_") and v == cardlist_version()
+
+
+def test_unknown_card_id_carries_all_stats_verbatim():
+    # a card_id absent from the catalog cannot be catalog-filled → all stats ride
+    # in the dev map and round-trip losslessly (no data loss).
+    UNKNOWN = 999999
+    hand = {"iid": 1, "card_id": UNKNOWN, "atk": 5, "def": 4, "abilities": "B-----"}
+    ref = compact_card(hand, board=False)
+    assert ref[0] == 1 and ref[1] == UNKNOWN
+    assert ref[2] == {"atk": 5, "def": 4, "abilities": "B-----"}
+    assert expand_card(ref, board=False) == hand
+    board = {**hand, "can_attack": False, "has_attacked": True}
+    assert expand_card(compact_card(board, board=True), board=True) == board
+
+
+def test_deviation_is_per_field_independent():
+    # only atk deviates (def == printed) → dev carries atk alone, and vice versa;
+    # guards against an atk/def field-name swap in the comparison.
+    only_atk = _base_board_card(3)
+    only_atk["atk"] = CARDS[3].attack + 3
+    assert compact_card(only_atk, board=True)[2] == {"atk": only_atk["atk"]}
+    assert expand_card(compact_card(only_atk, board=True), board=True) == only_atk
+    only_def = _base_board_card(3)
+    only_def["def"] = CARDS[3].defense - 1
+    assert compact_card(only_def, board=True)[2] == {"def": only_def["def"]}
+    assert expand_card(compact_card(only_def, board=True), board=True) == only_def
