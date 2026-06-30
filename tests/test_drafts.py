@@ -1,13 +1,19 @@
 from dataclasses import dataclass
 
 from locma.policies.drafts import (
+    AggroDraftPolicy,
     BalancedDraftPolicy,
+    DefenseDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
     MaxDefenseDraftPolicy,
     MaxGuardDraftPolicy,
+    MidrangeDraftPolicy,
     RandomDraftPolicy,
+    TrueCostBalancedDraftPolicy,
+    WeightedBalancedDraftPolicy,
     WeightedDraftPolicy,
+    make_draft_policy,
 )
 
 
@@ -18,6 +24,7 @@ class _CV:
     attack: int
     defense: int
     abilities: str
+    card_id: int = 1
 
 
 @dataclass
@@ -96,3 +103,52 @@ def test_balanced_prefers_creature_and_is_stateful():
     assert len(p._picks) == 1
     p.reset()
     assert p._picks == []
+
+
+def test_weighted_balanced_admits_premium_removal_more_than_balanced():
+    offered = (
+        _CV(2, 5, 0, -13, "------", 110),
+        _CV(0, 5, 3, 3, "------", 1),
+        _CV(0, 1, 1, 1, "------", 2),
+    )
+    assert BalancedDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) != 0
+    assert WeightedBalancedDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
+
+
+def test_truecost_balanced_uses_card_id_for_draw_and_hp_effects():
+    # Card 149 draws a card and strips all abilities; a same-view fake card id
+    # lacks those full-card fields, so the true-cost policy should prefer 149.
+    offered = (
+        _CV(2, 3, 0, 0, "BCDGLW", 149),
+        _CV(2, 0, 0, 0, "BCDGLW", 142),
+        _CV(0, 1, 2, 1, "------", 1),
+    )
+    assert TrueCostBalancedDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
+
+
+def test_make_draft_policy_supports_new_research_drafts():
+    assert isinstance(make_draft_policy("draft:weighted-balanced"), WeightedBalancedDraftPolicy)
+    assert isinstance(make_draft_policy("truecost-balanced"), TrueCostBalancedDraftPolicy)
+
+
+def test_aggro_prefers_cheap_attack_over_expensive_body():
+    offered = (
+        _CV(0, 2, 4, 1, "-C----", 39),
+        _CV(0, 6, 4, 7, "------", 68),
+        _CV(0, 3, 2, 3, "---G--", 10),
+    )
+    assert AggroDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 0
+
+
+def test_defense_prefers_guard_and_defense():
+    offered = (
+        _CV(0, 2, 4, 1, "-C----", 39),
+        _CV(0, 3, 2, 5, "---G--", 96),
+        _CV(0, 3, 5, 2, "------", 93),
+    )
+    assert DefenseDraftPolicy().draft_action(_DV(offered), [0, 1, 2]) == 1
+
+
+def test_midrange_and_defense_factory():
+    assert isinstance(make_draft_policy("draft:midrange"), MidrangeDraftPolicy)
+    assert isinstance(make_draft_policy("draft:defense"), DefenseDraftPolicy)

@@ -55,6 +55,44 @@ ranking because each imposes its own style. See `docs/draft-benchmark.md`.
 
 Example: `uv run locma draft-bench --battle azlite:100 --games 60`
 
+## draft-report
+`locma draft-report [SPEC...] [--drafts N] [--seed S] [--top-cards K]`
+Samples draft-only decks and prints cheap deck-quality proxies plus card cost
+outliers. Draft-only specs use `draft:<name>`: `draft:random`, `draft:greedy`,
+`draft:weighted`, `draft:balanced`, `draft:weighted-balanced`,
+`draft:truecost-balanced`, `draft:aggro`, `draft:midrange`, `draft:defense`,
+`draft:max-guard`, `draft:max-attack`, and `draft:max-defense`. Full policy specs
+are also accepted; their draft half is used.
+For same-battle validation, `ground-draft:<name>` pairs a draft-only policy with
+the ground battle policy. `ppo-draft:<name>,<model.zip>` pairs a draft-only policy
+with a PPO battle model for learned-policy draft-swap checks.
+`ppo-impact-draft:<weights.json>,<model.zip>,scale,curve,item` pairs a saved
+card-impact artifact with a PPO battle model.
+
+Example:
+`uv run locma draft-report draft:greedy draft:balanced draft:weighted-balanced --drafts 500`
+
+## card-impact
+`locma card-impact [--games N] [--seed S] [--battle SPEC] [--alpha A] [--top-cards K]`
+Estimates empirical card impact from random-draft games with a fixed battle
+policy. It fits a ridge model from deck card-count differences to game winner,
+then prints the strongest positive and negative card coefficients. This is a
+gameplay-derived complement to the static true-cost proxy in `draft-report`.
+`--battle` accepts `ground`, `greedy`, or a full policy spec whose battle half
+should be reused, such as `ppo:runs/ppo-shuffled-pool.zip`.
+
+Example:
+`uv run locma card-impact --games 1000 --battle ground --top-cards 20 --out runs/ground-impact.json`
+
+## impact-draft-sweep
+`locma impact-draft-sweep BATTLE [--fit-games N] [--eval-games N] [--reference DRAFT] [--spec S:C:I]`
+Fits empirical card impact for `BATTLE`, then evaluates impact-guided draft
+candidates against a reference draft. Candidate specs are
+`scale:curve_weight:item_discount` and may be repeated.
+
+Example:
+`uv run locma impact-draft-sweep ppo:runs/ppo-shuffled-pool.zip --fit-games 1200 --eval-games 200 --reference balanced --spec 20:4:8`
+
 ## noise-floor
 `locma noise-floor A [--games N] [--seed S]`
 Plays A against an independent copy of itself — the luck baseline. Prints win

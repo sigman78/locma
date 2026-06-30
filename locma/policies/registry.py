@@ -12,9 +12,11 @@ from locma.policies.composer import Composer
 from locma.policies.drafts import (
     BalancedDraftPolicy,
     GreedyDraftPolicy,
+    ImpactWeightsDraftPolicy,
     MaxAttackDraftPolicy,
     MaxGuardDraftPolicy,
     RandomDraftPolicy,
+    make_draft_policy,
 )
 
 
@@ -36,6 +38,11 @@ def _max_guard(params, spec):
 
 def _max_attack(params, spec):
     return Composer(GroundBattlePolicy(), MaxAttackDraftPolicy(), name=spec)
+
+
+def _ground_draft(params, spec):
+    draft_name = params[0] if params else "balanced"
+    return Composer(GroundBattlePolicy(), make_draft_policy(draft_name), name=spec)
 
 
 def _mcts(params, spec):
@@ -116,14 +123,45 @@ def _ppo(params, spec):
     )
 
     model_path = params[0] if params else "model.zip"
-    # Pair the learned battle net with a `balanced` draft, not `greedy`: the draft
-    # sweep (docs/baseline.md "PPO × draft sweep") found the greedy draft is the
-    # WORST partner (0.39 avg vs the ground baselines) while `balanced` (0.54) makes
-    # the same battle net BEAT them. The battle policy is deck-robust, so this needs
-    # no retraining.
     return Composer(
         MaskablePPOBattlePolicy(model_path=model_path), BalancedDraftPolicy(), name=spec
     )
+
+
+def _ppo_draft(params, spec):
+    """Experimental draft-swap spec — ``ppo-draft:draft_name,model_path``."""
+    draft_name = params[0] if len(params) > 0 else "balanced"
+    draft = make_draft_policy(draft_name)
+    model_path = params[1] if len(params) > 1 else "model.zip"
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
+
+    return Composer(MaskablePPOBattlePolicy(model_path=model_path), draft, name=spec)
+
+
+def _ppo_impact_draft(params, spec):
+    """Experimental spec — ``ppo-impact-draft:weights.json,model_path,scale,curve,item``."""
+    if len(params) < 1:
+        raise ValueError("ppo-impact-draft requires a weights JSON path")
+    weights_path = params[0]
+    model_path = params[1] if len(params) > 1 else "model.zip"
+    scale = float(params[2]) if len(params) > 2 else 20.0
+    curve_weight = float(params[3]) if len(params) > 3 else 3.0
+    item_discount = float(params[4]) if len(params) > 4 else 8.0
+    from locma.harness.card_impact import read_card_impact_weights  # noqa: PLC0415
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+    )
+
+    draft = ImpactWeightsDraftPolicy(
+        read_card_impact_weights(weights_path),
+        scale=scale,
+        curve_weight=curve_weight,
+        item_discount=item_discount,
+        name=f"impact-draft:{weights_path}",
+    )
+    return Composer(MaskablePPOBattlePolicy(model_path=model_path), draft, name=spec)
 
 
 # The pool of baseline opponents a `mixed` training opponent draws from.
@@ -145,19 +183,28 @@ _FACTORIES = {
     "greedy": _greedy,
     "max-guard": _max_guard,
     "max-attack": _max_attack,
+    "ground-draft": _ground_draft,
     "mcts": _mcts,
     "azlite": _azlite,
     "dmcts": _dmcts,
     "netdmcts": _netdmcts,
     "ppo": _ppo,
+    "ppo-draft": _ppo_draft,
+    "ppo-impact-draft": _ppo_impact_draft,
     "mixed": _mixed,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo` and `netdmcts` need a model artifact + the [ml] extra (use `ppo:path`
-# or `netdmcts:K,I,c,path`); `mixed` is a non-stationary training opponent,
-# not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts"}
+# `ppo`/`ppo-draft`/`ppo-impact-draft`/`netdmcts` need model artifacts + the [ml]
+# extra (use explicit specs); `mixed` is a non-stationary training opponent.
+_HIDDEN = {
+    "ppo",
+    "ppo-draft",
+    "ppo-impact-draft",
+    "netdmcts",
+    "mixed",
+    "ground-draft",
+}
 
 
 def policy_names() -> list[str]:
