@@ -537,6 +537,29 @@ cards, `cardlist_version` mismatch warning, `/3` strictly smaller than `/2` on
 a card-bearing fixture), `tests/test_replay_stream.py` (built replays are
 `/3` with a stamped `cardlist_version` and round-trip).
 
+## 2026-07-01 — Follow-up idea after canonical league: island/top-K self-play arenas
+
+While the canonical FSP league run is in flight, keep the algorithm unchanged:
+one sequential league trajectory from `round0.zip`, each round trained against
+all past snapshots plus `{scripted,max-guard,max-attack}`. After those results
+land, a natural parallel upgrade is an **island league** variant rather than
+trying to merge PPO gradients or average weights.
+
+Sketch: launch several independent arenas from the same `round0.zip` with
+different seeds. Each arena trains its own local FSP chain. At generation
+boundaries, evaluate arena winners on the same held-out seeds, then admit the
+top `M` snapshots (likely top 2) into a shared promoted pool used by the next
+generation's arenas, alongside each arena's own past snapshots and the three
+baselines. This uses CPU parallelism as policy search/selection: run multiple
+sequential PPO trajectories in parallel, then select/admit policies, not
+parameters.
+
+Preferred first variant: **top-2 admission** over winner-takes-all. It preserves
+diversity, reduces lucky-seed overfitting, and gives the league more distinct
+opponents without overbuilding a full hall-of-fame scheduler. Minimal tooling
+change: let `run_league` accept `initial_snapshots` so promoted snapshots can be
+seeded into the opponent pool for a new arena generation.
+
 ## 2026-06-30 — Autoregressive action head vs flat 155-softmax: no help (the head is not the lever)
 
 Branch `feat/ppo-autoreg-action` (off `main`, independent of the ceiling
@@ -592,4 +615,3 @@ so it can play the full game. Tooling: `locma/envs/action_factor.py`,
 `ar_distribution.py`, `ar_policy.py`, `ar_callbacks.py`, `harness/ar_study.py`,
 `locma ar-eval`. Tests: `test_action_factor.py`, `test_ar_distribution.py`,
 `test_ar_policy.py` (incl. smoke-train + save/load + legal-game), `test_ar_study.py`.
-
