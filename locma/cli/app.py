@@ -419,6 +419,31 @@ def train_zoo_cmd(
     console.print(f"saved {saved}")
 
 
+@app.command("ar-eval")
+def ar_eval_cmd(
+    flat: str = typer.Option(..., help="path to the flat-head baseline model .zip"),
+    ar: str = typer.Option(..., help="path to the autoregressive-head model .zip"),
+    seeds: int = typer.Option(200, help="number of held-out eval seeds"),
+    base_seed: int = typer.Option(1_000_000, help="first eval seed (held-out range)"),
+    games_per_seed: int = typer.Option(2, help="mirrored matches per opponent per seed"),
+):
+    """Paired avg-hard3 verdict: does the autoregressive head beat the flat head?"""
+    from locma.harness.ar_study import run_verdict  # noqa: PLC0415
+
+    seed_list = [base_seed + i for i in range(seeds)]
+    r = run_verdict(flat, ar, seed_list, games_per_seed)
+    table = Table(title="autoregressive-head verdict (avg-hard3)")
+    table.add_column("metric")
+    table.add_column("value", justify="right")
+    table.add_row("flat mean", f"{r['flat_mean']:.4f}")
+    table.add_row("ar mean", f"{r['ar_mean']:.4f}")
+    table.add_row("delta (ar - flat)", f"{r['delta']:+.4f}")
+    table.add_row("95% CI", f"[{r['ci'][0]:+.4f}, {r['ci'][1]:+.4f}]")
+    table.add_row("n seeds", str(r["n_seeds"]))
+    table.add_row("verdict", r["verdict"])
+    console.print(table)
+
+
 @app.command("record-practicum")
 def record_practicum_cmd(
     teacher: str = typer.Option("mcts:100", help="teacher policy spec to clone"),
