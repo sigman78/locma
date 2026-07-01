@@ -138,6 +138,7 @@ def train_agent(
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
     head: str = "flat",
+    callback=None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -177,7 +178,11 @@ def train_agent(
         prev = 0
         saved = []
         for i, mark in enumerate(marks):
-            model.learn(total_timesteps=mark - prev, reset_num_timesteps=(i == 0))
+            model.learn(
+                total_timesteps=mark - prev,
+                reset_num_timesteps=(i == 0),
+                callback=callback,
+            )
             path = _ckpt_path(out, mark)
             model.save(path)
             saved.append(path)
@@ -185,7 +190,7 @@ def train_agent(
         env.close()
         return saved
 
-    model.learn(total_timesteps=steps)
+    model.learn(total_timesteps=steps, callback=callback)
     model.save(out)
     env.close()
     return out

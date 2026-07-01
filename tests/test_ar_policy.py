@@ -94,3 +94,23 @@ def test_smoke_train_save_load_play(tmp_path):
     ppo = make_policy(f"ppo:{saved}")
     res = run_match(ppo, make_policy("random"), games=1, seed=123)
     assert res.games == 2  # mirrored pair completed without illegal-action errors
+
+
+def test_telemetry_callback_runs(tmp_path):
+    pytest.importorskip("stable_baselines3")
+    from locma.envs.ar_callbacks import ARTelemetryCallback  # noqa: PLC0415
+    from locma.envs.training import train_agent  # noqa: PLC0415
+
+    out = str(tmp_path / "ar.zip")
+    train_agent(
+        "random",
+        steps=600,
+        out=out,
+        seed=0,
+        verbose=0,
+        both_seat=False,
+        obs_mode="flat",
+        head="autoreg",
+        callback=ARTelemetryCallback(eval_freq=256, seeds=3, games_per_seed=1),
+    )
+    assert (tmp_path / "ar.zip").exists()
