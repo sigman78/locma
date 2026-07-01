@@ -696,6 +696,39 @@ def az_selfplay_cmd(
 
 
 @app.command()
+def sweep(
+    storage: str = typer.Option("sqlite:///runs/ceiling.db", help="Optuna storage URL"),
+    study_name: str = typer.Option("ceiling-phase1a", help="Optuna study name"),
+    n_trials: int = typer.Option(50, help="trials to run this invocation"),
+    n_envs: int = typer.Option(8, help="parallel envs per trial"),
+    total_steps: int = typer.Option(300_000, help="reduced per-trial budget (4-opp curriculum)"),
+    n_games: int = typer.Option(120, help="eval games per opponent in the callback"),
+    sweep_arch: bool = typer.Option(False, help="Phase 1b: sweep token-extractor arch"),
+    tb_root: str = typer.Option("runs/tb", help="TensorBoard + model output root"),
+    device: str = typer.Option("auto", help="torch device: auto|cpu|cuda|mps"),
+):
+    """Run the PPO ceiling-study hyperparameter sweep (requires [ml] + [sweep])."""
+    try:
+        from locma.envs.sweep import run_sweep  # noqa: PLC0415
+    except ImportError as e:
+        raise typer.BadParameter("sweep requires extras: uv sync --extra ml --extra sweep") from e
+    study = run_sweep(
+        storage=storage,
+        study_name=study_name,
+        n_trials=n_trials,
+        n_envs=n_envs,
+        total_steps=total_steps,
+        n_games=n_games,
+        sweep_arch=sweep_arch,
+        tb_root=tb_root,
+        device=device,
+    )
+    bt = study.best_trial
+    console.print(f"best avg_hard3 = {bt.value:.3f}  (trial {bt.number})")
+    console.print(f"best params: {bt.params}")
+
+
+@app.command()
 def serve(
     host: str = "127.0.0.1",
     port: int = 8000,
