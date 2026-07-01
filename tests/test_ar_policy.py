@@ -70,3 +70,27 @@ def test_make_model_autoreg_uses_ar_policy():
     model = _make_model(env, obs_mode="flat", seed=0, verbose=0, ent_coef=0.02, head="autoreg")
     assert isinstance(model.policy, MaskableAutoregressivePolicy)
     env.close()
+
+
+def test_smoke_train_save_load_play(tmp_path):
+    pytest.importorskip("stable_baselines3")
+    from locma.envs.training import train_agent  # noqa: PLC0415
+    from locma.harness.match import run_match  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+
+    out = str(tmp_path / "ar.zip")
+    saved = train_agent(
+        "random",
+        steps=400,
+        out=out,
+        seed=0,
+        verbose=0,
+        both_seat=False,
+        obs_mode="flat",
+        head="autoreg",
+    )
+    # `ppo:<path>` composes the AR battle net with the balanced draft so it can
+    # play a full game (draft + battle) — the apples-to-apples eval convention.
+    ppo = make_policy(f"ppo:{saved}")
+    res = run_match(ppo, make_policy("random"), games=1, seed=123)
+    assert res.games == 2  # mirrored pair completed without illegal-action errors
