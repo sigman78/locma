@@ -28,12 +28,16 @@ class MaskablePPOBattlePolicy:
     """
 
     def __init__(
-        self, model_path: str = "model.zip", name: str = "ppo", deterministic: bool = True
+        self,
+        model_path: str = "model.zip",
+        name: str = "ppo",
+        deterministic: bool = True,
+        model=None,
     ):
         self.model_path = model_path
         self.name = name
         self.deterministic = deterministic
-        self._model = None
+        self._model = model  # if provided, skip the lazy file load
 
     def _ensure(self) -> None:
         if self._model is None:
