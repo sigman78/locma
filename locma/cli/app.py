@@ -405,6 +405,7 @@ def train_zoo_cmd(
     vf_coef: float = typer.Option(0.5, help="PPO value function loss coefficient"),
     max_grad_norm: float = typer.Option(0.5, help="PPO max gradient norm for clipping"),
     device: str = typer.Option("auto", help="torch device: 'auto', 'cpu', or 'cuda'"),
+    n_envs: int = typer.Option(1, help="parallel envs per opponent phase (CPU speedup)"),
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
@@ -412,6 +413,8 @@ def train_zoo_cmd(
     [ml] extra."""
     if steps_per_opponent < 1:
         raise typer.BadParameter("steps-per-opponent must be >= 1")
+    if n_envs < 1:
+        raise typer.BadParameter("n_envs must be >= 1")
     if obs_mode not in ("flat", "token", "token-v1"):
         raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
@@ -440,6 +443,7 @@ def train_zoo_cmd(
             vf_coef=vf_coef,
             max_grad_norm=max_grad_norm,
             device=device,
+            n_envs=n_envs,
             tensorboard_log=tensorboard_log,
         )
     except ImportError as e:
