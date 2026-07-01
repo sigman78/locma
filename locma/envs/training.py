@@ -111,7 +111,7 @@ def _make_model(
         tensorboard_log=tensorboard_log,
     )
 
-    if obs_mode == "token":
+    if obs_mode.startswith("token"):
         from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
 
         pk = dict(features_extractor_class=TokenSetExtractor)

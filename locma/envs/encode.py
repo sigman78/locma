@@ -41,6 +41,9 @@ NUM_CARDS: int = 160
 # Tactical scalar count (see encode_battle_tokens docstring for full list)
 N_TACTICAL: int = 13
 
+# V1 tactical scalar count: V0's 13 + 5 symmetric-threat scalars (variant="v1").
+N_TACTICAL_V1: int = 18
+
 
 def _card_block(c, *, on_board: bool) -> list[float]:
     t = c.type
@@ -192,14 +195,15 @@ def _token_row(card, zone_idx: int, *, on_board: bool) -> list:
     return zone + type_oh + cad + abilities + [ready]
 
 
-def encode_battle_tokens(view) -> dict:
+def encode_battle_tokens(view, variant: str = "v0") -> dict:
     """Encode a BattleView into the tokenized PPO2 observation dict.
 
     Returns a dict with four float32 numpy arrays:
       - ``tokens``     shape (20, 17): per-card numeric features; zeros for pads
       - ``card_ids``   shape (20,):    card_id (1..160); 0 for pads
       - ``token_mask`` shape (20,):    1 for real cards, 0 for pads
-      - ``scalars``    shape (13,):    tactical scalars (see below)
+      - ``scalars``    shape (13,) for variant="v0", (18,) for variant="v1":
+                       tactical scalars (see below)
 
     Slot order: 0..7 my_hand / 8..13 my_board / 14..19 op_board.
 
@@ -217,6 +221,15 @@ def encode_battle_tokens(view) -> dict:
       10 my_total_defense   (sum of defense over my_board)
       11 reachable_face_damage  (0 if any opp guard else sum ready-attacker attack)
       12 lethal_available   (1.0 if reachable_face_damage >= op_health else 0.0)
+
+    variant="v1" appends 5 symmetric-threat scalars (N_TACTICAL_V1=18) that give
+    the net awareness of the *opponent's* threat back at me (V0 only encodes my
+    own guard/attack/reachable):
+      13 my_guard_count    (my-board creatures with G ability)
+      14 op_total_attack   (sum of attack over op_board)
+      15 op_reachable      (0 if any my guard else sum op ready-attacker attack)
+      16 exposed_to_lethal (1.0 if op_reachable >= me_health else 0.0)
+      17 card_advantage    ((my_hand+my_board) - (op_hand+op_board) card counts)
     """
     tokens = np.zeros((MAX_TOKENS, TOKEN_FEATS), dtype=np.float32)
     card_ids = np.zeros(MAX_TOKENS, dtype=np.float32)
@@ -282,6 +295,35 @@ def encode_battle_tokens(view) -> dict:
         dtype=np.float32,
     )
 
+    if variant == "v1":
+        my_guard_count = sum(1 for c in view.my_board if c.abilities[_GUARD_IDX] != "-")
+        op_total_attack = sum(float(c.attack) for c in view.op_board)
+        if my_guard_count > 0:
+            op_reachable = 0.0
+        else:
+            op_reachable = sum(
+                float(c.attack) for c in view.op_board if c.can_attack and not c.has_attacked
+            )
+        exposed_to_lethal = 1.0 if op_reachable >= view.me_health else 0.0
+        card_advantage = float(
+            (len(view.my_hand) + len(view.my_board)) - (view.op_hand_count + len(view.op_board))
+        )
+        scalars = np.concatenate(
+            [
+                scalars,
+                np.array(
+                    [
+                        my_guard_count,
+                        op_total_attack,
+                        op_reachable,
+                        exposed_to_lethal,
+                        card_advantage,
+                    ],
+                    dtype=np.float32,
+                ),
+            ]
+        )
+
     return {
         "tokens": tokens,
         "card_ids": card_ids,
@@ -290,12 +332,14 @@ def encode_battle_tokens(view) -> dict:
     }
 
 
-def token_obs_space():
+def token_obs_space(variant: str = "v0"):
     """Return the gymnasium spaces.Dict for the tokenized PPO2 observation.
 
     gymnasium is imported lazily so this module stays import-safe without ML deps.
     """
     from gymnasium import spaces  # noqa: PLC0415
+
+    n_scalar = N_TACTICAL_V1 if variant == "v1" else N_TACTICAL
 
     return spaces.Dict(
         {
@@ -320,7 +364,7 @@ def token_obs_space():
             "scalars": spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(N_TACTICAL,),
+                shape=(n_scalar,),
                 dtype=np.float32,
             ),
         }

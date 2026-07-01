@@ -15,7 +15,9 @@ def _encode_for(model, view):
     from gymnasium import spaces  # noqa: PLC0415 — lazy, only reached after model load
 
     if isinstance(model.observation_space, spaces.Dict):
-        return encode_battle_tokens(view)
+        n_scalar = int(model.observation_space["scalars"].shape[0])
+        variant = "v1" if n_scalar == 18 else "v0"
+        return encode_battle_tokens(view, variant)
     return encode_battle(view)
 
 

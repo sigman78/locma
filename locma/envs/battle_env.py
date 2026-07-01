@@ -57,7 +57,9 @@ class BattleEnv(gym.Env):
     obs_mode:
         ``"flat"`` (default) — Box(OBS_SIZE,) float32 vector via
         ``encode_battle``; ``"token"`` — spaces.Dict tokenized observation via
-        ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars).
+        ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars);
+        ``"token-v1"`` — same tokenized dict with 5 extra symmetric-threat
+        scalars (18 scalars instead of 13).
     """
 
     metadata: dict = {}
@@ -71,7 +73,7 @@ class BattleEnv(gym.Env):
         obs_mode: str = "flat",
     ) -> None:
         super().__init__()
-        _VALID_OBS_MODES = {"flat", "token"}
+        _VALID_OBS_MODES = {"flat", "token", "token-v1"}
         if obs_mode not in _VALID_OBS_MODES:
             raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
         self.obs_mode = obs_mode
@@ -89,7 +91,7 @@ class BattleEnv(gym.Env):
                 low=-np.inf, high=np.inf, shape=(OBS_SIZE,), dtype=np.float32
             )
         else:
-            self.observation_space = token_obs_space()
+            self.observation_space = token_obs_space(self._obs_variant())
         self.action_space = spaces.Discrete(ACTION_SIZE)
 
         self._cards = load_cards()
@@ -100,12 +102,16 @@ class BattleEnv(gym.Env):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _obs_variant(self) -> str:
+        """Map self.obs_mode to the token encoder variant ("v0"/"v1")."""
+        return "v1" if self.obs_mode == "token-v1" else "v0"
+
     def _encode_obs(self):
         """Build the current observation according to self.obs_mode."""
         view = make_battle_view(self.gs)
         if self.obs_mode == "flat":
             return encode_battle(view)
-        return encode_battle_tokens(view)
+        return encode_battle_tokens(view, self._obs_variant())
 
     def _zero_obs(self):
         """Return a correctly-shaped all-zero observation for self.obs_mode.
