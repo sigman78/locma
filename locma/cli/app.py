@@ -728,6 +728,34 @@ def sweep(
     console.print(f"best params: {bt.params}")
 
 
+@app.command("ceiling-eval")
+def ceiling_eval_cmd(
+    candidates: str = typer.Option(..., help="comma-separated candidate model .zip paths"),
+    baselines: str = typer.Option(..., help="comma-separated B0 model .zip paths"),
+    seeds: int = typer.Option(40, help="number of held-out eval seeds (from 1_000_000)"),
+    games_per_seed: int = typer.Option(25, help="paired games per opponent per seed"),
+    threshold: float = typer.Option(0.03, help="avg-hard3 lift required for 'headroom'"),
+):
+    """Rigorous paired-difference verdict for the PPO ceiling study (requires [ml])."""
+    try:
+        from locma.harness.ceiling_eval import run_verdict  # noqa: PLC0415
+    except ImportError as e:
+        raise typer.BadParameter("ceiling-eval requires the [ml] extra") from e
+    seed_list = list(range(1_000_000, 1_000_000 + seeds))
+    out = run_verdict(
+        candidates.split(","),
+        baselines.split(","),
+        seeds=seed_list,
+        games_per_seed=games_per_seed,
+        threshold=threshold,
+    )
+    console.print(
+        f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "
+        f"delta={out['mean_delta']:+.3f}  95% CI [{out['ci_lo']:+.3f}, {out['ci_hi']:+.3f}]"
+    )
+    console.print(f"[bold]VERDICT: {out['verdict']}[/]")
+
+
 @app.command()
 def serve(
     host: str = "127.0.0.1",
