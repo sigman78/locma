@@ -302,16 +302,21 @@ def train_zoo(
         extractor_kwargs=extractor_kwargs,
         tensorboard_log=tensorboard_log,
     )
-    for i, opp in enumerate(opps):
-        if i > 0:
-            old_env = model.env
-            model.set_env(_build_env(opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode))
-            old_env.close()  # else SubprocVecEnv workers from the old opponent phase leak
-        model.learn(
-            total_timesteps=steps_per_opponent,
-            reset_num_timesteps=(i == 0),
-            callback=callback,
-        )
-    model.save(out)
-    model.env.close()  # else the last opponent phase's SubprocVecEnv workers leak
+    try:
+        for i, opp in enumerate(opps):
+            if i > 0:
+                old_env = model.env
+                model.set_env(_build_env(opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode))
+                old_env.close()  # else SubprocVecEnv workers from the old phase leak
+            model.learn(
+                total_timesteps=steps_per_opponent,
+                reset_num_timesteps=(i == 0),
+                callback=callback,
+            )
+        model.save(out)
+    finally:
+        # model.learn() can raise mid-phase (e.g. optuna.TrialPruned from an eval
+        # callback) -- close whatever VecEnv is live at that point too, or its
+        # SubprocVecEnv workers leak just like the phase-swap case above.
+        model.env.close()
     return out
