@@ -79,6 +79,12 @@ def objective(
     tb_root: str,
     device: str,
 ) -> float:
+    """Train one trial's config and report its avg-hard3 for Optuna.
+
+    Fixed to ``obs_mode="token"`` (V0) by design -- this sweep never re-searches HPs
+    for obs variants. Phase-2 obs-variant experiments (e.g. token-v1) instead reuse
+    Phase-1's best HPs directly via ``train_zoo``/``ceiling-eval``, not a re-sweep.
+    """
     from locma.envs.eval_callback import WinRateEvalCallback  # noqa: PLC0415
     from locma.envs.training import train_zoo  # noqa: PLC0415
 

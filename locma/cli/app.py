@@ -707,7 +707,12 @@ def sweep(
     tb_root: str = typer.Option("runs/tb", help="TensorBoard + model output root"),
     device: str = typer.Option("auto", help="torch device: auto|cpu|cuda|mps"),
 ):
-    """Run the PPO ceiling-study hyperparameter sweep (requires [ml] + [sweep])."""
+    """Run the PPO ceiling-study hyperparameter sweep (requires [ml] + [sweep]).
+
+    Note: this sweep is fixed to token V0 obs by design -- Phase-2 obs-variant
+    experiments (e.g. token-v1) reuse Phase-1's best HPs via ``train-zoo``/
+    ``ceiling-eval`` directly, not via a re-sweep.
+    """
     try:
         from locma.envs.sweep import run_sweep  # noqa: PLC0415
     except ImportError as e:
@@ -728,6 +733,23 @@ def sweep(
     console.print(f"best params: {bt.params}")
 
 
+def _disjoint_eval_seeds(seeds: int, games_per_seed: int, start: int = 1_000_000) -> list[int]:
+    """Build ``seeds`` eval-seed anchors whose ``run_match`` game blocks never overlap.
+
+    ``run_match(policy_a, policy_b, games=games_per_seed, seed=s)`` internally plays base
+    seeds ``s, s+1, ..., s+games_per_seed-1`` (each mirrored). If eval seeds were spaced by
+    1 (e.g. ``1_000_000, 1_000_001, ...``), consecutive blocks would overlap in all but one
+    game, making the per-seed avg-hard3 values a heavily autocorrelated sliding-window
+    average rather than independent samples -- which would make the bootstrap CI in
+    ``paired_bootstrap_ci`` far too tight (anti-conservative) and risk a false "headroom"
+    verdict. Spacing anchors by ``games_per_seed`` instead makes each block
+    ``[start + i*games_per_seed, start + i*games_per_seed + games_per_seed - 1]`` disjoint
+    from its neighbors, while still playing the same total number of base seeds
+    (``seeds * games_per_seed``) as before.
+    """
+    return list(range(start, start + seeds * games_per_seed, games_per_seed))
+
+
 @app.command("ceiling-eval")
 def ceiling_eval_cmd(
     candidates: str = typer.Option(..., help="comma-separated candidate model .zip paths"),
@@ -741,7 +763,7 @@ def ceiling_eval_cmd(
         from locma.harness.ceiling_eval import run_verdict  # noqa: PLC0415
     except ImportError as e:
         raise typer.BadParameter("ceiling-eval requires the [ml] extra") from e
-    seed_list = list(range(1_000_000, 1_000_000 + seeds))
+    seed_list = _disjoint_eval_seeds(seeds, games_per_seed)
     out = run_verdict(
         candidates.split(","),
         baselines.split(","),

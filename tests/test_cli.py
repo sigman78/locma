@@ -5,7 +5,7 @@ import re
 
 from typer.testing import CliRunner
 
-from locma.cli.app import app
+from locma.cli.app import _disjoint_eval_seeds, app
 
 runner = CliRunner()
 
@@ -96,6 +96,32 @@ def test_train_help_lists_command():
 def test_train_rejects_zero_steps():
     # The guard fires before any ML import, so this passes with or without [ml].
     assert runner.invoke(app, ["train", "--steps", "0"]).exit_code != 0
+
+
+def test_disjoint_eval_seeds_blocks_do_not_overlap():
+    # run_match(seed=s, games=games_per_seed) consumes base seeds
+    # [s, s + games_per_seed - 1]. Anchors spaced by 1 (the old, buggy behavior)
+    # would make consecutive blocks overlap in all but one game; spacing by
+    # games_per_seed (the fix) must make every block disjoint from its neighbors.
+    seeds, games_per_seed = 40, 25
+    anchors = _disjoint_eval_seeds(seeds, games_per_seed)
+    assert len(anchors) == seeds
+    assert anchors[0] == 1_000_000
+    blocks = [set(range(a, a + games_per_seed)) for a in anchors]
+    for i in range(len(blocks) - 1):
+        assert blocks[i].isdisjoint(blocks[i + 1])
+    # Total base seeds played is unchanged from the old `seeds` count: still
+    # `seeds * games_per_seed` base seeds overall, just non-overlapping now.
+    all_covered = set()
+    for b in blocks:
+        all_covered |= b
+    assert len(all_covered) == seeds * games_per_seed
+
+
+def test_disjoint_eval_seeds_matches_old_count_when_games_per_seed_is_one():
+    # With games_per_seed=1 the old and new spacing coincide (sanity check that the
+    # fix is a generalization, not a behavior change for that degenerate case).
+    assert _disjoint_eval_seeds(5, 1) == list(range(1_000_000, 1_000_005))
 
 
 def test_train_zoo_help_lists_command():
