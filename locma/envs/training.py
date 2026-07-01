@@ -74,37 +74,53 @@ def _make_model(
     ent_coef: float,
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    n_steps: int = 2048,
+    batch_size: int = 64,
+    n_epochs: int = 10,
+    gamma: float = 0.99,
+    gae_lambda: float = 0.95,
+    clip_range: float = 0.2,
+    vf_coef: float = 0.5,
+    max_grad_norm: float = 0.5,
+    device: str = "auto",
+    extractor_kwargs: dict | None = None,
+    tensorboard_log: str | None = None,
 ):
     """Construct a MaskablePPO model, selecting the policy class by obs_mode.
 
-    "flat" → MlpPolicy (unchanged from the baseline).
-    "token" → MultiInputPolicy + TokenSetExtractor (self-attention over card tokens).
+    All PPO knobs are explicit so a sweep can set them; defaults match SB3's own
+    defaults, so an unset knob reproduces the pre-sweep behavior byte-for-byte.
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-    if obs_mode == "token":
-        from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
-
-        return MaskablePPO(
-            "MultiInputPolicy",
-            env,
-            policy_kwargs=dict(features_extractor_class=TokenSetExtractor),
-            verbose=verbose,
-            seed=seed,
-            ent_coef=ent_coef,
-            learning_rate=learning_rate,
-            target_kl=target_kl,
-        )
-    # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
-    return MaskablePPO(
-        "MlpPolicy",
-        env,
+    common = dict(
         verbose=verbose,
         seed=seed,
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
+        device=device,
+        tensorboard_log=tensorboard_log,
     )
+
+    if obs_mode == "token":
+        from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
+
+        pk = dict(features_extractor_class=TokenSetExtractor)
+        if extractor_kwargs:
+            pk["features_extractor_kwargs"] = dict(extractor_kwargs)
+        return MaskablePPO("MultiInputPolicy", env, policy_kwargs=pk, **common)
+
+    # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
+    return MaskablePPO("MlpPolicy", env, **common)
 
 
 def train_agent(
@@ -120,6 +136,18 @@ def train_agent(
     obs_mode: str = "flat",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    n_steps: int = 2048,
+    batch_size: int = 64,
+    n_epochs: int = 10,
+    gamma: float = 0.99,
+    gae_lambda: float = 0.95,
+    clip_range: float = 0.2,
+    vf_coef: float = 0.5,
+    max_grad_norm: float = 0.5,
+    device: str = "auto",
+    extractor_kwargs: dict | None = None,
+    callback=None,
+    tensorboard_log: str | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -139,6 +167,13 @@ def train_agent(
         the single `out` path.
     learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
     target_kl: PPO target KL divergence for early stopping (None = off, the default).
+    n_steps, batch_size, n_epochs, gamma, gae_lambda, clip_range, vf_coef,
+        max_grad_norm: PPO hyperparameters, forwarded to `_make_model` (defaults
+        match SB3's own defaults).
+    device: torch device passed to SB3 (default "auto").
+    extractor_kwargs: optional kwargs for TokenSetExtractor (token obs_mode only).
+    callback: optional SB3 callback (or CallbackList), passed to every `model.learn`.
+    tensorboard_log: optional tensorboard log directory.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -151,6 +186,17 @@ def train_agent(
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
+        device=device,
+        extractor_kwargs=extractor_kwargs,
+        tensorboard_log=tensorboard_log,
     )
 
     if checkpoints:
@@ -158,7 +204,9 @@ def train_agent(
         prev = 0
         saved = []
         for i, mark in enumerate(marks):
-            model.learn(total_timesteps=mark - prev, reset_num_timesteps=(i == 0))
+            model.learn(
+                total_timesteps=mark - prev, reset_num_timesteps=(i == 0), callback=callback
+            )
             path = _ckpt_path(out, mark)
             model.save(path)
             saved.append(path)
@@ -166,7 +214,7 @@ def train_agent(
         env.close()
         return saved
 
-    model.learn(total_timesteps=steps)
+    model.learn(total_timesteps=steps, callback=callback)
     model.save(out)
     env.close()
     return out
@@ -190,6 +238,19 @@ def train_zoo(
     obs_mode: str = "flat",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    n_steps: int = 2048,
+    batch_size: int = 64,
+    n_epochs: int = 10,
+    gamma: float = 0.99,
+    gae_lambda: float = 0.95,
+    clip_range: float = 0.2,
+    vf_coef: float = 0.5,
+    max_grad_norm: float = 0.5,
+    device: str = "auto",
+    extractor_kwargs: dict | None = None,
+    n_envs: int = 1,
+    callback=None,
+    tensorboard_log: str | None = None,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -206,6 +267,14 @@ def train_zoo(
         for MultiInputPolicy + TokenSetExtractor + tokenized Dict obs.
     learning_rate: PPO learning rate (default 3e-4, matching SB3's own default).
     target_kl: PPO target KL divergence for early stopping (None = off, the default).
+    n_steps, batch_size, n_epochs, gamma, gae_lambda, clip_range, vf_coef,
+        max_grad_norm: PPO hyperparameters, forwarded to `_make_model` (defaults
+        match SB3's own defaults).
+    device: torch device passed to SB3 (default "auto").
+    extractor_kwargs: optional kwargs for TokenSetExtractor (token obs_mode only).
+    n_envs: number of parallel envs per opponent phase (CPU speedup).
+    callback: optional SB3 callback (or CallbackList), passed to every `model.learn`.
+    tensorboard_log: optional tensorboard log directory.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -214,17 +283,32 @@ def train_zoo(
         raise ValueError("train_zoo needs a non-empty opponent list")
 
     model = _make_model(
-        _build_env(opps[0], seed, 1, both_seat=both_seat, obs_mode=obs_mode),
+        _build_env(opps[0], seed, n_envs, both_seat=both_seat, obs_mode=obs_mode),
         obs_mode=obs_mode,
         seed=seed,
         verbose=verbose,
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
+        device=device,
+        extractor_kwargs=extractor_kwargs,
+        tensorboard_log=tensorboard_log,
     )
     for i, opp in enumerate(opps):
         if i > 0:
-            model.set_env(_build_env(opp, seed, 1, both_seat=both_seat, obs_mode=obs_mode))
-        model.learn(total_timesteps=steps_per_opponent, reset_num_timesteps=(i == 0))
+            model.set_env(_build_env(opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode))
+        model.learn(
+            total_timesteps=steps_per_opponent,
+            reset_num_timesteps=(i == 0),
+            callback=callback,
+        )
     model.save(out)
     return out
