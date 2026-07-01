@@ -304,11 +304,14 @@ def train_zoo(
     )
     for i, opp in enumerate(opps):
         if i > 0:
+            old_env = model.env
             model.set_env(_build_env(opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode))
+            old_env.close()  # else SubprocVecEnv workers from the old opponent phase leak
         model.learn(
             total_timesteps=steps_per_opponent,
             reset_num_timesteps=(i == 0),
             callback=callback,
         )
     model.save(out)
+    model.env.close()  # else the last opponent phase's SubprocVecEnv workers leak
     return out
