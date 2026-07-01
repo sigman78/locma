@@ -18,3 +18,11 @@ def test_decide_verdicts():
     assert decide(-0.01, 0.02, 0.005) == "no-help"
     # wide / straddling the band
     assert decide(-0.05, 0.06, 0.01) == "inconclusive"
+
+
+def test_avg_hard3_spec_scripted_shape_and_range():
+    from locma.harness.ar_study import avg_hard3_spec  # noqa: PLC0415
+
+    out = avg_hard3_spec("scripted", seeds=[10, 11, 12], games_per_seed=1)
+    assert out.shape == (3,)
+    assert ((out >= 0.0) & (out <= 1.0)).all()
