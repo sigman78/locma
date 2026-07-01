@@ -57,21 +57,38 @@ class WinRateEvalCallback(BaseCallback):
         self.logged_keys.add("eval/avg_hard3")
         return avg
 
+    def _report_to_trial(self, avg: float) -> None:
+        """Report `avg` to the Optuna trial (if any) and prune if it says so.
+
+        Shared by the periodic path (`_on_step`) and the backstop
+        (`_on_training_end`) so a trial always gets a final report even when
+        training ends without ever landing on the `eval_freq` modulus.
+        """
+        if self.trial is None:
+            return
+        import optuna  # noqa: PLC0415
+
+        self.trial.report(avg, self.num_timesteps)
+        if self.trial.should_prune():
+            raise optuna.TrialPruned()
+
     def _on_step(self) -> bool:
         if self.num_timesteps % self.eval_freq != 0:
             return True
         avg = self._evaluate()
         self.last_avg_hard3 = avg
         self.logger.dump(self.num_timesteps)
-        if self.trial is not None:
-            import optuna  # noqa: PLC0415
-
-            self.trial.report(avg, self.num_timesteps)
-            if self.trial.should_prune():
-                raise optuna.TrialPruned()
+        self._report_to_trial(avg)
         return True
 
     def _on_training_end(self) -> None:
         # Guarantee at least one eval even if no step hit the modulus boundary.
+        # Must mirror `_on_step`'s dump + trial-report, not just set the
+        # attribute -- otherwise the eval/* scalars are staged via
+        # `logger.record` but never flushed to any KVWriter (TensorBoard/CSV),
+        # and a trial gets no final report at all.
         if self.last_avg_hard3 is None:
-            self.last_avg_hard3 = self._evaluate()
+            avg = self._evaluate()
+            self.last_avg_hard3 = avg
+            self.logger.dump(self.num_timesteps)
+            self._report_to_trial(avg)
