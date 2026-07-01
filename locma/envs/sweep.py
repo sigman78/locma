@@ -137,10 +137,21 @@ def run_sweep(
     if not sweep_arch and not study.trials:
         b0 = asdict(B0_CONFIG)
         study.enqueue_trial(
-            {k: b0[k] for k in (
-                "learning_rate", "target_kl", "n_steps", "batch_size", "n_epochs",
-                "gamma", "gae_lambda", "clip_range", "ent_coef", "vf_coef",
-            )}
+            {
+                k: b0[k]
+                for k in (
+                    "learning_rate",
+                    "target_kl",
+                    "n_steps",
+                    "batch_size",
+                    "n_epochs",
+                    "gamma",
+                    "gae_lambda",
+                    "clip_range",
+                    "ent_coef",
+                    "vf_coef",
+                )
+            }
         )
 
     study.optimize(
