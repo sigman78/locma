@@ -74,13 +74,30 @@ def _make_model(
     ent_coef: float,
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    head: str = "flat",
 ):
-    """Construct a MaskablePPO model, selecting the policy class by obs_mode.
+    """Construct a MaskablePPO model, selecting the policy by obs_mode and head.
 
-    "flat" → MlpPolicy (unchanged from the baseline).
-    "token" → MultiInputPolicy + TokenSetExtractor (self-attention over card tokens).
+    head="flat"    → the default single-softmax head (unchanged baseline).
+    head="autoreg" → MaskableAutoregressivePolicy (flat obs, factored head).
+
+    With head="flat": "flat" obs_mode → MlpPolicy, "token" → MultiInputPolicy +
+    TokenSetExtractor (self-attention over card tokens).
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+    if head == "autoreg":
+        from locma.envs.ar_policy import MaskableAutoregressivePolicy  # noqa: PLC0415
+
+        return MaskablePPO(
+            MaskableAutoregressivePolicy,
+            env,
+            verbose=verbose,
+            seed=seed,
+            ent_coef=ent_coef,
+            learning_rate=learning_rate,
+            target_kl=target_kl,
+        )
 
     if obs_mode == "token":
         from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
@@ -120,6 +137,7 @@ def train_agent(
     obs_mode: str = "flat",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    head: str = "flat",
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -151,6 +169,7 @@ def train_agent(
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        head=head,
     )
 
     if checkpoints:
@@ -190,6 +209,7 @@ def train_zoo(
     obs_mode: str = "flat",
     learning_rate: float = 3e-4,
     target_kl: float | None = None,
+    head: str = "flat",
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -221,6 +241,7 @@ def train_zoo(
         ent_coef=ent_coef,
         learning_rate=learning_rate,
         target_kl=target_kl,
+        head=head,
     )
     for i, opp in enumerate(opps):
         if i > 0:

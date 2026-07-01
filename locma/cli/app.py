@@ -325,6 +325,9 @@ def train(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    head: str = typer.Option(
+        "flat", help="action head: 'flat' (single softmax) or 'autoreg' (factored)"
+    ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
@@ -335,6 +338,8 @@ def train(
         raise typer.BadParameter("n_envs must be >= 1")
     if obs_mode not in ("flat", "token"):
         raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if head not in ("flat", "autoreg"):
+        raise typer.BadParameter("head must be 'flat' or 'autoreg'")
     marks = None
     if checkpoints:
         try:
@@ -358,6 +363,7 @@ def train(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            head=head,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -374,6 +380,9 @@ def train_zoo_cmd(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    head: str = typer.Option(
+        "flat", help="action head: 'flat' (single softmax) or 'autoreg' (factored)"
+    ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
@@ -384,6 +393,8 @@ def train_zoo_cmd(
         raise typer.BadParameter("steps-per-opponent must be >= 1")
     if obs_mode not in ("flat", "token"):
         raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if head not in ("flat", "autoreg"):
+        raise typer.BadParameter("head must be 'flat' or 'autoreg'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -401,6 +412,7 @@ def train_zoo_cmd(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            head=head,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

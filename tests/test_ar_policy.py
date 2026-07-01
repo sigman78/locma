@@ -60,3 +60,13 @@ def test_predict_is_deterministic_and_legal():
     assert torch.equal(a1, a2)
     for i, a in enumerate(a1.tolist()):
         assert masks[i, a]
+
+
+def test_make_model_autoreg_uses_ar_policy():
+    pytest.importorskip("stable_baselines3")
+    from locma.envs.training import _build_env, _make_model  # noqa: PLC0415
+
+    env = _build_env("random", seed=0, n_envs=1, both_seat=False, obs_mode="flat")
+    model = _make_model(env, obs_mode="flat", seed=0, verbose=0, ent_coef=0.02, head="autoreg")
+    assert isinstance(model.policy, MaskableAutoregressivePolicy)
+    env.close()
