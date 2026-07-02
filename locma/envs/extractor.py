@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from locma.envs.encode import MAX_TOKENS, N_TACTICAL, NUM_CARDS, TOKEN_FEATS
+from locma.envs.encode import MAX_TOKENS, NUM_CARDS, TOKEN_FEATS
 
 
 class TokenSetExtractor(BaseFeaturesExtractor):
@@ -30,8 +30,9 @@ class TokenSetExtractor(BaseFeaturesExtractor):
     6. Flatten per-slot outputs: z.reshape(B, MAX_TOKENS * d_model) — slot s occupies
        the fixed offset range [s*d_model : (s+1)*d_model], making slot-content
        associations directly addressable by the downstream policy head.
-    7. scalar_mlp(scalars): LayerNorm(N_TACTICAL) → Linear(N_TACTICAL, d_model) → ReLU
+    7. scalar_mlp(scalars): LayerNorm(n_scalar) → Linear(n_scalar, d_model) → ReLU
        normalizes raw scalar magnitudes (health≈30, turn≈50, board totals≈60).
+       n_scalar is read from the obs space so any variant (v0=13, v1=18) is drop-in.
     8. head(cat([flat, s], dim=-1)) → (B, features_dim)
 
     Why slot-addressable (NOT permutation-invariant):
@@ -54,6 +55,12 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         n_layers: int = 2,
         id_dim: int = 16,
         ff_mult: int = 2,
+        # 0.1 is empirically validated at the tuned recipe (lr=1e-4 + target_kl):
+        # removing it regressed -0.028 paired avg-hard3 (worklog 2026-07-02
+        # N-battery). Known PPO caveat: SB3 collects rollouts in eval mode but
+        # trains in train mode, so dropout>0 adds noise to the importance ratio
+        # (inflates approx_kl) -- here the regularization benefit measurably
+        # dominates that cost. Change only with a paired ceiling-eval.
         dropout: float = 0.1,
         features_dim: int = 256,
     ) -> None:
@@ -89,12 +96,15 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             encoder_layer, num_layers=n_layers, enable_nested_tensor=False
         )
 
-        # Scalar MLP: normalize then project N_TACTICAL scalars → d_model.
-        # LayerNorm on the scalar vector tames raw magnitudes (health≈30,
-        # turn≈50, board totals≈60) before the linear projection.
+        # Scalar MLP: normalize then project the scalar vector → d_model.
+        # The scalar dim is read from the obs space (v0=13, v1=18, or any future
+        # variant), so this extractor is variant-agnostic. LayerNorm on the scalar
+        # vector tames raw magnitudes (health≈30, turn≈50, board totals≈60) before
+        # the linear projection.
+        n_scalar = int(observation_space["scalars"].shape[0])
         self.scalar_mlp = nn.Sequential(
-            nn.LayerNorm(N_TACTICAL),
-            nn.Linear(N_TACTICAL, d_model),
+            nn.LayerNorm(n_scalar),
+            nn.Linear(n_scalar, d_model),
             nn.ReLU(),
         )
 

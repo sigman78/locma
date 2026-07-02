@@ -15,7 +15,9 @@ def _encode_for(model, view):
     from gymnasium import spaces  # noqa: PLC0415 — lazy, only reached after model load
 
     if isinstance(model.observation_space, spaces.Dict):
-        return encode_battle_tokens(view)
+        n_scalar = int(model.observation_space["scalars"].shape[0])
+        variant = "v1" if n_scalar == 18 else "v0"
+        return encode_battle_tokens(view, variant)
     return encode_battle(view)
 
 
@@ -28,12 +30,16 @@ class MaskablePPOBattlePolicy:
     """
 
     def __init__(
-        self, model_path: str = "model.zip", name: str = "ppo", deterministic: bool = True
+        self,
+        model_path: str = "model.zip",
+        name: str = "ppo",
+        deterministic: bool = True,
+        model=None,
     ):
         self.model_path = model_path
         self.name = name
         self.deterministic = deterministic
-        self._model = None
+        self._model = model  # if provided, skip the lazy file load
 
     def _ensure(self) -> None:
         if self._model is None:

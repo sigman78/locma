@@ -323,18 +323,28 @@ def train(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+        "flat", help="obs encoding: 'flat' (default), 'token', or 'token-v1' (tokenized)"
     ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
+    n_steps: int = typer.Option(2048, help="PPO rollout length (per env) before each update"),
+    batch_size: int = typer.Option(64, help="PPO minibatch size"),
+    n_epochs: int = typer.Option(10, help="PPO epochs per update"),
+    gamma: float = typer.Option(0.99, help="PPO discount factor"),
+    gae_lambda: float = typer.Option(0.95, help="PPO GAE lambda"),
+    clip_range: float = typer.Option(0.2, help="PPO clip range"),
+    vf_coef: float = typer.Option(0.5, help="PPO value function loss coefficient"),
+    max_grad_norm: float = typer.Option(0.5, help="PPO max gradient norm for clipping"),
+    device: str = typer.Option("auto", help="torch device: 'auto', 'cpu', or 'cuda'"),
+    tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
         raise typer.BadParameter("steps must be >= 1")
     if n_envs < 1:
         raise typer.BadParameter("n_envs must be >= 1")
-    if obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if obs_mode not in ("flat", "token", "token-v1"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     marks = None
     if checkpoints:
         try:
@@ -358,6 +368,16 @@ def train(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            n_steps=n_steps,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            clip_range=clip_range,
+            vf_coef=vf_coef,
+            max_grad_norm=max_grad_norm,
+            device=device,
+            tensorboard_log=tensorboard_log,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -372,18 +392,31 @@ def train_zoo_cmd(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
+        "flat", help="obs encoding: 'flat' (default), 'token', or 'token-v1' (tokenized)"
     ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
+    n_steps: int = typer.Option(2048, help="PPO rollout length (per env) before each update"),
+    batch_size: int = typer.Option(64, help="PPO minibatch size"),
+    n_epochs: int = typer.Option(10, help="PPO epochs per update"),
+    gamma: float = typer.Option(0.99, help="PPO discount factor"),
+    gae_lambda: float = typer.Option(0.95, help="PPO GAE lambda"),
+    clip_range: float = typer.Option(0.2, help="PPO clip range"),
+    vf_coef: float = typer.Option(0.5, help="PPO value function loss coefficient"),
+    max_grad_norm: float = typer.Option(0.5, help="PPO max gradient norm for clipping"),
+    device: str = typer.Option("auto", help="torch device: 'auto', 'cpu', or 'cuda'"),
+    n_envs: int = typer.Option(1, help="parallel envs per opponent phase (CPU speedup)"),
+    tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
     [ml] extra."""
     if steps_per_opponent < 1:
         raise typer.BadParameter("steps-per-opponent must be >= 1")
-    if obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if n_envs < 1:
+        raise typer.BadParameter("n_envs must be >= 1")
+    if obs_mode not in ("flat", "token", "token-v1"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -401,6 +434,17 @@ def train_zoo_cmd(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            n_steps=n_steps,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            clip_range=clip_range,
+            vf_coef=vf_coef,
+            max_grad_norm=max_grad_norm,
+            device=device,
+            n_envs=n_envs,
+            tensorboard_log=tensorboard_log,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -418,14 +462,14 @@ def record_practicum_cmd(
     out: str = typer.Option("practicum.npz", help="output practicum .npz path"),
     seed: int = 0,
     obs_mode: str = typer.Option(
-        "flat", help="observation encoding: 'flat' (default) or 'token' (tokenized for PPO2)"
+        "flat", help="observation encoding: 'flat' (default), 'token', or 'token-v1'"
     ),
 ):
     """Record a practicum of teacher battle decisions for distillation."""
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
-    if obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if obs_mode not in ("flat", "token", "token-v1"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     make_policy(teacher)  # validate up front for a friendly error
     for o in opponents:
         make_policy(o)
@@ -463,8 +507,8 @@ def distill(
         raise typer.BadParameter("epochs must be >= 1")
     if not 0.0 <= val_frac < 1.0:
         raise typer.BadParameter("val-frac must be in [0, 1)")
-    if obs_mode is not None and obs_mode not in ("flat", "token"):
-        raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if obs_mode is not None and obs_mode not in ("flat", "token", "token-v1"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     try:
         from locma.envs.distill import behavior_clone  # noqa: PLC0415 — optional [ml] dep
 
@@ -653,6 +697,51 @@ def az_selfplay_cmd(
         f"final_hard3={res['final_hard3']:.3f} "
         f"final_h2h={res['final_h2h']:.3f}"
     )
+
+
+def _disjoint_eval_seeds(seeds: int, games_per_seed: int, start: int = 1_000_000) -> list[int]:
+    """Build ``seeds`` eval-seed anchors whose ``run_match`` game blocks never overlap.
+
+    ``run_match(policy_a, policy_b, games=games_per_seed, seed=s)`` internally plays base
+    seeds ``s, s+1, ..., s+games_per_seed-1`` (each mirrored). If eval seeds were spaced by
+    1 (e.g. ``1_000_000, 1_000_001, ...``), consecutive blocks would overlap in all but one
+    game, making the per-seed avg-hard3 values a heavily autocorrelated sliding-window
+    average rather than independent samples -- which would make the bootstrap CI in
+    ``paired_bootstrap_ci`` far too tight (anti-conservative) and risk a false "headroom"
+    verdict. Spacing anchors by ``games_per_seed`` instead makes each block
+    ``[start + i*games_per_seed, start + i*games_per_seed + games_per_seed - 1]`` disjoint
+    from its neighbors, while still playing the same total number of base seeds
+    (``seeds * games_per_seed``) as before.
+    """
+    return list(range(start, start + seeds * games_per_seed, games_per_seed))
+
+
+@app.command("ceiling-eval")
+def ceiling_eval_cmd(
+    candidates: str = typer.Option(..., help="comma-separated candidate model .zip paths"),
+    baselines: str = typer.Option(..., help="comma-separated B0 model .zip paths"),
+    seeds: int = typer.Option(40, help="number of held-out eval seeds (from 1_000_000)"),
+    games_per_seed: int = typer.Option(25, help="paired games per opponent per seed"),
+    threshold: float = typer.Option(0.03, help="avg-hard3 lift required for 'headroom'"),
+):
+    """Rigorous paired-difference verdict for the PPO ceiling study (requires [ml])."""
+    try:
+        from locma.harness.ceiling_eval import run_verdict  # noqa: PLC0415
+    except ImportError as e:
+        raise typer.BadParameter("ceiling-eval requires the [ml] extra") from e
+    seed_list = _disjoint_eval_seeds(seeds, games_per_seed)
+    out = run_verdict(
+        candidates.split(","),
+        baselines.split(","),
+        seeds=seed_list,
+        games_per_seed=games_per_seed,
+        threshold=threshold,
+    )
+    console.print(
+        f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "
+        f"delta={out['mean_delta']:+.3f}  95% CI [{out['ci_lo']:+.3f}, {out['ci_hi']:+.3f}]"
+    )
+    console.print(f"[bold]VERDICT: {out['verdict']}[/]")
 
 
 @app.command()
