@@ -48,6 +48,53 @@ def test_tournament_matrix_smoke():
     assert "openskill" in res.stdout.lower()
 
 
+def test_draft_report_smoke():
+    res = runner.invoke(
+        app, ["draft-report", "random", "greedy", "--drafts", "3", "--top-cards", "2"]
+    )
+    assert res.exit_code == 0
+    assert "draft deck quality" in res.stdout.lower()
+    assert "card cost outliers" in res.stdout.lower()
+
+
+def test_draft_report_defaults_when_specs_omitted():
+    res = runner.invoke(app, ["draft-report", "--drafts", "2", "--top-cards", "0"])
+    assert res.exit_code == 0
+    assert "draft deck quality" in res.stdout.lower()
+
+
+def test_card_impact_smoke():
+    res = runner.invoke(app, ["card-impact", "--games", "3", "--top-cards", "2"])
+    assert res.exit_code == 0
+    assert "card impact" in res.stdout.lower()
+
+
+def test_card_impact_writes_artifact(tmp_path):
+    out = tmp_path / "impact.json"
+    res = runner.invoke(app, ["card-impact", "--games", "3", "--top-cards", "2", "--out", str(out)])
+    assert res.exit_code == 0
+    assert out.exists()
+    assert "wrote card-impact artifact" in res.stdout.lower()
+
+
+def test_impact_draft_sweep_smoke():
+    res = runner.invoke(
+        app,
+        [
+            "impact-draft-sweep",
+            "ground",
+            "--fit-games",
+            "3",
+            "--eval-games",
+            "1",
+            "--spec",
+            "1:2:3",
+        ],
+    )
+    assert res.exit_code == 0
+    assert "impact draft sweep" in res.stdout.lower()
+
+
 def test_play_log_then_replay_asserts_hash(tmp_path):
     log = tmp_path / "g.jsonl"
     r1 = runner.invoke(

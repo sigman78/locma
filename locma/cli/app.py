@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -247,6 +248,226 @@ def draft_bench_cmd(
             cells.append("--" if row == col else f"{s.win_matrix[(row, col)]:.2f}")
         m.add_row(*cells)
     console.print(m)
+
+
+@app.command("draft-report")
+def draft_report(
+    specs: Annotated[
+        list[str] | None, typer.Argument(help="policy or draft specs to sample")
+    ] = None,
+    drafts: int = typer.Option(200, help="drafts sampled per policy"),
+    seed: int = 0,
+    top_cards: int = typer.Option(8, help="card cost outliers to print per side"),
+):
+    """Report draft-only deck quality proxies and card cost outliers."""
+    if drafts < 1:
+        raise typer.BadParameter("drafts must be >= 1")
+    if top_cards < 0:
+        raise typer.BadParameter("top-cards must be >= 0")
+    if not specs:
+        specs = [
+            "draft:random",
+            "draft:greedy",
+            "draft:weighted",
+            "draft:balanced",
+            "draft:weighted-balanced",
+            "draft:truecost-balanced",
+            "draft:aggro",
+            "draft:midrange",
+            "draft:defense",
+            "draft:max-guard",
+            "draft:max-attack",
+        ]
+
+    from locma.harness.deck_quality import (  # noqa: PLC0415
+        card_cost_estimates,
+        summarize_policy,
+    )
+    from locma.policies.drafts import make_draft_policy  # noqa: PLC0415
+
+    rows = []
+    for spec in specs:
+        policy = make_draft_policy(spec) if spec.startswith("draft:") else make_policy(spec)
+        rows.append(summarize_policy(policy, spec, drafts=drafts, seed=seed))
+
+    t = Table(title="Draft Deck Quality", box=None)
+    t.add_column("policy")
+    t.add_column("quality", justify="right")
+    t.add_column("card value", justify="right")
+    t.add_column("eff cost delta", justify="right")
+    t.add_column("avg cost", justify="right")
+    t.add_column("creatures", justify="right")
+    t.add_column("items", justify="right")
+    t.add_column("curve L1", justify="right")
+    t.add_column("draw", justify="right")
+    t.add_column("G/W/L", justify="right")
+    for row in sorted(rows, key=lambda r: -r.quality):
+        t.add_row(
+            row.policy,
+            f"{row.quality:.2f}",
+            f"{row.avg_card_value:.2f}",
+            f"{row.avg_effective_cost_delta:+.2f}",
+            f"{row.avg_cost:.2f}",
+            f"{row.avg_creatures:.1f}",
+            f"{row.avg_items:.1f}",
+            f"{row.curve_l1:.1f}",
+            f"{row.avg_draw:.1f}",
+            f"{row.avg_guards:.1f}/{row.avg_wards:.1f}/{row.avg_lethals:.1f}",
+        )
+    console.print(t)
+
+    if top_cards:
+        estimates = card_cost_estimates()
+        cheap = sorted(estimates, key=lambda e: -e.delta)[:top_cards]
+        expensive = sorted(estimates, key=lambda e: e.delta)[:top_cards]
+        ct = Table(title="Card Cost Outliers", box=None)
+        ct.add_column("side")
+        ct.add_column("id", justify="right")
+        ct.add_column("card")
+        ct.add_column("type")
+        ct.add_column("cost", justify="right")
+        ct.add_column("eff cost", justify="right")
+        ct.add_column("delta", justify="right")
+        for side, group in (("underpriced", cheap), ("overpriced", expensive)):
+            for e in group:
+                ct.add_row(
+                    side,
+                    str(e.card_id),
+                    e.name,
+                    e.type,
+                    str(e.cost),
+                    f"{e.effective_cost:.2f}",
+                    f"{e.delta:+.2f}",
+                )
+        console.print(ct)
+
+
+@app.command("card-impact")
+def card_impact(
+    games: int = typer.Option(1000, help="random-draft games to sample"),
+    seed: int = 0,
+    battle: str = typer.Option(
+        "ground", help="fixed battle policy: ground, greedy, ppo:model.zip, etc."
+    ),
+    alpha: float = typer.Option(10.0, help="ridge regularization strength"),
+    top_cards: int = typer.Option(12, help="card outliers to print per side"),
+    out: str | None = typer.Option(None, help="write a reusable card-impact JSON artifact"),
+):
+    """Estimate empirical card impact from random-draft same-battle games."""
+    if games < 1:
+        raise typer.BadParameter("games must be >= 1")
+    if alpha < 0:
+        raise typer.BadParameter("alpha must be >= 0")
+    if top_cards < 1:
+        raise typer.BadParameter("top-cards must be >= 1")
+    from locma.harness.card_impact import estimate_card_impact, write_card_impact  # noqa: PLC0415
+
+    try:
+        report = estimate_card_impact(games=games, seed=seed, battle=battle, alpha=alpha)
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+    best = sorted(report.rows, key=lambda r: -r.coefficient)[:top_cards]
+    worst = sorted(report.rows, key=lambda r: r.coefficient)[:top_cards]
+    t = Table(
+        title=f"Card Impact ({report.battle}, games={report.games}, alpha={report.alpha:g})",
+        box=None,
+    )
+    t.add_column("side")
+    t.add_column("id", justify="right")
+    t.add_column("card")
+    t.add_column("type")
+    t.add_column("cost", justify="right")
+    t.add_column("impact", justify="right")
+    t.add_column("eff cost delta", justify="right")
+    for side, rows in (("positive", best), ("negative", worst)):
+        for row in rows:
+            t.add_row(
+                side,
+                str(row.card_id),
+                row.name,
+                row.type,
+                str(row.cost),
+                f"{row.coefficient:+.4f}",
+                f"{row.effective_cost_delta:+.2f}",
+            )
+    console.print(t)
+    if out:
+        write_card_impact(report, out)
+        console.print(f"[dim]wrote card-impact artifact: {out}[/]")
+
+
+def _parse_impact_spec(raw: str) -> tuple[float, float, float]:
+    parts = raw.split(":")
+    if len(parts) != 3:
+        raise typer.BadParameter("impact specs must be scale:curve:item, e.g. 20:4:8")
+    try:
+        return float(parts[0]), float(parts[1]), float(parts[2])
+    except ValueError as e:
+        raise typer.BadParameter("impact specs must contain numbers") from e
+
+
+@app.command("impact-draft-sweep")
+def impact_draft_sweep(
+    battle: str,
+    fit_games: int = typer.Option(1000, help="random-draft games used to fit card impact"),
+    fit_seed: int = 0,
+    fit_alpha: float = typer.Option(20.0, help="card-impact ridge regularization"),
+    eval_games: int = typer.Option(200, help="mirrored match pairs per candidate"),
+    eval_seed: int = 1_000_000,
+    reference: str = typer.Option("balanced", help="reference draft name"),
+    spec: list[str] = typer.Option(  # noqa: B008
+        None, help="candidate triple scale:curve:item; may be repeated"
+    ),
+):
+    """Fit card impact, then evaluate impact-guided draft candidates."""
+    if fit_games < 1:
+        raise typer.BadParameter("fit-games must be >= 1")
+    if eval_games < 1:
+        raise typer.BadParameter("eval-games must be >= 1")
+    if fit_alpha < 0:
+        raise typer.BadParameter("fit-alpha must be >= 0")
+    specs = [_parse_impact_spec(s) for s in spec] if spec else None
+    from locma.harness.card_impact import sweep_impact_drafts  # noqa: PLC0415
+
+    try:
+        sweep = sweep_impact_drafts(
+            battle=battle,
+            fit_games=fit_games,
+            fit_seed=fit_seed,
+            fit_alpha=fit_alpha,
+            eval_games=eval_games,
+            eval_seed=eval_seed,
+            reference=reference,
+            specs=specs,
+        )
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+
+    t = Table(
+        title=(
+            f"Impact Draft Sweep ({sweep.battle}, fit={sweep.fit_report.games}, "
+            f"eval={sweep.eval_games * 2} games/candidate)"
+        ),
+        box=None,
+    )
+    t.add_column("candidate")
+    t.add_column("scale", justify="right")
+    t.add_column("curve", justify="right")
+    t.add_column("item", justify="right")
+    t.add_column(f"win vs {reference}", justify="right")
+    t.add_column("95% CI", justify="right")
+    t.add_column("p", justify="right")
+    for row in sorted(sweep.rows, key=lambda r: -r.win_rate):
+        t.add_row(
+            row.name,
+            f"{row.scale:g}",
+            f"{row.curve_weight:g}",
+            f"{row.item_discount:g}",
+            f"{row.win_rate:.3f}",
+            f"{row.ci_low:.3f}-{row.ci_high:.3f}",
+            f"{row.p_value:.4g}",
+        )
+    console.print(t)
 
 
 @app.command()
