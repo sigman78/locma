@@ -90,6 +90,14 @@ path to 0). Re-run the B0 recipe x3 seeds; additionally retry `lr=3e-4` /
 optimum shifts. Cost: ~1 line + one B0-scale rerun (~75 min for 3 seeds at the
 observed pace). Verdict via the existing `ceiling-eval` ruler.
 
+**Outcome (2026-07-02, `fix/ppo-e1-e3`): implemented — and the benchmark
+REGRESSED: dropout-0 at the B0 recipe scores -0.037 [-0.044, -0.030] paired vs
+B0.** The contamination mechanism is real but its net effect at the gentle
+recipe was beneficial regularization. See the worklog entry for the follow-up
+N-arm battery (dropout-0.1 isolation arm + lr=3e-4 arms) that discriminates
+"dropout was a feature" from "the recipe was compensating"; the E1 default may
+be reverted pending that result.
+
 ### E2 — trivial: fix the token-v1 threat scalars, then run R5
 
 `op_reachable` currently filters opponent creatures by `can_attack and
@@ -99,6 +107,11 @@ nothing (env-computed), rerun the planned R5 obs-v1 experiment on the same +0.03
 ruler. Without the fix, R5's verdict on "does threat awareness help" is invalid —
 `exposed_to_lethal` is frequently 0 in genuinely lethal positions, which is worse
 than absent (a confidently wrong feature).
+
+**Outcome (2026-07-02, `fix/ppo-e1-e3`): fixed and benchmarked — V1-fixed beats
+V0 by +0.008 [+0.002, +0.015] at matched recipe (both dropout-0 arms).** The
+first obs-side change with a CI-clean nonzero paired delta, but far below the
++0.03 headroom bar. Re-test at whatever recipe wins the dropout question.
 
 ### E3 — easy: measurement/diversity hygiene (protects conclusions, not a win-rate lever)
 

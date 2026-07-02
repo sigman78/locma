@@ -794,3 +794,60 @@ B0 at full budget.
 
 Next: R5 (Phase 2 obs-v1 vs B0, same +0.03 ruler) is the natural next step —
 needs explicit go-ahead, not started.
+
+## E1-E3 fixes + benchmark (2026-07-02, branch `fix/ppo-e1-e3`)
+
+Implemented the top-3 items from `docs/PPO-REVIEW-FB.md` (commit `d60da7f`;
+implementation by a subagent, reviewed line-by-line):
+
+- **E1** `TokenSetExtractor` default `dropout` 0.1 -> 0.0 (SB3 collects
+  rollouts in eval mode but runs `evaluate_actions` in train mode, so
+  dropout>0 contaminates the PPO ratio).
+- **E2** token-v1 `op_reachable`/`exposed_to_lethal` now sum the WHOLE
+  opponent board (`start_turn` refreshes every creature; readiness-filtering
+  excluded exactly last turn's attackers).
+- **E3** eval-callback bucket-crossing gating; per-env seed stride (50k);
+  `BattleEnv.reset` reseeds the opponent. One regression test per change;
+  470 passed.
+
+**Benchmark** (B0 recipe: token V0, lr=1e-4, target_kl=0.025, 800k zoo
+curriculum, n_envs=16; 3 seeds/arm; verdicts via `locma ceiling-eval`
+--seeds 40 --games-per-seed 25, paired vs `runs/b0_s{0,1,2}.zip`):
+
+| arm | vs | delta | 95% CI | verdict |
+|---|---|---:|---|---|
+| `e1_s*` dropout-0, token V0 | B0 | **-0.037** | [-0.044, -0.030] | regression |
+| `e2_s*` dropout-0, token V1-fixed | e1 arm | **+0.008** | [+0.002, +0.015] | real but sub-threshold |
+
+(cand=0.620 / B0=0.657 for E1; cand=0.629 / base=0.620 for E2. Training was
+~11 min/run this session vs R1's ~24 — unexplained, possibly KL-early-stop
+frequency shifting without dropout noise; diagnostics in
+`runs/e1e3/train_*.log`.)
+
+**Honest read of E1: removing dropout at the tuned recipe made the model
+WORSE, clearly (CI entirely negative).** The mechanistic claim stands — the
+ratio contamination is real — but its net effect at the *gentle* B0 recipe
+(lr=1e-4 + KL cap) was evidently beneficial regularization, not just noise.
+Two confounds noted: (a) the e1 arm bundles the E3 seed-stride hygiene (b0
+models predate it); (b) without dropout noise `approx_kl` reads lower, so
+the `target_kl=0.025` early-stop fires later -> effectively MORE update
+epochs per batch -> a more aggressive optimization regime than the recipe
+was tuned for. The overnight battery below discriminates.
+
+**E2 read:** the corrected V1 threat scalars give a small, CI-clean lift
+(+0.008) over V0 at matched recipe/dropout - the first obs-side change to
+produce a nonzero paired delta, but far under the +0.03 headroom bar. Worth
+re-testing at whatever recipe wins the dropout question.
+
+**Overnight battery (N-arms, 3 seeds each, all evaluated paired vs B0):**
+
+- **N0** dropout=0.1 explicit + current code (isolates the E3 stride
+  confound: if N0 ~= B0, the -0.037 is all dropout).
+- **N1** lr=3e-4, target_kl=None, dropout=0 (the config the worklog
+  declared broken - retested without the alleged confounder).
+- **N2** lr=3e-4, target_kl=0.025, dropout=0 (separates LR from KL cap).
+
+Decision rule: if N0 ~= B0 and N1/N2 < B0, dropout was a *feature* at this
+scale - revert the E1 default to 0.1 (keeping the mechanism documented) and
+the ceiling verdict hardens. If N1 or N2 >= B0, the "gentle PPO" recipe was
+compensating for dropout and the HP story reopens.
