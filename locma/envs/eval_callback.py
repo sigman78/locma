@@ -1,8 +1,7 @@
 """In-training win-rate telemetry for the PPO ceiling study (requires [ml]).
 
 Every ``eval_freq`` steps, plays paired games with the *current* policy vs a fixed
-set of scripted opponents, logs avg-hard3 + per-opponent rates to TensorBoard, and
-(optionally) reports the score to an Optuna trial so hopeless runs prune early.
+set of scripted opponents and logs avg-hard3 + per-opponent rates to TensorBoard.
 Reuses the registry + run_match path for eval fidelity; the PPO net is piloted with
 the BalancedDraftPolicy (the deployment pairing).
 """
@@ -19,7 +18,6 @@ class WinRateEvalCallback(BaseCallback):
         eval_freq: int = 50_000,
         n_games: int = 120,
         eval_seed: int = 1_000_000,
-        trial=None,
         verbose: int = 0,
     ) -> None:
         super().__init__(verbose)
@@ -27,7 +25,6 @@ class WinRateEvalCallback(BaseCallback):
         self.eval_freq = eval_freq
         self.n_games = n_games
         self.eval_seed = eval_seed
-        self.trial = trial
         self.last_avg_hard3: float | None = None
         self.logged_keys: set[str] = set()
         # num_timesteps advances in increments of n_envs, so a plain modulus
@@ -62,40 +59,20 @@ class WinRateEvalCallback(BaseCallback):
         self.logged_keys.add("eval/avg_hard3")
         return avg
 
-    def _report_to_trial(self, avg: float) -> None:
-        """Report `avg` to the Optuna trial (if any) and prune if it says so.
-
-        Shared by the periodic path (`_on_step`) and the backstop
-        (`_on_training_end`) so a trial always gets a final report even when
-        training ends without ever landing on the `eval_freq` modulus.
-        """
-        if self.trial is None:
-            return
-        import optuna  # noqa: PLC0415
-
-        self.trial.report(avg, self.num_timesteps)
-        if self.trial.should_prune():
-            raise optuna.TrialPruned()
-
     def _on_step(self) -> bool:
         bucket = self.num_timesteps // self.eval_freq
         if bucket <= self._last_eval_bucket:
             return True
         self._last_eval_bucket = bucket
-        avg = self._evaluate()
-        self.last_avg_hard3 = avg
+        self.last_avg_hard3 = self._evaluate()
         self.logger.dump(self.num_timesteps)
-        self._report_to_trial(avg)
         return True
 
     def _on_training_end(self) -> None:
-        # Guarantee at least one eval even if no step hit the modulus boundary.
-        # Must mirror `_on_step`'s dump + trial-report, not just set the
-        # attribute -- otherwise the eval/* scalars are staged via
-        # `logger.record` but never flushed to any KVWriter (TensorBoard/CSV),
-        # and a trial gets no final report at all.
+        # Guarantee at least one eval even if no step crossed an eval_freq
+        # bucket. Must mirror `_on_step`'s dump, not just set the attribute --
+        # otherwise the eval/* scalars are staged via `logger.record` but never
+        # flushed to any KVWriter (TensorBoard/CSV).
         if self.last_avg_hard3 is None:
-            avg = self._evaluate()
-            self.last_avg_hard3 = avg
+            self.last_avg_hard3 = self._evaluate()
             self.logger.dump(self.num_timesteps)
-            self._report_to_trial(avg)

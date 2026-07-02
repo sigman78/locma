@@ -360,8 +360,11 @@ or an explicit draw convention.
 
 ### 8. Minor sweep nits
 
-`objective` returns `-1.0` for infeasible configs (`sweep.py:93`) — TPE ingests it
-as a real (terrible) observation next to a hard boundary; `raise
+**Moot as of 2026-07-02: the Optuna sweep machinery (`locma/envs/sweep.py`, the
+`sweep` CLI command, the `[sweep]` extra) was removed after the study concluded
+with a null verdict — recover from git history if a re-sweep is ever needed.**
+Preserved for the record: `objective` returned `-1.0` for infeasible configs —
+TPE ingests it as a real (terrible) observation next to a hard boundary; `raise
 optuna.TrialPruned()` keeps the surrogate cleaner. And `HyperbandPruner` with ~30
 trials and 6 checkpoints has near-empty brackets (observed in R2: nothing pruned
 until late) — with small trial counts `MedianPruner` behaves better.

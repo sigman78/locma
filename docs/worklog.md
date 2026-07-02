@@ -926,3 +926,28 @@ E3a (tactics diagnostic suite), E4 (netdmcts distillation with soft targets
 + DAgger), E5 (learned-value own-turn planner). Code kept from this branch:
 the E2 v1-scalar correctness fix, all E3 hygiene fixes, the dropout revert
 with its pinning test.
+
+## Post-study cleanup: sweep + puffer machinery removed (2026-07-02, branch feat/ppo-ceiling-study)
+
+With both ceiling-study verdicts in (HP tuning null, obs encoding null), the
+study-only machinery earns its exit. Removed, recoverable from git history:
+
+- **Optuna sweep**: `locma/envs/sweep.py`, the `locma sweep` CLI command, the
+  `trial=`/pruning plumbing in `WinRateEvalCallback`, the 4 `test_sweep_*.py`
+  files + 2 trial-path callback tests, and the `[sweep]` extra (optuna,
+  tensorboard) from pyproject/uv.lock. A re-sweep was already ruled out by
+  design (R4 verdict); anyone reviving it should also re-read finding 8 in
+  `docs/PPO-REVIEW-FB.md` (infeasible-config handling, pruner choice).
+- **PufferLib Gate-0 spike**: `scripts/puffer_bench.py` + test. PufferLib has
+  no native Windows support (worklog Gate-0 entry has the 4-release evidence
+  and the SPS table); the study ran on sb3 and the recipe of record is sb3.
+
+Kept: `WinRateEvalCallback` itself (in-training telemetry, bucket-crossing
+fix), `ceiling-eval` CLI + paired-bootstrap harness (the ruler for all future
+experiments), the full HP plumbing on `train_zoo` (generic, not sweep-bound),
+and the token-v1 obs variant (null result but a correct, tested variant; the
+E2 threat-scalar fix lives there). Post-cleanup: ruff clean, 461 passed,
+1 skipped.
+
+Archival docs (`ppo-ceiling-study-{design,plan,HANDOFF}.md`) still reference
+the removed tooling by design -- they document the study as it ran.

@@ -323,8 +323,8 @@ def train_zoo(
             )
         model.save(out)
     finally:
-        # model.learn() can raise mid-phase (e.g. optuna.TrialPruned from an eval
-        # callback) -- close whatever VecEnv is live at that point too, or its
-        # SubprocVecEnv workers leak just like the phase-swap case above.
+        # model.learn() can raise mid-phase (e.g. from an eval callback or a
+        # KeyboardInterrupt) -- close whatever VecEnv is live at that point too,
+        # or its SubprocVecEnv workers leak just like the phase-swap case above.
         model.env.close()
     return out
