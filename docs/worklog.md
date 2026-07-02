@@ -888,3 +888,41 @@ dropout front; H1/H2 (planning gap) stand untouched.
 recipe (dropout 0.1) x3 seeds, paired vs B0. The earlier +0.008 v1-vs-v0
 delta was measured on the handicapped dropout-0 arms; this is the design
 doc's Phase-2 verdict on the correct ruler.
+
+## R5-proper: token-v1 (fixed) at the winning recipe -- VERDICT #2 (2026-07-02)
+
+`r5_s{0,1,2}` = token-v1 (corrected threat scalars), B0 recipe (lr=1e-4,
+target_kl=0.025, dropout=0.1), 800k zoo curriculum, paired vs B0:
+
+```
+cand=0.660  B0=0.657  delta=+0.003  95% CI [-0.004, +0.010]
+VERDICT: ceiling-confirmed
+```
+
+**VERDICT #2 (Phase 2, obs-encoding): null.** The +0.008 v1-vs-v0 edge
+measured on the dropout-0 arms did not carry to the winning recipe -- with
+dropout restored, v1-fixed is statistically indistinguishable from V0
+(CI straddles zero, nowhere near +0.03). The symmetric-threat scalars are
+neutral: the regularized net either already infers that information from
+the tokens or cannot exploit it reactively.
+
+### Night summary -- full verdict table (all paired vs B0=0.657, 40x25)
+
+| arm | change vs B0 | delta | 95% CI | read |
+|---|---|---:|---|---|
+| e1 | dropout 0, V0 | -0.037 | [-0.044, -0.030] | dropout removal hurts |
+| e2 | dropout 0, V1-fixed | (+0.008 vs e1) | [+0.002, +0.015] | small, arm-local |
+| n0 | dropout 0.1, E3 hygiene only | -0.009 | [-0.016, -0.002] | hygiene ~free |
+| n1 | lr 3e-4 uncapped, dropout 0 | -0.247 | [-0.256, -0.239] | high LR intrinsic collapse |
+| n2 | lr 3e-4 + KL cap, dropout 0 | -0.022 | [-0.029, -0.015] | cap does the rescuing |
+| r5 | V1-fixed, winning recipe | +0.003 | [-0.004, +0.010] | **Phase-2 null** |
+
+**Bottom line for the ceiling study: both design-doc verdicts are now in and
+both confirm the ceiling** -- #1 HP tuning (R4, -0.040) and #2 obs encoding
+(R5, +0.003). Everything training-side is spent; B0 (token V0, lr=1e-4,
+target_kl=0.025, dropout=0.1) at **0.657** is the reactive recipe of record.
+The open levers are the planning-side ones from `docs/PPO-REVIEW-FB.md`:
+E3a (tactics diagnostic suite), E4 (netdmcts distillation with soft targets
++ DAgger), E5 (learned-value own-turn planner). Code kept from this branch:
+the E2 v1-scalar correctness fix, all E3 hygiene fixes, the dropout revert
+with its pinning test.

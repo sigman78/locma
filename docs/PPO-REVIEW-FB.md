@@ -111,10 +111,12 @@ ruler. Without the fix, R5's verdict on "does threat awareness help" is invalid 
 `exposed_to_lethal` is frequently 0 in genuinely lethal positions, which is worse
 than absent (a confidently wrong feature).
 
-**Outcome (2026-07-02, `fix/ppo-e1-e3`): fixed and benchmarked — V1-fixed beats
-V0 by +0.008 [+0.002, +0.015] at matched recipe (both dropout-0 arms).** The
-first obs-side change with a CI-clean nonzero paired delta, but far below the
-+0.03 headroom bar. Re-test at whatever recipe wins the dropout question.
+**Outcome (2026-07-02, `fix/ppo-e1-e3`): fixed; final verdict null.** On the
+dropout-0 arms V1-fixed showed a small CI-clean +0.008 over V0, but at the
+winning recipe (dropout 0.1) the R5-proper paired eval vs B0 came back +0.003
+[-0.004, +0.010] — indistinguishable from V0. Phase-2 (obs-encoding) verdict:
+ceiling-confirmed. The correctness fix stays (a confidently wrong feature is
+still worse than a neutral one); the threat scalars are not a lever.
 
 ### E3 — easy: measurement/diversity hygiene (protects conclusions, not a win-rate lever)
 
