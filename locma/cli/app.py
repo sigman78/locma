@@ -325,6 +325,9 @@ def train(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    head: str = typer.Option(
+        "flat", help="action head: 'flat' (single softmax) or 'autoreg' (factored)"
+    ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
@@ -335,6 +338,8 @@ def train(
         raise typer.BadParameter("n_envs must be >= 1")
     if obs_mode not in ("flat", "token"):
         raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if head not in ("flat", "autoreg"):
+        raise typer.BadParameter("head must be 'flat' or 'autoreg'")
     marks = None
     if checkpoints:
         try:
@@ -358,6 +363,7 @@ def train(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            head=head,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -374,6 +380,9 @@ def train_zoo_cmd(
     obs_mode: str = typer.Option(
         "flat", help="obs encoding: 'flat' (default) or 'token' (tokenized + self-attention)"
     ),
+    head: str = typer.Option(
+        "flat", help="action head: 'flat' (single softmax) or 'autoreg' (factored)"
+    ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
 ):
@@ -384,6 +393,8 @@ def train_zoo_cmd(
         raise typer.BadParameter("steps-per-opponent must be >= 1")
     if obs_mode not in ("flat", "token"):
         raise typer.BadParameter("obs_mode must be 'flat' or 'token'")
+    if head not in ("flat", "autoreg"):
+        raise typer.BadParameter("head must be 'flat' or 'autoreg'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -401,10 +412,91 @@ def train_zoo_cmd(
             obs_mode=obs_mode,
             learning_rate=learning_rate,
             target_kl=target_kl,
+            head=head,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
     console.print(f"saved {saved}")
+
+
+@app.command("ar-eval")
+def ar_eval_cmd(
+    flat: str = typer.Option(..., help="path to the flat-head baseline model .zip"),
+    ar: str = typer.Option(..., help="path to the autoregressive-head model .zip"),
+    seeds: int = typer.Option(200, help="number of held-out eval seeds"),
+    base_seed: int = typer.Option(1_000_000, help="first eval seed (held-out range)"),
+    games_per_seed: int = typer.Option(2, help="mirrored matches per opponent per seed"),
+):
+    """Paired avg-hard3 verdict: does the autoregressive head beat the flat head?"""
+    from locma.harness.ar_study import run_verdict  # noqa: PLC0415
+
+    seed_list = [base_seed + i for i in range(seeds)]
+    r = run_verdict(flat, ar, seed_list, games_per_seed)
+    table = Table(title="autoregressive-head verdict (avg-hard3)")
+    table.add_column("metric")
+    table.add_column("value", justify="right")
+    table.add_row("flat mean", f"{r['flat_mean']:.4f}")
+    table.add_row("ar mean", f"{r['ar_mean']:.4f}")
+    table.add_row("delta (ar - flat)", f"{r['delta']:+.4f}")
+    table.add_row("95% CI", f"[{r['ci'][0]:+.4f}, {r['ci'][1]:+.4f}]")
+    table.add_row("n seeds", str(r["n_seeds"]))
+    table.add_row("verdict", r["verdict"])
+    console.print(table)
+
+
+@app.command("selfplay-league")
+def selfplay_league_cmd(
+    base: str = typer.Option(..., help="path to the token base model .zip (round 0)"),
+    rounds: int = typer.Option(6, help="number of league rounds"),
+    steps_per_round: int = typer.Option(200_000, help="training steps per round"),
+    out_dir: str = typer.Option("runs/league", help="output dir for snapshots + league.csv"),
+    seed: int = typer.Option(0),
+    eval_seeds: int = typer.Option(150, help="held-out eval seeds per round"),
+    eval_base_seed: int = typer.Option(1_000_000, help="first eval seed"),
+    games_per_seed: int = typer.Option(2, help="mirrored matches per opponent per seed"),
+    target_kl: float = typer.Option(0.025, help="conservative KL cap for stable self-play"),
+):
+    """Run FSP league self-play for the token net; track avg-hard3 per round."""
+    if rounds < 1:
+        raise typer.BadParameter("rounds must be >= 1")
+    if steps_per_round < 1:
+        raise typer.BadParameter("steps-per-round must be >= 1")
+    from locma.envs.league import run_league  # noqa: PLC0415
+
+    rows = run_league(
+        base,
+        rounds=rounds,
+        steps_per_round=steps_per_round,
+        out_dir=out_dir,
+        seed=seed,
+        eval_seeds=eval_seeds,
+        eval_base_seed=eval_base_seed,
+        games_per_seed=games_per_seed,
+        target_kl=target_kl,
+        verbose=1,
+    )
+    table = Table(title="league self-play (avg-hard3 per round)")
+    table.add_column("round")
+    table.add_column("avg_hard3", justify="right")
+    table.add_column("snapshot")
+    for row in rows:
+        table.add_row(str(row["round"]), f"{row['avg_hard3']:.4f}", row["snapshot"])
+    console.print(table)
+
+
+@app.command("hard3-eval")
+def hard3_eval_cmd(
+    spec: str = typer.Option(..., help="policy spec, e.g. 'ppo:x.zip'"),
+    seeds: int = typer.Option(100, help="number of held-out eval seeds"),
+    base_seed: int = typer.Option(1_000_000, help="first eval seed"),
+    games_per_seed: int = typer.Option(2, help="mirrored matches per opponent per seed"),
+):
+    """Print avg-hard3 for any policy spec."""
+    from locma.harness.ar_study import avg_hard3_spec  # noqa: PLC0415
+
+    seed_list = [base_seed + i for i in range(seeds)]
+    arr = avg_hard3_spec(spec, seed_list, games_per_seed)
+    console.print(f"avg-hard3({spec}) = {float(arr.mean()):.4f} over {seeds} seeds")
 
 
 @app.command("record-practicum")

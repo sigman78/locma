@@ -536,3 +536,124 @@ turns, `/2` path unchanged, lossless round-trip incl. buffed/damaged/Guard
 cards, `cardlist_version` mismatch warning, `/3` strictly smaller than `/2` on
 a card-bearing fixture), `tests/test_replay_stream.py` (built replays are
 `/3` with a stamped `cardlist_version` and round-trip).
+
+## 2026-07-01 — FSP league self-play: improves base, does not clear prior plateau
+
+Ran the canonical token-net fictitious self-play league from
+`docs/ppo-league-selfplay-design.md`: 800k token zoo base (`round0.zip`), then
+6 rounds × 200k single-env PPO self-play against all past frozen snapshots plus
+`{scripted,max-guard,max-attack}`, with `target_kl=0.025` and held-out
+`avg-hard3` tracking.
+
+League curve (`avg-hard3`, 150 held-out seeds):
+
+| round | snapshot | avg-hard3 |
+|---:|---|---:|
+| 0 | `runs/league/round0.zip` | 0.3067 |
+| 1 | `runs/league/round1.zip` | 0.5050 |
+| 2 | `runs/league/round2.zip` | 0.5267 |
+| 3 | `runs/league/round3.zip` | 0.5261 |
+| 4 | `runs/league/round4.zip` | 0.5417 |
+| 5 | `runs/league/round5.zip` | **0.5972** |
+| 6 | `runs/league/round6.zip` | 0.5611 |
+
+Best reactive snapshot was round 5. Paired verdict vs the round-0 base over
+300 held-out seeds (same `ar-eval` harness, here comparing base vs best league
+net rather than action heads):
+
+| metric | value |
+|---|---:|
+| base mean | 0.3269 |
+| best league mean | 0.5858 |
+| delta | +0.2589 |
+| 95% CI | [+0.2386, +0.2792] |
+
+Downstream oracle check:
+`netdmcts:8,40,1.5,runs/league/round5.zip` scored **0.7292 avg-hard3** over
+40 seeds.
+
+Verdict: the league substantially rescues this weak 800k base and keeps
+improving through round 5, but it still does **not** clear the prior reactive
+plateau **0.639**. The best league net also does **not** improve the downstream
+netdmcts oracle over the prior **0.817** result. This supports the same
+structural-ceiling read as the earlier 2-snapshot probe: reactive self-play can
+sharpen the token net, but search remains the higher-leverage path.
+
+## 2026-07-01 — Follow-up idea after canonical league: island/top-K self-play arenas
+
+While the canonical FSP league run is in flight, keep the algorithm unchanged:
+one sequential league trajectory from `round0.zip`, each round trained against
+all past snapshots plus `{scripted,max-guard,max-attack}`. After those results
+land, a natural parallel upgrade is an **island league** variant rather than
+trying to merge PPO gradients or average weights.
+
+Sketch: launch several independent arenas from the same `round0.zip` with
+different seeds. Each arena trains its own local FSP chain. At generation
+boundaries, evaluate arena winners on the same held-out seeds, then admit the
+top `M` snapshots (likely top 2) into a shared promoted pool used by the next
+generation's arenas, alongside each arena's own past snapshots and the three
+baselines. This uses CPU parallelism as policy search/selection: run multiple
+sequential PPO trajectories in parallel, then select/admit policies, not
+parameters.
+
+Preferred first variant: **top-2 admission** over winner-takes-all. It preserves
+diversity, reduces lucky-seed overfitting, and gives the league more distinct
+opponents without overbuilding a full hall-of-fame scheduler. Minimal tooling
+change: let `run_league` accept `initial_snapshots` so promoted snapshots can be
+seeded into the opponent pool for a new arena generation.
+
+## 2026-06-30 — Autoregressive action head vs flat 155-softmax: no help (the head is not the lever)
+
+Branch `feat/ppo-autoreg-action` (off `main`, independent of the ceiling
+study). Question: with the observation and action space held **fixed**, does
+factoring the action head autoregressively beat the flat 155-way masked
+softmax? Only the action *distribution* changed.
+
+**The idea.** The `Discrete(155)` space factors exactly along
+`type → source → target` (`SEG=((0,1,1),(1,8,1),(9,8,13),(113,6,7))`). A
+`MaskableAutoregressivePolicy` (subclass of `MaskableActorCriticPolicy`) keeps
+`Discrete(155)`, the 155-bool mask, and the flat-int rollout buffer, but swaps
+the single head for three conditional heads scored with sb3's
+`MaskableCategorical`: `type ← z`, `source ← (z, emb_type)`,
+`target ← (z, emb_type, emb_source)`. All conditional masks are **derived from
+the flat 155 mask** (single source of truth), so legality can never diverge and
+the head cannot emit an illegal action. The neat part: non-applicable factors
+(a Pass has no real source/target) collapse to a single legal cell, so their
+conditional log-prob and entropy are exactly 0 — the three-factor scoring needs
+**zero per-type branching**. `log π(a) = Σ` conditional log-probs,
+`entropy = Σ` conditional entropies.
+
+**A/B verdict (avg-hard3 = mean win rate vs scripted/max-guard/max-attack).**
+Both heads trained with the *identical* recipe (LR 3e-4, ent_coef 0.02,
+both-seat, zoo curriculum 200k×4 = 800k, seed 0); only the head differs.
+Paired over 300 held-out eval seeds (common random numbers, 2 mirrored games
+per opponent per seed), symmetric pre-committed ±0.03 bar, bootstrap CI:
+
+| | avg-hard3 |
+|---|---|
+| flat 155-softmax | 0.5419 |
+| autoregressive head | 0.5525 |
+| **delta (ar − flat)** | **+0.0106** |
+| 95% CI | [−0.0083, +0.0294] |
+| verdict | **no-help** |
+
+The point estimate leans slightly positive (~+1pp), but the whole CI is inside
+±0.03 and straddles 0. By the symmetric rule this is a **null**: factoring the
+action head does not move the reactive ceiling — the flat masked softmax
+already captures whatever the reactive policy expresses along the action-head
+dimension. (Consistent with the standing prior that the reactive policy's
+ceiling is structural, not an under-parameterised-head artifact; the real lever
+remains search-at-play-time — see netdmcts.)
+
+**Cost note.** The AR head trained in ~33m vs ~18m for flat (~1.8× slower, from
+the sequential per-factor sampling + three heads) at 800k on CPU-only torch
+(~512 steps/s flat). No accuracy payoff to justify the extra cost here.
+
+**Additive & clean.** `head="flat"` is byte-identical to the baseline; the AR
+head is behind `--head autoreg` on `train`/`train-zoo`. Saved model is a normal
+`MaskablePPO.load`-able `.zip` (no `custom_objects` — the policy class is
+in-package). Eval composes the net via the `ppo:<path>` spec (balanced draft)
+so it can play the full game. Tooling: `locma/envs/action_factor.py`,
+`ar_distribution.py`, `ar_policy.py`, `ar_callbacks.py`, `harness/ar_study.py`,
+`locma ar-eval`. Tests: `test_action_factor.py`, `test_ar_distribution.py`,
+`test_ar_policy.py` (incl. smoke-train + save/load + legal-game), `test_ar_study.py`.
