@@ -537,6 +537,48 @@ cards, `cardlist_version` mismatch warning, `/3` strictly smaller than `/2` on
 a card-bearing fixture), `tests/test_replay_stream.py` (built replays are
 `/3` with a stamped `cardlist_version` and round-trip).
 
+## 2026-07-01 — FSP league self-play: improves base, does not clear prior plateau
+
+Ran the canonical token-net fictitious self-play league from
+`docs/ppo-league-selfplay-design.md`: 800k token zoo base (`round0.zip`), then
+6 rounds × 200k single-env PPO self-play against all past frozen snapshots plus
+`{scripted,max-guard,max-attack}`, with `target_kl=0.025` and held-out
+`avg-hard3` tracking.
+
+League curve (`avg-hard3`, 150 held-out seeds):
+
+| round | snapshot | avg-hard3 |
+|---:|---|---:|
+| 0 | `runs/league/round0.zip` | 0.3067 |
+| 1 | `runs/league/round1.zip` | 0.5050 |
+| 2 | `runs/league/round2.zip` | 0.5267 |
+| 3 | `runs/league/round3.zip` | 0.5261 |
+| 4 | `runs/league/round4.zip` | 0.5417 |
+| 5 | `runs/league/round5.zip` | **0.5972** |
+| 6 | `runs/league/round6.zip` | 0.5611 |
+
+Best reactive snapshot was round 5. Paired verdict vs the round-0 base over
+300 held-out seeds (same `ar-eval` harness, here comparing base vs best league
+net rather than action heads):
+
+| metric | value |
+|---|---:|
+| base mean | 0.3269 |
+| best league mean | 0.5858 |
+| delta | +0.2589 |
+| 95% CI | [+0.2386, +0.2792] |
+
+Downstream oracle check:
+`netdmcts:8,40,1.5,runs/league/round5.zip` scored **0.7292 avg-hard3** over
+40 seeds.
+
+Verdict: the league substantially rescues this weak 800k base and keeps
+improving through round 5, but it still does **not** clear the prior reactive
+plateau **0.639**. The best league net also does **not** improve the downstream
+netdmcts oracle over the prior **0.817** result. This supports the same
+structural-ceiling read as the earlier 2-snapshot probe: reactive self-play can
+sharpen the token net, but search remains the higher-leverage path.
+
 ## 2026-07-01 — Follow-up idea after canonical league: island/top-K self-play arenas
 
 While the canonical FSP league run is in flight, keep the algorithm unchanged:
