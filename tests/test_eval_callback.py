@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 pytest.importorskip("sb3_contrib")
@@ -15,6 +17,35 @@ def test_callback_logs_avg_hard3_during_short_training():
     assert 0.0 <= cb.last_avg_hard3 <= 1.0
     # TensorBoard-bound scalar names were recorded at least once:
     assert "eval/avg_hard3" in cb.logged_keys
+
+
+def test_eval_fires_once_per_bucket_crossing_not_on_modulus():
+    """Regression test for the plain-modulus gate (`num_timesteps % eval_freq
+    != 0`), which can never fire when num_timesteps only ever advances in
+    increments (n_envs) that don't divide eval_freq -- e.g. n_envs=3 against
+    eval_freq=10 never lands on a multiple of 10 at all. Bucket-crossing must
+    still fire once per eval_freq boundary crossed."""
+    cb = WinRateEvalCallback(eval_freq=10, n_games=1, eval_seed=1_000_000)
+    cb.model = SimpleNamespace(logger=SimpleNamespace(dump=lambda ts: None))
+
+    fire_count = 0
+
+    def _stub_evaluate():
+        nonlocal fire_count
+        fire_count += 1
+        return 0.5
+
+    cb._evaluate = _stub_evaluate
+
+    cb.num_timesteps = 0
+    for _ in range(10):
+        cb.num_timesteps += 3  # never a multiple of eval_freq=10
+        cb._on_step()
+
+    # ts sequence: 3,6,9,12,15,18,21,24,27,30 -> buckets 0,0,0,1,1,1,2,2,2,3
+    # bucket increases at ts=12, 21, 30: three crossings.
+    assert fire_count == 3
+    assert cb.last_avg_hard3 == 0.5
 
 
 def _backstop_only_model_and_callback(**cb_kwargs):

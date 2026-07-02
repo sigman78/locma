@@ -151,6 +151,10 @@ class BattleEnv(gym.Env):
 
         eff = seed if seed is not None else self.base_seed + self._ep
         self._ep += 1
+        # Mirror run_game (engine.py): reseed the opponent per episode so a
+        # stochastic/stateful policy (mixed, mcts, ...) is reproducible and
+        # doesn't carry state across episodes.
+        self.opponent.reset(eff)
         if self.seat_random:
             self.agent_seat = self._seat_rng.randint(0, 1)
 

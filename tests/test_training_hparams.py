@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 pytest.importorskip("sb3_contrib")  # ML-only
@@ -47,3 +49,21 @@ def test_flat_defaults_unchanged():
     m = _model("flat")
     assert m.n_steps == 2048 and m.batch_size == 64 and m.n_epochs == 10
     assert m.gamma == 0.99 and m.gae_lambda == 0.95 and m.vf_coef == 0.5
+
+
+def test_build_env_strides_seed_per_worker(monkeypatch):
+    """Each parallel worker must get a disjoint episode-seed block (worker i's
+    episode k must not equal worker j's episode k+(i-j)) -- inspect the
+    factory partials directly rather than spinning real subprocess envs."""
+    captured = {}
+
+    def _fake_subproc_vec_env(fns):
+        captured["fns"] = fns
+        return SimpleNamespace(close=lambda: None)
+
+    monkeypatch.setattr("stable_baselines3.common.vec_env.SubprocVecEnv", _fake_subproc_vec_env)
+
+    _build_env("random", seed=7, n_envs=3, both_seat=True, obs_mode="flat")
+
+    seeds = [fn.args[1] for fn in captured["fns"]]  # (_opponent_spec, seed, ...)
+    assert seeds == [7, 7 + 50_000, 7 + 2 * 50_000]

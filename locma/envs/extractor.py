@@ -55,7 +55,11 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         n_layers: int = 2,
         id_dim: int = 16,
         ff_mult: int = 2,
-        dropout: float = 0.1,
+        # Must stay 0.0 for PPO training: SB3 collects rollouts in eval mode but
+        # runs evaluate_actions in train mode, so any dropout>0 makes pi_new/pi_old
+        # differ from 1 by noise alone, inflating approx_kl/clip_fraction before
+        # any gradient step. Non-zero only makes sense for supervised distillation.
+        dropout: float = 0.0,
         features_dim: int = 256,
     ) -> None:
         super().__init__(observation_space, features_dim)

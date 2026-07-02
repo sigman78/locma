@@ -30,6 +30,11 @@ class WinRateEvalCallback(BaseCallback):
         self.trial = trial
         self.last_avg_hard3: float | None = None
         self.logged_keys: set[str] = set()
+        # num_timesteps advances in increments of n_envs, so a plain modulus
+        # check can permanently miss eval_freq (only hits when eval_freq is a
+        # multiple of n_envs). Track the last bucket we fired in and fire on
+        # bucket change instead.
+        self._last_eval_bucket = 0
 
     def _eval_policy(self):
         from locma.policies.composer import Composer  # noqa: PLC0415
@@ -73,8 +78,10 @@ class WinRateEvalCallback(BaseCallback):
             raise optuna.TrialPruned()
 
     def _on_step(self) -> bool:
-        if self.num_timesteps % self.eval_freq != 0:
+        bucket = self.num_timesteps // self.eval_freq
+        if bucket <= self._last_eval_bucket:
             return True
+        self._last_eval_bucket = bucket
         avg = self._evaluate()
         self.last_avg_hard3 = avg
         self.logger.dump(self.num_timesteps)

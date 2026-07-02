@@ -57,6 +57,40 @@ def test_search_opponent_works_as_training_opponent():
     assert reward in (-1.0, 0.0, 1.0)
 
 
+class _RecordingOpponent:
+    """Wraps a working policy but records every `reset(seed)` call, so tests
+    can assert BattleEnv.reset() reseeds the opponent (mirrors run_game,
+    engine.py, which resets both policies per game for determinism)."""
+
+    def __init__(self):
+        self._inner = Composer(RandomBattlePolicy(seed=0), RandomDraftPolicy(seed=0), name="opp")
+        self.reset_calls: list = []
+
+    def draft_action(self, view, legal):
+        return self._inner.draft_action(view, legal)
+
+    def battle_action(self, view, legal, state=None):
+        return self._inner.battle_action(view, legal, state)
+
+    def reset(self, seed=None):
+        self.reset_calls.append(seed)
+        self._inner.reset(seed)
+
+
+def test_battle_env_reset_resets_opponent_policy():
+    opp = _RecordingOpponent()
+    env = BattleEnv(opponent=opp, seed=0)
+
+    env.reset()
+    assert opp.reset_calls == [0]  # base_seed(0) + ep(0)
+
+    env.reset()
+    assert opp.reset_calls == [0, 1]  # base_seed(0) + ep(1)
+
+    env.reset(seed=42)
+    assert opp.reset_calls == [0, 1, 42]  # explicit seed passed through
+
+
 def test_obs_size_matches_encode():
     """Verify OBS_SIZE constant matches encode_battle output length."""
     from locma.core.views import BattleView, CardView  # noqa: PLC0415

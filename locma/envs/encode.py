@@ -227,7 +227,10 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
     own guard/attack/reachable):
       13 my_guard_count    (my-board creatures with G ability)
       14 op_total_attack   (sum of attack over op_board)
-      15 op_reachable      (0 if any my guard else sum op ready-attacker attack)
+      15 op_reachable      (0 if any my guard else sum attack over ALL op_board —
+                            not gated by current readiness: start_turn refreshes
+                            every creature on the opponent's turn, so all of them
+                            will be ready when they next act)
       16 exposed_to_lethal (1.0 if op_reachable >= me_health else 0.0)
       17 card_advantage    ((my_hand+my_board) - (op_hand+op_board) card counts)
     """
@@ -298,12 +301,12 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
     if variant == "v1":
         my_guard_count = sum(1 for c in view.my_board if c.abilities[_GUARD_IDX] != "-")
         op_total_attack = sum(float(c.attack) for c in view.op_board)
-        if my_guard_count > 0:
-            op_reachable = 0.0
-        else:
-            op_reachable = sum(
-                float(c.attack) for c in view.op_board if c.can_attack and not c.has_attacked
-            )
+        # Unlike my-side readiness (fresh on my own turn), op-board can_attack/
+        # has_attacked reflect the opponent's LAST turn: start_turn refreshes
+        # every creature on their board (battle.py), so all of op_board will be
+        # ready when the opponent next acts. Sum the whole board, not just the
+        # currently-ready subset, or this undercounts incoming damage.
+        op_reachable = 0.0 if my_guard_count > 0 else op_total_attack
         exposed_to_lethal = 1.0 if op_reachable >= view.me_health else 0.0
         card_advantage = float(
             (len(view.my_hand) + len(view.my_board)) - (view.op_hand_count + len(view.op_board))

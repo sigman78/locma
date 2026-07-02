@@ -58,8 +58,16 @@ def _build_env(
         SubprocVecEnv,
     )
 
+    # Stride per-env seeds: each BattleEnv draws episode seeds base+ep, so a
+    # plain seed+i overlaps worker i's episode k with worker j's episode
+    # k+(i-j). The stride must exceed episodes-per-env for any realistic run
+    # (800k steps / n_envs at ~40 steps/episode is ~1-3k episodes) and the
+    # whole block must stay below the 1_000_000+ held-out eval-seed range
+    # (16 envs * 50_000 = 800k max offset).
     fns = [
-        functools.partial(_make_battle_env, opponent_spec, seed + i, 0, both_seat, obs_mode)
+        functools.partial(
+            _make_battle_env, opponent_spec, seed + i * 50_000, 0, both_seat, obs_mode
+        )
         for i in range(n_envs)
     ]
     return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
