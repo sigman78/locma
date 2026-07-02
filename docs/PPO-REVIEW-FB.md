@@ -90,13 +90,16 @@ path to 0). Re-run the B0 recipe x3 seeds; additionally retry `lr=3e-4` /
 optimum shifts. Cost: ~1 line + one B0-scale rerun (~75 min for 3 seeds at the
 observed pace). Verdict via the existing `ceiling-eval` ruler.
 
-**Outcome (2026-07-02, `fix/ppo-e1-e3`): implemented — and the benchmark
-REGRESSED: dropout-0 at the B0 recipe scores -0.037 [-0.044, -0.030] paired vs
-B0.** The contamination mechanism is real but its net effect at the gentle
-recipe was beneficial regularization. See the worklog entry for the follow-up
-N-arm battery (dropout-0.1 isolation arm + lr=3e-4 arms) that discriminates
-"dropout was a feature" from "the recipe was compensating"; the E1 default may
-be reverted pending that result.
+**Outcome (2026-07-02, `fix/ppo-e1-e3`): tested and REVERTED — dropout is a
+feature, not a bug.** Dropout-0 at the B0 recipe regressed -0.037 [-0.044,
+-0.030] paired vs B0. The N-battery decomposed it: the isolation arm (dropout
+0.1 on fixed code) sits at -0.009 vs B0, so ~-0.028 is dropout removal itself;
+and lr=3e-4 *without* dropout still collapses (-0.247 uncapped, -0.022 with the
+KL cap), refuting the "gentle recipe was compensating for dropout" hypothesis —
+the token net's high-LR instability is intrinsic. The ratio-contamination
+mechanism is real but its cost is measurably dominated by the regularization
+benefit at this scale. Default restored to 0.1 with a pinning test; H4 is
+largely refuted on the dropout front.
 
 ### E2 — trivial: fix the token-v1 threat scalars, then run R5
 
@@ -282,6 +285,13 @@ clip-fraction ~0.4 at default LR, "degrades with training", fixed by throttling
 (`lr=1e-4` + `target_kl=0.025`). The tuned B0 recipe is plausibly compensating
 for this. **Fix: `dropout=0.0` for PPO training** (E1). Note the R2 sweep tuned
 *around* this noise source, which further muddies its (already null) result.
+
+**Empirical resolution (2026-07-02): tested, and the fix was WRONG in net
+effect — reverted.** The mechanism above is real, but removing dropout at the
+tuned recipe regressed -0.028 paired, and the high-LR collapse happens with
+dropout off too (N1: -0.247), so dropout was never the cause of the KL blowup —
+it is a net-positive regularizer here. Kept at 0.1 with a pinning test; see the
+E1 outcome note and the 2026-07-02 worklog N-battery entry.
 
 ### 2. token-v1 `op_reachable` / `exposed_to_lethal` computed from stale opponent readiness — undercounts threat
 

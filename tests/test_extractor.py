@@ -55,15 +55,15 @@ def _make_batch(B: int = 4, n_real: int = 10):
 # ---------------------------------------------------------------------------
 
 
-def test_default_dropout_is_zero():
-    """SB3 collects rollouts in eval mode but runs evaluate_actions in train
-    mode, so any dropout>0 makes pi_new/pi_old differ from 1 by noise alone,
-    inflating approx_kl/clip_fraction before any gradient step. The PPO
-    training path must default to dropout=0.0 (E1)."""
+def test_default_dropout_pinned():
+    """dropout=0.1 is empirically load-bearing: the 2026-07-02 N-battery showed
+    removing it regresses -0.028 paired avg-hard3 at the tuned recipe (despite
+    the known PPO ratio-noise caveat). Pin the default so it only changes
+    deliberately, with a fresh paired ceiling-eval."""
     space = token_obs_space()
     extractor = TokenSetExtractor(space)
     encoder_layer = extractor.transformer.layers[0]
-    assert encoder_layer.dropout.p == 0.0
+    assert encoder_layer.dropout.p == 0.1
 
 
 def test_forward_shape_and_finite():

@@ -851,3 +851,40 @@ Decision rule: if N0 ~= B0 and N1/N2 < B0, dropout was a *feature* at this
 scale - revert the E1 default to 0.1 (keeping the mechanism documented) and
 the ceiling verdict hardens. If N1 or N2 >= B0, the "gentle PPO" recipe was
 compensating for dropout and the HP story reopens.
+
+## N-battery results + dropout revert (2026-07-02, early morning)
+
+All three arms trained and evaluated clean (paired vs `runs/b0_s{0,1,2}.zip`,
+40 seeds x 25 games):
+
+| arm | config | delta vs B0 | 95% CI |
+|---|---|---:|---|
+| N0 | dropout=0.1 explicit, current code | -0.009 | [-0.016, -0.002] |
+| N1 | lr=3e-4, target_kl=None, dropout=0 | **-0.247** | [-0.256, -0.239] |
+| N2 | lr=3e-4, target_kl=0.025, dropout=0 | -0.022 | [-0.029, -0.015] |
+
+**Decomposition of E1's -0.037:** N0 shows the bundled E3 hygiene costs at
+most ~-0.01 (tiny; possibly seed noise around the stride change), so
+**dropout removal accounts for ~-0.028** (N0 0.648 vs e1-arm 0.620 at
+identical code). **N1 refutes the "recipe was compensating for dropout"
+hypothesis outright**: lr=3e-4 without a KL cap collapses to 0.410 even with
+dropout OFF -- the token net's high-LR instability is intrinsic, not
+dropout-borne. N2 confirms the KL cap (not low LR alone) does most of the
+rescuing (0.635, within ~0.02 of B0).
+
+**Decision (per the pre-committed rule): dropout was a feature.** Reverted
+the TokenSetExtractor default to 0.1; the constructor comment + a pinning
+test now document both the PPO ratio-noise caveat and the measured
+regularization win, so this doesn't get "fixed" again without a paired eval.
+The E2 v1-scalar fix and all E3 hygiene fixes stand (correctness, ~free).
+
+**Ceiling verdict hardened:** B0 (token V0, lr=1e-4, target_kl=0.025,
+dropout=0.1) = **0.657** remains the best reactive recipe. HP tuning (R2/R4),
+dropout removal, and higher-LR regimes all regress or tie. Review-doc H4
+("optimization pathology is self-inflicted") is now largely refuted on the
+dropout front; H1/H2 (planning gap) stand untouched.
+
+**Next (launched):** R5-proper -- token-v1 (fixed scalars) at the winning
+recipe (dropout 0.1) x3 seeds, paired vs B0. The earlier +0.008 v1-vs-v0
+delta was measured on the handicapped dropout-0 arms; this is the design
+doc's Phase-2 verdict on the correct ruler.
