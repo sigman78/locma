@@ -39,16 +39,21 @@ Round-robin. Ratings table: policy | openskill (ordinal) | elo | p vs reference.
 Example: `uv run locma tournament random scripted greedy --games 30 --matrix`
 
 ## draft-bench
-`locma draft-bench [DRAFTS...] [--battle SPEC] [--games N] [--seed S]`
+`locma draft-bench [DRAFTS...] [--battle SPEC] [--games N] [--seed S] [--workers W]`
 Rank **draft (deck-building) policies in isolation**. Both seats are piloted by the
 SAME `--battle` policy and differ only in their draft, so the win-rate edge is pure
 deck quality (the draft deals both seats identical offers on a fixed seed; a
 self-duel is exactly 0.500). Prints a ranking by average win rate vs the field and
 the pair-score matrix. With no `DRAFTS`, ranks all built-in drafts
 (`random greedy weighted max-attack max-defense max-guard balanced`).
+- A `+rndK` suffix on any draft name (e.g. `balanced+rnd4`) makes exactly `K` of
+  its 30 picks uniformly random (a `PartialRandomDraftPolicy` wrapper) — for
+  measuring the deck-quality cost of draft noise.
 - `--battle` the pilot for both seats: `ground` (default), `greedy`, `scripted`,
   `azlite:100` (strong), `dmcts:K,I` (strong + fair), `ppo:PATH` (deployment net).
 - `--games` mirrored game pairs per draft pair (total per pair is `2 × N`).
+- `--workers` process-pool workers over the pair grid (0 = all CPUs minus one;
+  default 1 = serial). Results are identical to a serial run.
 
 Choose a **strong** pilot — weak heuristics (`ground` vs `greedy`) disagree on the
 ranking because each imposes its own style. See `docs/draft-benchmark.md`.
@@ -103,6 +108,9 @@ constant for now.
 - `--steps-per-opponent` timesteps per opponent phase (default 200000).
 - `--out` output path for the saved model (default `model.zip`).
 - `--ent-coef` entropy coefficient (default 0.02).
+- `--draft-noise K` (also on `train`): make `K` of each deck's 30 draft picks
+  uniformly random. The opponent drafts BOTH seats in the battle env, so this
+  diversifies the decks the agent trains on without changing the eval draft.
 
 The saved model is a normal PPO artifact — evaluate it like any other policy,
 e.g. `locma tournament random scripted greedy max-guard max-attack ppo:zoo.zip

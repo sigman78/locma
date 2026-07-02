@@ -23,6 +23,9 @@ from sb3_contrib import MaskablePPO  # noqa: E402
 
 from locma.envs.training import train_agent  # noqa: E402
 
+# Long model-training/game-playing tests: opt-in via `pytest -m slow`.
+pytestmark = pytest.mark.slow
+
 
 def test_train_agent_token_smoke(tmp_path):
     """(a) Token path: train_agent with obs_mode='token' saves a Dict-obs model."""

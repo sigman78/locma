@@ -192,7 +192,52 @@ class BalancedDraftPolicy:
             score -= self._ITEM_DISCOUNT
         return score
 
+    def note_pick(self, view, idx):
+        """Record a pick made on this policy's behalf (e.g. an overridden pick by
+        PartialRandomDraftPolicy), keeping the curve/creature tracking accurate."""
+        self._picks.append(view.offered[idx])
+
     def draft_action(self, view, legal):
         idx = max(legal, key=lambda i: self._score(view.offered[i]))
-        self._picks.append(view.offered[idx])
+        self.note_pick(view, idx)
         return idx
+
+
+class PartialRandomDraftPolicy:
+    """Wrap a base draft policy, overriding exactly ``k`` of the 30 draft rounds
+    with a uniformly random pick; every other round delegates to ``base``.
+
+    The random rounds are re-sampled on each ``reset`` (seeded, so an episode is
+    reproducible) and keyed on ``view.round`` — not on call count — so the wrapper
+    behaves identically whether it drafts one seat (run_game) or both seats
+    alternately (BattleEnv, where the opponent drafts for both players): each deck
+    gets exactly ``k`` random picks either way.
+
+    If the base policy is stateful (``balanced``), its ``note_pick`` hook is called
+    on overridden rounds so its internal deck tracking stays accurate.
+    """
+
+    def __init__(self, base, k: int, seed: int = 0, rounds: int = 30, name: str | None = None):
+        if not 0 <= k <= rounds:
+            raise ValueError(f"k must be in [0, {rounds}], got {k}")
+        self.base = base
+        self.k = k
+        self._rounds = rounds
+        self._seed = seed
+        self.name = name if name is not None else f"{base.name}+rnd{k}"
+        self.reset(seed)
+
+    def reset(self, seed=None):
+        eff = self._seed if seed is None else seed
+        self._r = random.Random(eff)
+        self._random_rounds = frozenset(self._r.sample(range(self._rounds), self.k))
+        self.base.reset(seed)
+
+    def draft_action(self, view, legal):
+        if view.round in self._random_rounds:
+            idx = self._r.choice(legal)
+            note = getattr(self.base, "note_pick", None)
+            if note is not None:
+                note(view, idx)
+            return idx
+        return self.base.draft_action(view, legal)

@@ -10,6 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+# Long model-training/game-playing tests: opt-in via `pytest -m slow`.
+pytestmark = pytest.mark.slow
+
 # ---------------------------------------------------------------------------
 # Shared fixture: build a tiny token MaskablePPO model once per test session
 # ---------------------------------------------------------------------------

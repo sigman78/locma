@@ -951,3 +951,58 @@ E2 threat-scalar fix lives there). Post-cleanup: ruff clean, 461 passed,
 
 Archival docs (`ppo-ceiling-study-{design,plan,HANDOFF}.md`) still reference
 the removed tooling by design -- they document the study as it ran.
+
+## Draft-noise study: partial random draft (2026-07-02)
+
+New lever, orthogonal to the (confirmed-null) training-side HPs: **deck
+diversity**. `PartialRandomDraftPolicy` wraps a base draft and replaces exactly
+`k` of the 30 picks with uniform-random ones (keyed on draft round, so the
+battle env's draft-both-seats gives each deck exactly `k` random picks;
+`note_pick` keeps the stateful `balanced` tracker accurate). Exposed as
+`+rndK` draft-bench specs, `--draft-noise K` on `train`/`train-zoo`, and a
+`draft_noise` knob on the ceiling-eval runner. Eval harnesses (`draft-bench`,
+`ceiling-eval`) gained `--workers` process-pool parallelism (0 = all CPUs
+minus one; results byte-identical to serial, pinned by tests).
+
+**A. Deck-quality cost of noise** (draft duel, ground pilot, 600 games/pair,
+resolution +/-0.04): `balanced` 0.595 field-avg vs `+rnd2` 0.570, `+rnd4`
+0.575, `+rnd6` 0.548, `+rnd8` 0.549. Head-to-head vs clean balanced: 0.48-0.49
+(k<=4), 0.44-0.46 (k>=6). **k<=4 is ~free deck-wise**; even `+rnd8` still
+crushes greedy/weighted (0.65-0.68).
+
+**B. B0 eval-time robustness** (b0_s{0,1,2}, 40 paired seeds x 25 games,
+noisy draft on the PPO side only):
+
+| eval draft | avg-hard3 | delta vs clean | 95% CI |
+|---|---:|---:|---|
+| balanced (clean) | 0.6571 | -- | (reproduces the 0.657 of record) |
+| +rnd2 | 0.6528 | -0.004 | [-0.011, +0.003] |
+| +rnd4 | 0.6459 | -0.011 | [-0.019, -0.003] |
+| +rnd8 | 0.6402 | -0.017 | [-0.028, -0.006] |
+
+The reactive net is already fairly deck-robust: 8/30 random picks costs only
+~1.7 points. (480-cell grid, 19 workers, 49 min wall.)
+
+**C. Training with diversified decks -- VERDICT: null.** `rnd4_s{0,1,2}` =
+B0 recipe + `--draft-noise 4` (the ~free-deck-cost point), 800k zoo
+(~13.5 min/seed), paired ceiling-eval vs `b0_s{0,1,2}` (40 x 25, 19 workers,
+~23 min wall vs a serial half-day):
+
+```
+cand=0.649  B0=0.657  delta=-0.008  95% CI [-0.016, +0.001]
+VERDICT: ceiling-confirmed
+```
+
+Robustness cross-check (same noisy-eval grid as B, on the rnd4 nets):
+clean 0.6491; +rnd4 -0.005 [-0.013, +0.003]; +rnd8 -0.013 [-0.024, -0.001].
+The noise-trained nets do degrade a touch less under deck noise (about half
+B0's slope at k=4), but from a lower clean baseline -- B0 ties or beats them
+at EVERY eval-noise level (0.657/0.646/0.640 vs 0.649/0.644/0.637). Deck
+diversity in training buys nothing, not even on the noisy-deck axis it was
+supposed to help.
+
+**Study bottom line:** the draft-diversity lever is null, consistent with the
+ceiling study's read that the reactive net's limit is planning-side (H1/H2),
+not data-side. B0 remains the recipe of record; `--draft-noise`, `+rndK`
+bench specs, and `--workers` parallel eval stay as tested, documented tooling.
+`rnd4_s{0,1,2}.zip` kept in runs/ for reference.

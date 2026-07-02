@@ -40,6 +40,12 @@ explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Long game-playing/training/network tests are opt-in: run them with
+#   uv run --extra ml --extra dev pytest -m slow
+addopts = '-m "not slow"'
+markers = [
+    "slow: long-running test (trains a model, records selfplay, fetches art); deselected by default",
+]
 
 [tool.ruff]
 line-length = 100
