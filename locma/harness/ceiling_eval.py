@@ -36,17 +36,31 @@ HARD3 = ("scripted", "max-guard", "max-attack")
 
 
 def _ppo_policy(model_path: str, draft_noise: int = 0):
-    from locma.policies.composer import Composer  # noqa: PLC0415
-    from locma.policies.drafts import (  # noqa: PLC0415
-        BalancedDraftPolicy,
-        PartialRandomDraftPolicy,
-    )
-    from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+    """Build the candidate policy for one eval cell.
 
-    draft = BalancedDraftPolicy()
+    ``model_path`` is either a bare ``.zip`` path (wrapped as the standard
+    ppo+balanced pairing, the historic behavior) or a full registry spec
+    (e.g. ``vbeam:runs/b0_s0.zip``) so play-time-search candidates ride the
+    same paired ruler as reactive nets.
+    """
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.drafts import PartialRandomDraftPolicy  # noqa: PLC0415
+    from locma.policies.registry import is_policy_spec, make_policy  # noqa: PLC0415
+
+    if is_policy_spec(model_path):
+        policy = make_policy(model_path)
+    else:
+        from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+        from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+
+        policy = Composer(MaskablePPOBattlePolicy(model_path), BalancedDraftPolicy(), name="ppo")
     if draft_noise:
-        draft = PartialRandomDraftPolicy(draft, draft_noise)
-    return Composer(MaskablePPOBattlePolicy(model_path), draft, name="ppo")
+        policy = Composer(
+            policy.battle,
+            PartialRandomDraftPolicy(policy.draft, draft_noise),
+            name=f"{policy.name}+rnd{draft_noise}",
+        )
+    return policy
 
 
 # Per-process policy cache: a pool worker evaluates many (seed) tasks for the
@@ -71,8 +85,9 @@ def avg_hard3_at_seed(
     """avg-hard3 (mean win-rate over the opponents) at ONE eval seed.
 
     Top-level and spec-string-parameterised so it is the picklable unit of work
-    for a process pool. ``draft_noise`` (k) replaces k of the PPO side's 30 draft
-    picks with uniform random ones (deck-robustness probes).
+    for a process pool. ``model_path`` is a ``.zip`` path or a registry spec
+    (see ``_ppo_policy``). ``draft_noise`` (k) replaces k of the candidate
+    side's 30 draft picks with uniform random ones (deck-robustness probes).
     """
     from locma.harness.match import run_match  # noqa: PLC0415
     from locma.policies.registry import make_policy  # noqa: PLC0415

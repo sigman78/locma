@@ -1006,3 +1006,48 @@ ceiling study's read that the reactive net's limit is planning-side (H1/H2),
 not data-side. B0 remains the recipe of record; `--draft-noise`, `+rndK`
 bench specs, and `--workers` parallel eval stay as tested, documented tooling.
 `rnd4_s{0,1,2}.zip` kept in runs/ for reference.
+
+## E5 "planning-lite": vbeam own-turn beam planner -- H2 CONFIRMED (2026-07-02)
+
+`locma/policies/vbeam.py` (branch feat/vbeam-turn-planner): at each decision
+point, beam-search own-turn action *sequences* on a `_clone_battle` forward
+model and score stopping points with B0's token critic, batched (one trunk
+forward per beam depth). Fair by construction: the search never simulates
+`Pass` (draws happen only at `start_turn`), so no hidden information is
+touched; the evaluator reads only the public `BattleView`. Terminal win/loss
+score +/-2 (outside the critic's [-1,1] clip), so a found lethal outranks any
+estimate. Spec `vbeam:model_path,width,max_actions` (defaults 8/20, balanced
+draft); `ceiling-eval` now accepts registry specs alongside .zip paths.
+~0.6 s/game -- roughly 100x cheaper than netdmcts's K*I=1200 net calls.
+
+**The bug that mattered (stop-scoring bias):** the naive planner scored
+"stop here" with V(s). But V is a *state* value -- it already credits the
+actions the net expects to still take this turn -- so "stop now" free-rode
+on phantom actions. Probe: 13/38 turns planned as bare [Pass] (9 where the
+reactive net itself would act); paired pilot 0.308 vs B0 0.652 (-0.343).
+Fix: a stop is scoreable with V(s) only where the policy's masked argmax IS
+Pass (continuation == passing, bias vanishes) or Pass is forced (line
+exhausted); elsewhere the root stop survives only as a -1.5 fallback that
+outranks self-inflicted losses (-2) and nothing else. Post-fix probe: 4/46
+bare-Pass turns, healthy 1-7 action plans.
+
+**Verdicts (paired vs b0_s{0,1,2}, standard ruler):**
+
+```
+pilot 10x10:  cand=0.854  B0=0.652  delta=+0.202  95% CI [+0.168, +0.241]
+full  40x25:  cand=0.863  B0=0.657  delta=+0.206  95% CI [+0.196, +0.216]
+VERDICT: headroom
+```
+
+**Reading:** H2 confirmed on the design doc's own terms -- the review's 0.70
+bar is cleared by 0.16, and vbeam even beats the netdmcts teacher (0.817)
+at ~100x less play-time compute. The ~0.66 plateau was never representation,
+data, or optimization: it was within-turn plan composition, recoverable at
+play time from the EXISTING B0 value head with zero retraining. Per
+PPO-REVIEW-FB E5, "the reactive deployment constraint should be renegotiated"
+-- vbeam costs well under a second per turn.
+
+**Next levers (in order):** E5 variant 2 (fitted-value iteration: retrain the
+critic against the planner's own play -- the current critic is evaluated
+off-policy under vbeam); E5a (learned-potential PBS shaping with the frozen
+critic); netdmcts with the vbeam-improved net as a stronger teacher for E4.

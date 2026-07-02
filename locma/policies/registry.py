@@ -110,6 +110,27 @@ def _netdmcts(params, spec):
     )
 
 
+def _vbeam(params, spec):
+    """V-greedy own-turn beam planner — spec ``vbeam:model_path,width,max_actions``.
+
+    Plans whole turns by beam-searching own-turn action sequences and scoring
+    stopping points with the token model's value head (E5 "planning-lite").
+    Model path first so the common case (``vbeam:runs/b0_s0.zip``) needs no
+    commas. Paired with the ``balanced`` draft like ``ppo``/``azlite``/
+    ``netdmcts`` for apples-to-apples comparisons.
+    """
+    from locma.policies.vbeam import VBeamBattlePolicy  # noqa: PLC0415
+
+    model_path = params[0] if len(params) > 0 and params[0] else "model.zip"
+    width = int(params[1]) if len(params) > 1 else 8
+    max_actions = int(params[2]) if len(params) > 2 else 20
+    return Composer(
+        VBeamBattlePolicy(model_path=model_path, width=width, max_actions=max_actions),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
 def _ppo(params, spec):
     from locma.policies.ppo import (  # noqa: PLC0415
         MaskablePPOBattlePolicy,
@@ -149,20 +170,31 @@ _FACTORIES = {
     "azlite": _azlite,
     "dmcts": _dmcts,
     "netdmcts": _netdmcts,
+    "vbeam": _vbeam,
     "ppo": _ppo,
     "mixed": _mixed,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo` and `netdmcts` need a model artifact + the [ml] extra (use `ppo:path`
-# or `netdmcts:K,I,c,path`); `mixed` is a non-stationary training opponent,
-# not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts"}
+# `ppo`, `netdmcts` and `vbeam` need a model artifact + the [ml] extra (use
+# `ppo:path`, `netdmcts:K,I,c,path` or `vbeam:path,width,max_actions`);
+# `mixed` is a non-stationary training opponent, not a baseline to rank.
+_HIDDEN = {"ppo", "mixed", "netdmcts", "vbeam"}
 
 
 def policy_names() -> list[str]:
     """Selectable built-in policy names, in registration order."""
     return [n for n in _FACTORIES if n not in _HIDDEN]
+
+
+def is_policy_spec(s: str) -> bool:
+    """True when ``s`` names a registered policy (``base`` or ``base:params``).
+
+    A bare model path is NOT a spec: ``runs/b0_s0.zip`` has no known base, and
+    a Windows drive prefix (``F:\\...``) parses to a base like ``F`` which is
+    not registered either.
+    """
+    return s.partition(":")[0] in _FACTORIES
 
 
 def make_policy(spec: str):
