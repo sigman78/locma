@@ -12,6 +12,7 @@ from locma.harness.draft_bench import (
     make_draft,
     round_robin,
 )
+from locma.policies.drafts import PartialRandomDraftPolicy
 
 
 def test_draft_names_nonempty_and_known():
@@ -111,3 +112,38 @@ def test_cli_draft_bench_rejects_zero_games():
     runner = CliRunner()
     res = runner.invoke(app, ["draft-bench", "greedy", "balanced", "--games", "0"])
     assert res.exit_code != 0
+
+
+def test_make_draft_parses_rnd_suffix():
+    p = make_draft("balanced+rnd4")
+    assert isinstance(p, PartialRandomDraftPolicy)
+    assert p.k == 4 and p.name == "balanced+rnd4"
+    with pytest.raises(ValueError):
+        make_draft("nope+rnd4")  # unknown base
+    with pytest.raises(ValueError):
+        make_draft("balanced+rndx")  # non-integer K
+    with pytest.raises(ValueError):
+        make_draft("balanced+rnd31")  # K out of [0, 30]
+
+
+def test_noisy_self_duel_is_exactly_half():
+    # The calibration guarantee must survive the noise wrapper: run_match resets
+    # both policies to the game seed, so two identical `+rndK` instances pick the
+    # same random rounds AND the same random cards -> mirror still cancels exactly.
+    r = duel("balanced+rnd4", "balanced+rnd4", battle="ground", games=32, seed=0)
+    assert r.win_rate_a == 0.5
+
+
+def test_noisy_draft_loses_to_clean_base():
+    # Sanity direction check: replacing 8 of 30 balanced picks with uniform noise
+    # must not IMPROVE the deck (win rate <= 0.5 vs the clean draft, same pilot).
+    r = duel("balanced+rnd8", "balanced", battle="ground", games=48, seed=0)
+    assert r.win_rate_a <= 0.5
+
+
+def test_round_robin_parallel_matches_serial():
+    drafts = ["greedy", "balanced", "random"]
+    serial = round_robin(drafts, battle="ground", games=8, seed=0, workers=1)
+    par = round_robin(drafts, battle="ground", games=8, seed=0, workers=2)
+    assert serial.win_matrix == par.win_matrix
+    assert serial.avg_win_rate == par.avg_win_rate

@@ -31,6 +31,7 @@ from locma.policies.drafts import (
     MaxAttackDraftPolicy,
     MaxDefenseDraftPolicy,
     MaxGuardDraftPolicy,
+    PartialRandomDraftPolicy,
     RandomDraftPolicy,
     WeightedDraftPolicy,
 )
@@ -57,7 +58,18 @@ def draft_names() -> list[str]:
 
 
 def make_draft(name: str):
-    """Construct a draft policy by name (a fresh instance per call)."""
+    """Construct a draft policy by name (a fresh instance per call).
+
+    A ``+rndK`` suffix wraps the base draft in PartialRandomDraftPolicy: exactly
+    ``K`` of the 30 picks are made uniformly at random, the rest by the base —
+    e.g. ``balanced+rnd4``. Run-time reseeding (run_match resets per game) keeps
+    the random rounds reproducible.
+    """
+    base, sep, kstr = name.partition("+rnd")
+    if sep:
+        if base not in DRAFTS or not kstr.isdigit():
+            raise ValueError(f"bad noisy-draft spec '{name}' (want <base>+rnd<K>)")
+        return PartialRandomDraftPolicy(DRAFTS[base](), int(kstr), name=name)
     if name not in DRAFTS:
         raise ValueError(f"unknown draft '{name}' (known: {', '.join(DRAFTS)})")
     return DRAFTS[name]()
@@ -117,7 +129,7 @@ class SweepResult:
 
 
 def round_robin(
-    drafts: list[str], battle: str = "ground", games: int = 100, seed: int = 0
+    drafts: list[str], battle: str = "ground", games: int = 100, seed: int = 0, workers: int = 1
 ) -> SweepResult:
     """All-pairs draft duel under one battle policy.
 
@@ -125,14 +137,36 @@ def round_robin(
     (``run_match`` already mirrors seats, so ``duel(a,b) == 1 − duel(b,a)``),
     halving the work. The headline ranking is ``avg_win_rate`` — each draft's mean
     win rate over the rest of the field (a Copeland-style score that, unlike Elo,
-    is not fooled by lopsided wins vs a single weak draft)."""
+    is not fooled by lopsided wins vs a single weak draft).
+
+    ``workers > 1`` fans the pairs out over a process pool (each duel is an
+    independent seeded match, so results are identical to the serial run)."""
     names = list(drafts)
+    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
+    if workers > 1 and len(pairs) > 1:
+        from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
+
+        from locma.harness.parallel import init_eval_worker  # noqa: PLC0415
+
+        with ProcessPoolExecutor(
+            max_workers=min(workers, len(pairs)), initializer=init_eval_worker
+        ) as ex:
+            duels = list(
+                ex.map(
+                    duel,
+                    [a for a, _ in pairs],
+                    [b for _, b in pairs],
+                    [battle] * len(pairs),
+                    [games] * len(pairs),
+                    [seed] * len(pairs),
+                )
+            )
+    else:
+        duels = [duel(a, b, battle=battle, games=games, seed=seed) for a, b in pairs]
     win_matrix: dict = {}
-    for i, a in enumerate(names):
-        for b in names[i + 1 :]:
-            d = duel(a, b, battle=battle, games=games, seed=seed)
-            win_matrix[(a, b)] = d.win_rate_a
-            win_matrix[(b, a)] = 1.0 - d.win_rate_a
+    for (a, b), d in zip(pairs, duels, strict=True):
+        win_matrix[(a, b)] = d.win_rate_a
+        win_matrix[(b, a)] = 1.0 - d.win_rate_a
     avg = {}
     for a in names:
         rates = [win_matrix[(a, b)] for b in names if b != a]

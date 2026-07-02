@@ -1,11 +1,14 @@
 from dataclasses import dataclass
 
+import pytest
+
 from locma.policies.drafts import (
     BalancedDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
     MaxDefenseDraftPolicy,
     MaxGuardDraftPolicy,
+    PartialRandomDraftPolicy,
     RandomDraftPolicy,
     WeightedDraftPolicy,
 )
@@ -96,3 +99,88 @@ def test_balanced_prefers_creature_and_is_stateful():
     assert len(p._picks) == 1
     p.reset()
     assert p._picks == []
+
+
+# ---------------------------------------------------------------------------
+# PartialRandomDraftPolicy — k uniformly random picks on top of a base draft
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _RoundDV:
+    round: int
+    offered: tuple
+
+
+class _ConstDraft:
+    """Spy base: always picks 0 and counts how often it is consulted."""
+
+    name = "const"
+
+    def __init__(self):
+        self.calls = 0
+
+    def draft_action(self, view, legal):
+        self.calls += 1
+        return 0
+
+    def reset(self, seed=None):
+        self.calls = 0
+
+
+def _round_view(r):
+    return _RoundDV(r, (_CV(0, 1, 1, 1, "------"),) * 3)
+
+
+def test_partial_random_overrides_exactly_k_rounds():
+    base = _ConstDraft()
+    p = PartialRandomDraftPolicy(base, k=4, seed=7)
+    p.reset(7)
+    for r in range(30):
+        assert p.draft_action(_round_view(r), [0, 1, 2]) in (0, 1, 2)
+    assert base.calls == 26  # exactly 30 - k delegated
+
+
+def test_partial_random_both_seats_get_k_random_picks_each():
+    # BattleEnv: the same policy drafts BOTH seats, alternating on each round.
+    # Keying on view.round (not call count) gives each deck exactly k random picks.
+    base = _ConstDraft()
+    p = PartialRandomDraftPolicy(base, k=4, seed=7)
+    p.reset(7)
+    for r in range(30):
+        p.draft_action(_round_view(r), [0, 1, 2])  # seat 0
+        p.draft_action(_round_view(r), [0, 1, 2])  # seat 1
+    assert base.calls == 52  # 2 x (30 - k)
+
+
+def test_partial_random_reset_is_reproducible():
+    p = PartialRandomDraftPolicy(_ConstDraft(), k=6, seed=0)
+    p.reset(42)
+    rounds = p._random_rounds
+    first = [p.draft_action(_round_view(r), [0, 1, 2]) for r in range(30)]
+    p.reset(42)
+    assert p._random_rounds == rounds  # random rounds derive from the seed only
+    assert [p.draft_action(_round_view(r), [0, 1, 2]) for r in range(30)] == first
+
+
+def test_partial_random_k0_is_pure_delegation_and_k_bounds():
+    base = _ConstDraft()
+    p = PartialRandomDraftPolicy(base, k=0, seed=1)
+    for r in range(30):
+        assert p.draft_action(_round_view(r), [0, 1, 2]) == 0
+    assert base.calls == 30
+    with pytest.raises(ValueError):
+        PartialRandomDraftPolicy(_ConstDraft(), k=31)
+    with pytest.raises(ValueError):
+        PartialRandomDraftPolicy(_ConstDraft(), k=-1)
+
+
+def test_partial_random_name_and_stateful_base_tracking():
+    base = BalancedDraftPolicy()
+    p = PartialRandomDraftPolicy(base, k=30, seed=3)  # every round random
+    assert p.name == "balanced-draft+rnd30"
+    p.reset(3)
+    for r in range(5):
+        p.draft_action(_round_view(r), [0, 1, 2])
+    # note_pick keeps the balanced draft's curve tracking accurate on overridden rounds
+    assert len(base._picks) == 5

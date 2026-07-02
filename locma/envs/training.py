@@ -16,6 +16,7 @@ def _make_battle_env(
     agent_seat: int = 0,
     seat_random: bool = False,
     obs_mode: str = "flat",
+    draft_noise: int = 0,
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -23,12 +24,26 @@ def _make_battle_env(
     (possibly stateful) opponent never has to be pickled and crosses no process
     boundary. ``seat_random`` trains the agent as both first and second player.
     ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
+    ``draft_noise`` (k > 0) wraps the opponent's draft half so exactly k of each
+    deck's 30 picks are uniformly random — the opponent drafts BOTH seats in the
+    battle env, so this diversifies the decks the agent trains on.
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.drafts import PartialRandomDraftPolicy  # noqa: PLC0415
     from locma.policies.registry import make_policy  # noqa: PLC0415
 
+    opponent = make_policy(opponent_spec)
+    if draft_noise:
+        if getattr(opponent, "draft", None) is None:
+            raise ValueError(f"draft_noise needs an opponent with a draft half: '{opponent_spec}'")
+        opponent = Composer(
+            opponent.battle,
+            PartialRandomDraftPolicy(opponent.draft, draft_noise, seed=seed),
+            name=f"{opponent_spec}+rnd{draft_noise}",
+        )
     return BattleEnv(
-        opponent=make_policy(opponent_spec),
+        opponent=opponent,
         seed=seed,
         agent_seat=agent_seat,
         seat_random=seat_random,
@@ -48,11 +63,13 @@ def _build_env(
     n_envs: int,
     both_seat: bool = True,
     obs_mode: str = "flat",
+    draft_noise: int = 0,
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
     randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
-    ``obs_mode`` selects the observation encoding: "flat" (default) or "token"."""
+    ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
+    ``draft_noise`` (k) makes k of each deck's 30 draft picks uniformly random."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
@@ -66,7 +83,7 @@ def _build_env(
     # (16 envs * 50_000 = 800k max offset).
     fns = [
         functools.partial(
-            _make_battle_env, opponent_spec, seed + i * 50_000, 0, both_seat, obs_mode
+            _make_battle_env, opponent_spec, seed + i * 50_000, 0, both_seat, obs_mode, draft_noise
         )
         for i in range(n_envs)
     ]
@@ -156,6 +173,7 @@ def train_agent(
     extractor_kwargs: dict | None = None,
     callback=None,
     tensorboard_log: str | None = None,
+    draft_noise: int = 0,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -182,10 +200,14 @@ def train_agent(
     extractor_kwargs: optional kwargs for TokenSetExtractor (token obs_mode only).
     callback: optional SB3 callback (or CallbackList), passed to every `model.learn`.
     tensorboard_log: optional tensorboard log directory.
+    draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
+        diversifies the decks the agent trains on (the opponent drafts both seats).
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
-    env = _build_env(opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode)
+    env = _build_env(
+        opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, draft_noise=draft_noise
+    )
     model = _make_model(
         env,
         obs_mode=obs_mode,
@@ -259,6 +281,7 @@ def train_zoo(
     n_envs: int = 1,
     callback=None,
     tensorboard_log: str | None = None,
+    draft_noise: int = 0,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -283,6 +306,8 @@ def train_zoo(
     n_envs: number of parallel envs per opponent phase (CPU speedup).
     callback: optional SB3 callback (or CallbackList), passed to every `model.learn`.
     tensorboard_log: optional tensorboard log directory.
+    draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
+        diversifies the decks the agent trains on (the opponent drafts both seats).
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -290,8 +315,13 @@ def train_zoo(
     if not opps:
         raise ValueError("train_zoo needs a non-empty opponent list")
 
+    def build(opp):
+        return _build_env(
+            opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, draft_noise=draft_noise
+        )
+
     model = _make_model(
-        _build_env(opps[0], seed, n_envs, both_seat=both_seat, obs_mode=obs_mode),
+        build(opps[0]),
         obs_mode=obs_mode,
         seed=seed,
         verbose=verbose,
@@ -314,7 +344,7 @@ def train_zoo(
         for i, opp in enumerate(opps):
             if i > 0:
                 old_env = model.env
-                model.set_env(_build_env(opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode))
+                model.set_env(build(opp))
                 old_env.close()  # else SubprocVecEnv workers from the old phase leak
             model.learn(
                 total_timesteps=steps_per_opponent,

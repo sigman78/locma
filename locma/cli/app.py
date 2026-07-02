@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from locma.cli.render import GameRenderer
-from locma.harness.draft_bench import draft_names, make_battle, round_robin
+from locma.harness.draft_bench import draft_names, make_battle, make_draft, round_robin
 from locma.harness.match import run_match
 from locma.harness.tournament import run_tournament
 from locma.harness.trace import (
@@ -201,29 +201,36 @@ def draft_bench_cmd(
     ),
     games: int = typer.Option(100, help="mirrored game pairs per draft pair (2x this total)"),
     seed: int = 0,
+    workers: int = typer.Option(
+        1, help="process-pool workers for the pair grid (0 = all CPUs minus one)"
+    ),
 ):
     """Rank draft (deck-building) policies in isolation.
 
     Both seats are piloted by the SAME ``--battle`` policy and differ only in their
     draft, so the win-rate edge is pure deck quality (the draft deals both seats
-    identical offers on a fixed seed; a self-duel is exactly 0.500). Prints a
-    ranking by average win rate vs the field and the pair-score matrix. See
-    docs/experiments.md.
+    identical offers on a fixed seed; a self-duel is exactly 0.500). A ``+rndK``
+    suffix (e.g. ``balanced+rnd4``) makes K of that draft's 30 picks uniformly
+    random. Prints a ranking by average win rate vs the field and the pair-score
+    matrix. See docs/experiments.md.
     """
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
     names = list(drafts) if drafts else draft_names()
     if len(names) < 2:
         raise typer.BadParameter("need at least 2 drafts to rank")
-    known = draft_names()
     for n in names:
-        if n not in known:
-            raise typer.BadParameter(f"unknown draft '{n}' (known: {', '.join(known)})")
+        try:
+            make_draft(n)  # validate (incl. +rndK specs) up front for a clean error
+        except ValueError as e:
+            raise typer.BadParameter(str(e)) from e
     try:
         make_battle(battle)  # validate the battle spec up front for a clean error
     except ValueError as e:
         raise typer.BadParameter(str(e)) from e
-    s = round_robin(names, battle=battle, games=games, seed=seed)
+    from locma.harness.parallel import resolve_workers  # noqa: PLC0415
+
+    s = round_robin(names, battle=battle, games=games, seed=seed, workers=resolve_workers(workers))
 
     # Resolution limit: Wilson half-width of a single cell at this n.
     lo, hi = wilson_ci(games, 2 * games)
@@ -337,12 +344,17 @@ def train(
     max_grad_norm: float = typer.Option(0.5, help="PPO max gradient norm for clipping"),
     device: str = typer.Option("auto", help="torch device: 'auto', 'cpu', or 'cuda'"),
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
+    draft_noise: int = typer.Option(
+        0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
         raise typer.BadParameter("steps must be >= 1")
     if n_envs < 1:
         raise typer.BadParameter("n_envs must be >= 1")
+    if not 0 <= draft_noise <= 30:
+        raise typer.BadParameter("draft-noise must be in [0, 30]")
     if obs_mode not in ("flat", "token", "token-v1"):
         raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     marks = None
@@ -378,6 +390,7 @@ def train(
             max_grad_norm=max_grad_norm,
             device=device,
             tensorboard_log=tensorboard_log,
+            draft_noise=draft_noise,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -407,6 +420,9 @@ def train_zoo_cmd(
     device: str = typer.Option("auto", help="torch device: 'auto', 'cpu', or 'cuda'"),
     n_envs: int = typer.Option(1, help="parallel envs per opponent phase (CPU speedup)"),
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
+    draft_noise: int = typer.Option(
+        0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -415,6 +431,8 @@ def train_zoo_cmd(
         raise typer.BadParameter("steps-per-opponent must be >= 1")
     if n_envs < 1:
         raise typer.BadParameter("n_envs must be >= 1")
+    if not 0 <= draft_noise <= 30:
+        raise typer.BadParameter("draft-noise must be in [0, 30]")
     if obs_mode not in ("flat", "token", "token-v1"):
         raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
@@ -445,6 +463,7 @@ def train_zoo_cmd(
             device=device,
             n_envs=n_envs,
             tensorboard_log=tensorboard_log,
+            draft_noise=draft_noise,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -723,12 +742,17 @@ def ceiling_eval_cmd(
     seeds: int = typer.Option(40, help="number of held-out eval seeds (from 1_000_000)"),
     games_per_seed: int = typer.Option(25, help="paired games per opponent per seed"),
     threshold: float = typer.Option(0.03, help="avg-hard3 lift required for 'headroom'"),
+    workers: int = typer.Option(
+        1, help="process-pool workers over the (model, seed) grid (0 = all CPUs minus one)"
+    ),
 ):
     """Rigorous paired-difference verdict for the PPO ceiling study (requires [ml])."""
     try:
         from locma.harness.ceiling_eval import run_verdict  # noqa: PLC0415
     except ImportError as e:
         raise typer.BadParameter("ceiling-eval requires the [ml] extra") from e
+    from locma.harness.parallel import resolve_workers  # noqa: PLC0415
+
     seed_list = _disjoint_eval_seeds(seeds, games_per_seed)
     out = run_verdict(
         candidates.split(","),
@@ -736,6 +760,7 @@ def ceiling_eval_cmd(
         seeds=seed_list,
         games_per_seed=games_per_seed,
         threshold=threshold,
+        workers=resolve_workers(workers),
     )
     console.print(
         f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "
