@@ -536,3 +536,261 @@ turns, `/2` path unchanged, lossless round-trip incl. buffed/damaged/Guard
 cards, `cardlist_version` mismatch warning, `/3` strictly smaller than `/2` on
 a card-bearing fixture), `tests/test_replay_stream.py` (built replays are
 `/3` with a stamped `cardlist_version` and round-trip).
+
+## 2026-06-30 — PPO ceiling study: Gate 0 (throughput) + kickoff on the RTX 4080 box
+
+Tooling (Tasks 1–10 of `docs/ppo-ceiling-study-plan.md`) confirmed green on the
+GPU box: `pytest tests/ -q` with `--extra ml --extra dev --extra sweep` →
+**464 passed, 1 skipped** (553s; the ML-gated tests that actually train small
+models now run instead of skipping, hence the longer wall time vs. a CPU-only
+box).
+
+**R0 — Gate 0 throughput spike** (`scripts/puffer_bench.py`, sb3 arm; PufferLib
+not installed so that arm is `(absent)` — deferred, non-blocking per the plan):
+
+| config | SPS |
+|---|---:|
+| sb3 token n_envs=1 | 6280 |
+| sb3 token n_envs=4 | 8695 |
+| sb3 token n_envs=8 | 12072 |
+| sb3 token n_envs=16 | 14009 |
+
+Env-stepping throughput flattens at `n_envs=16` (this box has 20 logical
+cores, so that's already near the practical ceiling — pushing higher would
+oversubscribe, not help). A short real-training comparison (16k steps, token
+net) gave **2390 fps on `device=cuda`** vs **1638 fps on `device=cpu`** — CUDA
+wins but not dramatically, since the token net is small; GPU host↔device
+transfer eats into the advantage. Once gradient updates kick in (not just
+rollout collection) sustained fps drops further to **~390** on this box —
+that's the realistic full-run rate, not the rollout-only 2390 headline.
+**Decision: `n_envs=16`, `device=cuda` for the sweep and B0 runs.** Since CPU
+is already ~saturated by one run's 16 env workers, B0's 3 seeds run
+**sequentially**, not as 3 parallel processes (parallelizing would mostly add
+contention here, not speedup).
+
+**PufferLib arm: no native Windows support, confirmed across 4 release
+generations** — not a version-picking problem, it just doesn't ship for this
+platform:
+- `pufferlib==3.0.0` (current): sdist build raises `ValueError: Unsupported
+  system: Windows` outright — it compiles CUDA/C++ extensions and vendors
+  raylib/Box2D binaries published only for Linux/macOS.
+- `pufferlib==2.0.x`: identical Windows block in `setup.py`.
+- `pufferlib==1.0.1` / `0.7.3` (older, no explicit OS gate): pin ancient deps
+  (`numpy==1.23.3`, legacy `setuptools` build backend) that can't build
+  against this box's Python 3.14.
+- No Windows wheels published for any release on PyPI.
+- WSL2 is enabled on this box but has no Linux distro installed; Docker isn't
+  present either — standing one up (distro + CUDA passthrough + build) was
+  judged not worth doing just for a throughput spike.
+
+**Decision: defer the PufferLib arm to a future macOS (CPU/MPS) session** —
+there's reportedly a newer `4.0` release on GitHub (not yet on PyPI) worth
+checking then too. `scripts/puffer_bench.py`'s `puffer_sps()` already
+degrades gracefully to `(absent)` when the package isn't importable, so this
+doesn't block anything. **The study proceeds on sb3 regardless, per the
+plan's Global Constraints — Puffer is informational only.**
+
+**R1 — B0 baseline (×3 seeds, full 800k steps, `n_envs=16`, `device=cuda`,
+`lr=1e-4`, `target_kl=0.025`, token obs):**
+
+| run | wall time | avg_hard3 (40 held-out seeds × 25 games/opp) |
+|---|---:|---:|
+| `b0_s0.zip` | 25.3 min | 0.6447 (range 0.607–0.707) |
+| `b0_s1.zip` | 23.8 min | 0.6448 (range 0.573–0.707) |
+| `b0_s2.zip` | 24.2 min | 0.6285 (range 0.567–0.700) |
+
+**B0 mean avg_hard3 ≈ 0.639** (3-seed average) — a touch higher than the
+~0.60 plateau the design doc's motivating anecdote cited, but in the same
+neighborhood; this run's own number is now the actual verdict baseline, not
+the anecdote. All three seeds trained clean (no crashes, KL early-stopping
+engaged as expected with `target_kl=0.025`).
+
+**Eval-harness speed note (matters for R4/R5):** `avg_hard3_per_seed` /
+`run_match` plays games **one at a time, unbatched** — computing this table
+(3 models × 40 seeds × 3 opponents × 25 games = 9000 games) took **~40
+minutes**, noticeably slower than the 800k-step *training* runs themselves
+(~25 min each). R4's rigorous confirm (3–5 survivors + B0, same 40×25
+protocol) and R5 (repeat for obs-v1) will each pay this cost again per
+candidate set — budget for it, and it's a candidate for a future batching
+optimization if the sweep produces many survivors to confirm.
+
+R1 done.
+
+**R2 — Phase 1a Optuna sweep, first attempt (150 trials planned):** started
+at `n_envs=16`, `total_steps=320_000`/trial, `n_games=120`. Trial 0 (the
+enqueued B0 point at this reduced budget) completed in **~27 min** at
+value=0.5611; trial 1 (a TPE sample) completed in **~32 min** at
+value=0.5583, closely tracking trial 0's own eval curve — its scary early
+0.02 eval was just pre-learning noise, not a bad config, so Hyperband
+correctly didn't prune it. **With only 1-2 sibling trials in the bracket,
+Hyperband had no basis to prune anything yet — every trial ran to ~full
+budget.** Observed pace: **~2.5 trials/hour**, i.e. **~60 hours for the full
+150 trials** — not viable for this session. Roughly a third of each trial's
+wall time is the unbatched `WinRateEvalCallback` eval games (6 checkpoints ×
+360 games each), not training — same cost structure flagged in the R1 eval
+note.
+
+**Decision: stopped the 150-trial run after 2 trials (SQLite study
+`sqlite:///runs/ceiling.db`, `phase1a`, is resumable — nothing lost) and
+restarted at `--n-trials 30`** on the same study — an overnight-scale budget
+(~13-16h at the observed per-trial pace) instead of a 2.5-day one. Trial
+numbering continues from where it left off (trial 2 was killed mid-run and
+is orphaned/incomplete in the DB, harmless). Best-so-far after 2 completed
+trials: **trial 0 at 0.5611** (the B0 point) — essentially tied with trial 1,
+so no HP lift has separated from baseline yet at this early stage.
+
+**R2 crashed at trial 8/9 (00:XX PDT) — `MemoryError` from a `SubprocVecEnv`
+worker subprocess failing to import torch.** Root cause: `train_zoo`'s
+opponent-curriculum swap (`model.set_env(_build_env(...))` on each of the 4
+phases) never closed the *previous* phase's `VecEnv` — `set_env` only
+replaces the reference, so the old `SubprocVecEnv`'s worker processes were
+orphaned and relied on Python's GC to eventually reap them. GC-triggered
+subprocess cleanup is unreliable on Windows, so within one long-running
+`locma sweep` process (many trials × 4 phases × `n_envs=16` workers each),
+workers piled up: by the crash, **113 orphaned `python.exe` processes at
+~535MB each (full torch import per worker) had consumed ~60GB, leaving only
+~8GB free out of 68GB**, and the next subprocess spawn failed outright trying
+to import torch. `train_zoo`'s end-of-function path had the same bug for the
+*final* opponent phase (its `VecEnv` was never closed at all, not even at GC
+time until the caller's `model` reference dropped).
+
+**Fix (`d5b5a18`):** `train_zoo` now explicitly `.close()`s the outgoing
+`VecEnv` right after `set_env()` on each curriculum swap, and closes the
+final phase's `VecEnv` after `model.save()`. Verified: the 10 tests exercising
+`train_zoo`/`model.learn` paths still pass, and no `python.exe` processes
+remain after that test run (previously they would have accumulated across
+the run in the same way). Stopping the sweep task via `TaskStop` also fully
+reclaimed the leaked ~52GB in one shot (kills the whole process tree, not
+just the parent) — worth remembering as the recovery move if this class of
+leak recurs elsewhere.
+
+Study state at the crash: 8 real trial slots resolved since the restart
+(trials 0,1,3,4 complete, 5 & 7 pruned, 6 complete, 8 in-progress when
+killed) — **best value still trial 0 (B0 point) at 0.5611**, no HP config has
+separated from baseline yet. Nothing is lost; `sqlite:///runs/ceiling.db` has
+all completed/pruned trials and is resumable.
+
+**The first fix was incomplete — same leak recurred within ~30 min of
+resuming (`8af3383`).** Root cause: the first fix (`d5b5a18`) only closed the
+outgoing `VecEnv` on the normal `set_env()` swap path and after
+`model.save()`. It missed that **pruning itself works by raising
+`optuna.TrialPruned()` from inside `WinRateEvalCallback._on_step()`, which
+unwinds straight out of `model.learn()` and out of `train_zoo()` before
+either close call is ever reached.** Once pruning started actually working
+(most new trials pruned rather than run to completion — 6 of 8 new trials in
+this window), that exception path became the *common* case instead of a rare
+one, and the same worker pile-up recurred: **115 `python.exe` processes,
+~8GB free of 68GB**, caught and stopped before a second crash. Fix: wrap the
+opponent-phase loop in `try`/`finally`, closing whatever `VecEnv` is
+currently live in the `finally` block so it fires on both the normal-save
+path and any mid-phase exception (pruning or otherwise). Verified two ways:
+(1) the same 10 `train_zoo`-dependent tests still pass, (2) a forced-exception
+repro (raise inside a callback mid-phase, matching the pruning shape) shows
+0 net new `python.exe` processes after the exception, vs. leaking under the
+first fix.
+
+**Lesson for next time:** a resource-cleanup fix that only covers the happy
+path isn't verified until it's checked under the failure path that actually
+matters in production — here, pruning-via-exception was the whole point of
+Hyperband, so "no leak on a clean run" was never sufficient evidence.
+
+Study state when caught (second time): 17 total trial slots, 6 complete + 8
+pruned + 3 orphaned/incomplete (killed) — **best value trial 14 at 0.5694**,
+a hair above B0's 0.5611 but not yet clearly separated (single trial, no CI).
+Nothing lost; study remains resumable.
+
+**R2 — Phase 1a Optuna sweep, final result.** Ran to completion cleanly with
+both leak fixes in place — process count and free memory stayed flat through
+24 pruned trials in the second half (vs. crashing after ~8-9 before), and
+0 `python.exe` processes remained after the run exited normally.
+
+**Study totals: 33 trial slots — 6 complete, 24 pruned, 3 orphaned/incomplete
+(trials 2, 8, 16 — remnants of the two mid-run kills during the leak
+incident, harmless).**
+
+| trial | avg_hard3 (320k-step budget) | lr | target_kl | n_steps | batch | n_epochs | ent_coef |
+|---|---:|---:|---|---:|---:|---:|---:|
+| 14 | **0.5694** (best) | 7.57e-05 | 0.025 | 1024 | 128 | 10 | 0.0165 |
+| 0 (B0 point) | 0.5611 | 1.00e-04 | 0.025 | 2048 | 64 | 10 | 0.0200 |
+| 1 | 0.5583 | 1.41e-04 | 0.025 | 4096 | 64 | 7 | 0.0061 |
+| 3 | 0.5583 | 1.41e-04 (dup of trial 1) | 0.025 | 4096 | 64 | 7 | 0.0061 |
+| 4 | 0.5417 | 1.82e-04 | 0.03 | 2048 | 256 | 7 | 0.0017 |
+| 6 | 0.5361 | 3.35e-05 | 0.05 | 2048 | 64 | 3 | 0.0011 |
+
+fANOVA param importances weren't computed — `optuna.importance` needs
+`sklearn`, which isn't installed, and with only 6 completed trials the
+estimate wouldn't have been reliable enough to be worth adding the
+dependency for.
+
+**Honest read: no HP config separated meaningfully from B0.** Trial 14 beats
+B0 by +0.008 at this reduced budget — nowhere near the design doc's +0.03
+symmetric-verdict threshold, and this is a single stochastic eval per trial
+(not the 40-seed paired-bootstrap protocol R4 uses for real verdicts), so
++0.008 is well within plausible noise. The completed-trial spread
+(0.536–0.569) is narrow and doesn't show a clear HP-driven signal at all —
+24 of 30 sampled configs got pruned early for being clearly worse, but among
+the survivors nothing stands out. **This is consistent with "ceiling
+confirmed, robust to core-PPO HP" rather than "headroom found,"** though a
+real verdict requires R4's rigorous full-budget paired comparison, not this
+reduced-budget sweep signal alone.
+
+Next: R3 (Phase-1b arch sweep around the 1a winner) and R4 (rigorous confirm
+of survivors at full 800k budget vs. B0, with the paired-bootstrap verdict)
+are the remaining runbook steps — both need explicit go-ahead. Given how flat
+the Phase-1a results look, R4 on trial 14 (the nominal best) might be the
+more informative next step over R3 (arch sweep), since core-PPO tuning
+hasn't shown a signal worth building an arch sweep around yet.
+
+## R4 — rigorous confirm: trial 14 vs B0, full 800k budget — VERDICT #1
+
+Retrained trial 14's exact HP config (`lr=7.57e-05, target_kl=0.025,
+n_steps=1024, batch_size=128, n_epochs=10, gamma=0.99, gae_lambda=0.9,
+clip_range=0.3, ent_coef=0.0165, vf_coef=0.5`, token obs V0) at full 800k
+steps ×3 seeds — `runs/cand1_s{0,1,2}.zip`. Notably **faster to train than
+B0** (~15 min/seed vs. B0's ~24-25 min), consistent with its smaller
+`n_steps=1024` rollout. No leak issues — process count and memory stayed
+flat across the whole run.
+
+Ran `locma ceiling-eval --candidates runs/cand1_s0.zip,runs/cand1_s1.zip,runs/cand1_s2.zip --baselines runs/b0_s0.zip,runs/b0_s1.zip,runs/b0_s2.zip --seeds 40 --games-per-seed 25 --threshold 0.03`:
+
+```
+cand=0.617  B0=0.657  delta=-0.040  95% CI [-0.048, -0.032]
+VERDICT: ceiling-confirmed
+```
+
+**VERDICT #1: ceiling-confirmed — and not a null result, a confirmed
+regression.** The 95% CI is entirely negative and nowhere near crossing zero,
+let alone clearing the design doc's +0.03 threshold for "headroom." Trial
+14's HP config, which looked marginally better than B0 under the *reduced*
+320k-step sweep budget (0.5694 vs 0.5611, a noisy +0.008), **reverses to a
+statistically clear -0.040 disadvantage once retrained at the full 800k
+budget.** This is a textbook budget-mismatch failure mode for reduced-budget
+HP sweeps: a config's relative ranking at a truncated training budget doesn't
+reliably predict its ranking at the full budget, and can flip sign entirely.
+
+**Methodology correction to R1's B0 number:** this run's `B0=0.657` (via the
+CLI's `_disjoint_eval_seeds` — anchors spaced by `games_per_seed` so each
+`run_match` block is independent, the fix landed in `00aaad9` right before
+this session) is the *correct* figure. R1's own ad-hoc `avg_hard3` script
+(this session, before R4) used `range(1_000_000, 1_000_040)` — seeds spaced
+by 1 — which produces **overlapping, autocorrelated `run_match` blocks**
+(exactly the anti-conservative-CI bug `00aaad9` fixed in the CLI path, just
+not in that one-off script). R1's reported **B0 mean ≈ 0.639 should be
+treated as superseded/methodologically flawed; 0.657 (this run, disjoint
+seeds, same 3 B0 models) is the trustworthy number.** Worth remembering:
+always eval through `locma ceiling-eval` / `_disjoint_eval_seeds`, never
+hand-roll the seed list again.
+
+**What this settles:** no evidence of headroom from core-PPO hyperparameter
+tuning — Phase 1a's flat sweep result plus R4's confirmed-negative retrain
+of its best candidate both point the same way. The ~0.60-0.66ish avg_hard3
+plateau looks like a real ceiling for this reactive architecture under
+core-PPO tuning, not an under-tuning artifact. The remaining lever per the
+design doc is **R5 (Phase 2: obs-encoding variants, e.g. token-v1)** — a
+different kind of change (richer observation, not HP tuning) that this
+result doesn't speak to either way. R3 (arch sweep around the 1a "winner")
+looks like a bad use of compute now that its baseline config underperformed
+B0 at full budget.
+
+Next: R5 (Phase 2 obs-v1 vs B0, same +0.03 ruler) is the natural next step —
+needs explicit go-ahead, not started.
