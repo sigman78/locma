@@ -8,6 +8,7 @@ from locma.envs.eval_callback import WinRateEvalCallback
 from locma.envs.training import _build_env, _make_model
 
 
+@pytest.mark.slow  # trains a short PPO run
 def test_callback_logs_avg_hard3_during_short_training():
     env = _build_env("random", seed=0, n_envs=1, both_seat=True, obs_mode="flat")
     model = _make_model(env, obs_mode="flat", seed=0, verbose=0, ent_coef=0.02)
