@@ -100,4 +100,4 @@ def test_hard3_eval_help_lists_spec():
 
     res = CliRunner().invoke(app, ["hard3-eval", "--help"])
     assert res.exit_code == 0
-    assert "--spec" in res.output
+    assert "policy spec" in res.output
