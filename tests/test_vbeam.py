@@ -25,21 +25,24 @@ from locma.policies.vbeam import VBeamBattlePolicy, plan_turn
 
 
 class _ZeroEvaluator:
-    """All states are worth 0; also counts batched calls (plan-cache probe)."""
+    """All states worth 0, net never prefers Pass; counts batched calls."""
 
-    def __init__(self):
+    def __init__(self, would_pass=False):
         self.calls = 0
+        self.would_pass = would_pass
 
-    def values(self, views):
+    def evaluate(self, views, masks):
         self.calls += 1
-        return [0.0] * len(views)
+        return [0.0] * len(views), [self.would_pass] * len(views)
 
 
 class _AttackPenaltyEvaluator:
-    """Penalizes every spent attacker — makes 'stop now' the best plan."""
+    """Penalizes every spent attacker; net would pass anywhere — so 'stop
+    now' is both allowed and the best plan."""
 
-    def values(self, views):
-        return [-float(sum(1 for c in v.my_board if c.has_attacked)) for v in views]
+    def evaluate(self, views, masks):
+        vals = [-float(sum(1 for c in v.my_board if c.has_attacked)) for v in views]
+        return vals, [True] * len(views)
 
 
 def _gs():
@@ -104,6 +107,19 @@ def test_plan_ends_with_pass_unless_game_won():
     gs.players[0].board.append(_creature(1, 2, 2))  # face hit, no lethal (30 HP)
     plan = plan_turn(gs, _ZeroEvaluator())
     assert isinstance(plan[-1], Pass)
+
+
+def test_no_premature_pass_when_net_would_act():
+    """The stop-scoring guard: V(root) must NOT be a stop score when the net's
+    argmax at the root is not Pass — the plan acts instead of free-riding on
+    phantom value (the naive planner passed 1/3 of its turns)."""
+    gs = _gs()
+    gs.players[0].board.append(_creature(1, 1, 1))  # free chip attack available
+    plan = plan_turn(gs, _ZeroEvaluator(would_pass=False))
+    # The exhausted post-attack state (forced Pass) scores 0.0; the root
+    # fallback ranks below it, so the planner must take the attack.
+    assert isinstance(plan[0], Attack)
+    assert plan == [Attack(1, -1), Pass()]
 
 
 def test_deterministic_and_does_not_mutate_state():
