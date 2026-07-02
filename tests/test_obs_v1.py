@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from locma.envs.encode import N_TACTICAL_V1, encode_battle_tokens, token_obs_space
 
 
@@ -48,6 +50,9 @@ def test_v1_appends_five_symmetric_threat_scalars():
 
 
 def test_token_obs_space_v1_scalar_shape():
+    # Gated per-function (not module-level) so the numpy-only encode tests
+    # above still run on the lean CI job, matching test_encode_tokens.py.
+    pytest.importorskip("gymnasium")
     sp = token_obs_space(variant="v1")
     assert sp["scalars"].shape == (18,)
 
