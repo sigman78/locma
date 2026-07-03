@@ -296,10 +296,9 @@
   }
   function clickHand(c: CardState) {
     if (!interactive || drag) return
-    if (canSummon(legal, c.iid)) {
-      send({ t: 'summon', id: c.iid })
-      return
-    }
+    // summoning is drag-and-drop ONLY: a click (or a carry released outside the
+    // drop zone, which the browser also reports as a click) must never summon
+    if (canSummon(legal, c.iid)) return
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 1 && ts[0] === -1) {
       send({ t: 'use', item: c.iid, target: -1 })
@@ -471,7 +470,7 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, drag a card onto your field to summon, drag an item to its target, or end turn.{/if}
     </span>
     <button
       class="endturn"
@@ -529,6 +528,14 @@
   .slot.carrying { box-shadow: 0 16px 30px rgba(0, 0, 0, 0.55); }
   .slot.tether-return { transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
     z-index: 40; }
+  /* never show the hover tooltip on a card that is being dragged (carried,
+     tethered, springing back, or aim-armed) — the cursor rides the card, so
+     the :hover reveal would flicker it in mid-drag */
+  .slot.tethered :global(.tooltip),
+  .slot.tether-return :global(.tooltip),
+  .slot.armed :global(.tooltip) {
+    opacity: 0 !important; visibility: hidden !important;
+  }
   .field .slot:hover { transform: translateY(-3px) scale(1.03); z-index: 30; }
   /* a minion with legal attack targets: soft amber ready-glow */
   .slot.ready { outline-color: rgba(255, 210, 61, 0.55);
