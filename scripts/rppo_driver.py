@@ -56,9 +56,18 @@ def b0(s: int) -> str:
     return f"depot:b0/b0_s{s}.zip"
 
 
-def train_one(seed: int, out: str) -> dict:
+def train_one(seed: int) -> tuple[int, dict]:
+    """Train one seed; top-level and picklable so seeds run in parallel.
+
+    The three seed runs are independent, and SB3's loop is synchronous
+    (rollout collection is CPU-bound while the GPU idles, gradient updates
+    are GPU-bound while the CPU idles) — running the seeds concurrently
+    overlaps one run's CPU phase with another's GPU phase. ~4.6 GB GPU per
+    run, 3 runs fit the 16 GB card.
+    """
     from locma.envs.training import train_zoo  # noqa: PLC0415 — lazy heavy import
 
+    out = f"runs/rppo_s{seed}.zip"
     t0 = time.time()
     train_zoo(
         steps_per_opponent=200_000,
@@ -80,7 +89,7 @@ def train_one(seed: int, out: str) -> dict:
         verbose=0,
         recurrent=True,
     )
-    return {"minutes": round((time.time() - t0) / 60, 1)}
+    return seed, {"minutes": round((time.time() - t0) / 60, 1)}
 
 
 def verdict(tag: str, candidates: list[str], baselines: list[str], seeds: int, games: int) -> dict:
@@ -110,14 +119,20 @@ def main() -> None:
             summary.update(json.load(f))
     log("=== E6 rppo overnight driver start ===")
 
-    # ---- Stage 1: train 3 seeds (B0 recipe + LSTM) -----------------------
+    # ---- Stage 1: train 3 seeds (B0 recipe + LSTM), in parallel -----------
+    todo = [
+        s for s in SEEDS if not (os.path.exists(f"runs/rppo_s{s}.zip") and f"train_s{s}" in summary)
+    ]
     for s in SEEDS:
-        out = f"runs/rppo_s{s}.zip"
-        if os.path.exists(out) and f"train_s{s}" in summary:
+        if s not in todo:
             log(f"stage1 s{s}: exists, skip")
-            continue
-        log(f"stage1 s{s}: train 800k zoo, recurrent, B0 recipe")
-        record(f"train_s{s}", train_one(s, out))
+    if todo:
+        from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
+
+        log(f"stage1: training seeds {todo} in parallel (800k zoo, recurrent, B0 recipe)")
+        with ProcessPoolExecutor(max_workers=len(todo)) as ex:
+            for s, r in ex.map(train_one, todo):
+                record(f"train_s{s}", r)
 
     # ---- Stage 2: pilot 10x10 --------------------------------------------
     cands = [f"rppo:runs/rppo_s{s}.zip" for s in SEEDS]
