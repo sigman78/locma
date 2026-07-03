@@ -4,9 +4,10 @@ import importlib.metadata
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
+from locma.cli.depot import depot_app
 from locma.cli.render import GameRenderer
+from locma.cli.textfmt import ascii_table
 from locma.harness.draft_bench import draft_names, make_battle, make_draft, round_robin
 from locma.harness.match import run_match
 from locma.harness.tournament import run_tournament
@@ -22,7 +23,16 @@ from locma.stats.intervals import binomial_test, wilson_ci
 from locma.stats.openskill_ratings import openskill_from_results, ordinal
 from locma.stats.sprt import sprt as sprt_test
 
-app = typer.Typer(help="Legends of Code & Magic 1.2 explore kit")
+# rich_markup_mode=None keeps typer's help/usage-error output plain Click text
+# (no framed panels); pretty_exceptions_enable=False does the same for tracebacks.
+app = typer.Typer(
+    help="Legends of Code & Magic 1.2 explore kit",
+    rich_markup_mode=None,
+    pretty_exceptions_enable=False,
+)
+app.add_typer(depot_app, name="depot")
+# rich is used ONLY by the interactive game renderer; CLI reporting is plain
+# text (see locma/cli/textfmt.py for the rationale).
 console = Console()
 
 
@@ -63,7 +73,7 @@ def play(
             for a_seat in (0, 1):
                 p0, p1 = (pa, pb) if a_seat == 0 else (pb, pa)
                 if renderer:
-                    console.rule(f"game seed={s} a_seat={a_seat}")
+                    print(f"---- game seed={s} a_seat={a_seat} ----")
                     res, trace = _recorded_with_render(p0, p1, s, renderer)
                 else:
                     res, trace = record_game(p0, p1, seed=s)
@@ -93,8 +103,8 @@ def play(
 
     lo, hi = wilson_ci(wins_a, total)
     p = binomial_test(wins_a, total, 0.5)
-    console.print(
-        f"[bold]{a}[/] vs [bold]{b}[/]  win rate A = {wins_a / total:.3f} "
+    print(
+        f"{a} vs {b}  win rate A = {wins_a / total:.3f} "
         f"(95% CI {lo:.3f}-{hi:.3f}), p={p:.4g}, n={total}"
     )
 
@@ -141,36 +151,40 @@ def tournament(
             pairs.append((x, y, 0.0))
     osk = openskill_from_results(pairs)
 
-    t = Table(title="Ratings", box=None)
-    t.add_column("policy")
-    t.add_column("openskill", justify="right")
-    t.add_column("elo", justify="right")
-    t.add_column("p vs ref", justify="right")
     order = sorted(res.ratings, key=lambda k: -ordinal(*osk.get(k, (25.0, 8.333))))
+    rows = []
     for n in order:
         mu, sigma = osk.get(n, (25.0, 8.333))
-        t.add_row(
-            n,
-            f"{ordinal(mu, sigma):.2f}",
-            f"{res.ratings[n]:.0f}",
-            f"{res.p_vs_reference.get(n, float('nan')):.4g}",
+        rows.append(
+            (
+                n,
+                f"{ordinal(mu, sigma):.2f}",
+                f"{res.ratings[n]:.0f}",
+                f"{res.p_vs_reference.get(n, float('nan')):.4g}",
+            )
         )
-    console.print(t)
+    print(ascii_table(("policy", "openskill", "elo", "p vs ref"), rows, align="lrrr"))
 
     if matrix:
-        m = Table(title="Pair-score matrix (row win rate vs column)", box=None)
-        m.add_column("")
-        for n in names:
-            m.add_column(n, justify="right")
-        for row in names:
-            cells = [row]
-            for col in names:
-                if row == col:
-                    cells.append("--")
-                else:
-                    cells.append(f"{res.win_matrix.get((row, col), float('nan')):.2f}")
-            m.add_row(*cells)
-        console.print(m)
+        cells = [
+            tuple(
+                [row]
+                + [
+                    "--" if row == col else f"{res.win_matrix.get((row, col), float('nan')):.2f}"
+                    for col in names
+                ]
+            )
+            for row in names
+        ]
+        print()
+        print(
+            ascii_table(
+                ("", *names),
+                cells,
+                align="l" + "r" * len(names),
+                title="Pair-score matrix (row win rate vs column)",
+            )
+        )
 
 
 @app.command("noise-floor")
@@ -181,11 +195,11 @@ def noise_floor(a: str, games: int = 200, seed: int = 0):
     res = run_match(make_policy(a), make_policy(a), games=games, seed=seed)
     lo, hi = wilson_ci(res.wins_a, res.games)
     half = (hi - lo) / 2
-    console.print(
-        f"[bold]{a}[/] vs itself  win rate = {res.win_rate_a:.3f} "
+    print(
+        f"{a} vs itself  win rate = {res.win_rate_a:.3f} "
         f"(95% CI {lo:.3f}-{hi:.3f}), n={res.games}\n"
         f"resolution limit: +/-{half:.3f}  "
-        f"[dim](edges smaller than this are indistinguishable from luck)[/]"
+        f"(edges smaller than this are indistinguishable from luck)"
     )
 
 
@@ -235,25 +249,33 @@ def draft_bench_cmd(
     # Resolution limit: Wilson half-width of a single cell at this n.
     lo, hi = wilson_ci(games, 2 * games)
     half = (hi - lo) / 2
-    console.print(f"[dim]battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}[/]")
+    print(f"battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}")
 
-    rank = Table(title=f"Draft ranking (avg win rate vs field, battle={battle})", box=None)
-    rank.add_column("draft")
-    rank.add_column("avg", justify="right")
-    for n in sorted(names, key=lambda k: -s.avg_win_rate[k]):
-        rank.add_row(n, f"{s.avg_win_rate[n]:.3f}")
-    console.print(rank)
+    rank_rows = [
+        (n, f"{s.avg_win_rate[n]:.3f}") for n in sorted(names, key=lambda k: -s.avg_win_rate[k])
+    ]
+    print(
+        ascii_table(
+            ("draft", "avg"),
+            rank_rows,
+            align="lr",
+            title=f"Draft ranking (avg win rate vs field, battle={battle})",
+        )
+    )
 
-    m = Table(title="Pair-score matrix (row win rate vs column)", box=None)
-    m.add_column("")
-    for n in names:
-        m.add_column(n, justify="right")
-    for row in names:
-        cells = [row]
-        for col in names:
-            cells.append("--" if row == col else f"{s.win_matrix[(row, col)]:.2f}")
-        m.add_row(*cells)
-    console.print(m)
+    cells = [
+        tuple([row] + ["--" if row == col else f"{s.win_matrix[(row, col)]:.2f}" for col in names])
+        for row in names
+    ]
+    print()
+    print(
+        ascii_table(
+            ("", *names),
+            cells,
+            align="l" + "r" * len(names),
+            title="Pair-score matrix (row win rate vs column)",
+        )
+    )
 
 
 @app.command()
@@ -281,9 +303,7 @@ def sprt(
         if r.decision != "continue":
             break
     lo, hi = wilson_ci(wins, n)
-    console.print(
-        f"verdict: [bold]{r.decision}[/]  winrate={wins / n:.3f} (CI {lo:.3f}-{hi:.3f}), n={n}"
-    )
+    print(f"verdict: {r.decision}  winrate={wins / n:.3f} (CI {lo:.3f}-{hi:.3f}), n={n}")
 
 
 @app.command()
@@ -302,7 +322,7 @@ def replay(
         p0, p1 = (pa, pb) if row["a_seat"] == 0 else (pb, pa)
         if render:
             renderer = GameRenderer(console)
-            console.rule(f"replay game {i} seed={row['seed']}")
+            print(f"---- replay game {i} seed={row['seed']} ----")
             result, trace = _recorded_with_render(p0, p1, row["seed"], renderer)
         else:
             result, trace = record_game(p0, p1, seed=row["seed"])
@@ -310,9 +330,9 @@ def replay(
         ok = h == row.get("hash")
         if not ok:
             mismatches += 1
-            console.print(f"[red]game {i}: hash MISMATCH[/] stored={row.get('hash')} got={h}")
+            print(f"game {i}: hash MISMATCH stored={row.get('hash')} got={h}")
         else:
-            console.print(f"game {i}: ok ({h})")
+            print(f"game {i}: ok ({h})")
     if assert_hash and mismatches:
         raise typer.Exit(code=1)
 
@@ -394,7 +414,7 @@ def train(
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
-    console.print(f"saved {saved}")
+    print(f"saved {saved}")
 
 
 @app.command("train-zoo")
@@ -439,7 +459,7 @@ def train_zoo_cmd(
 
     for o in ZOO_OPPONENTS:
         make_policy(o)  # validate each declared opponent spec up front
-    console.print(f"zoo curriculum: {' -> '.join(ZOO_OPPONENTS)}")
+    print(f"zoo curriculum: {' -> '.join(ZOO_OPPONENTS)}")
     try:
         from locma.envs.training import train_zoo  # noqa: PLC0415 — optional [ml] dep
 
@@ -467,7 +487,7 @@ def train_zoo_cmd(
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
-    console.print(f"saved {saved}")
+    print(f"saved {saved}")
 
 
 @app.command("record-practicum")
@@ -502,7 +522,7 @@ def record_practicum_cmd(
         seed=seed,
         obs_mode=obs_mode,
     )
-    console.print(
+    print(
         f"recorded {manifest['n_examples']} examples "
         f"({manifest['n_dropped_overflow']} dropped) -> {out}"
     )
@@ -543,7 +563,7 @@ def distill(
         )
     except ImportError as e:
         raise typer.BadParameter("distill requires the [ml] extra: uv sync --extra ml") from e
-    console.print(
+    print(
         f"saved {info['out']}  val_agreement={info['val_agreement']:.3f} "
         f"(train={info['n_train']}, val={info['n_val']})"
     )
@@ -594,7 +614,7 @@ def record_selfplay_cmd(
         raise typer.BadParameter(
             "record-selfplay requires the [ml] extra: uv sync --extra ml"
         ) from e
-    console.print(
+    print(
         f"recorded {manifest['n_examples']} examples "
         f"({manifest['failed_games']} failed games) -> {out}"
     )
@@ -639,7 +659,7 @@ def az_train_cmd(
         )
     except ImportError as e:
         raise typer.BadParameter("az-train requires the [ml] extra: uv sync --extra ml") from e
-    console.print(
+    print(
         f"saved {info['out']}  "
         f"val_policy_ce={info['val_policy_ce']:.4f} "
         f"val_value_mse={info['val_value_mse']:.4f} "
@@ -710,7 +730,7 @@ def az_selfplay_cmd(
         )
     except ImportError as e:
         raise typer.BadParameter("az-selfplay requires the [ml] extra: uv sync --extra ml") from e
-    console.print(
+    print(
         f"best_net={res['best_net']} "
         f"best_score={res['best_score']:.3f} "
         f"final_hard3={res['final_hard3']:.3f} "
@@ -764,11 +784,11 @@ def ceiling_eval_cmd(
         threshold=threshold,
         workers=resolve_workers(workers),
     )
-    console.print(
+    print(
         f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "
         f"delta={out['mean_delta']:+.3f}  95% CI [{out['ci_lo']:+.3f}, {out['ci_hi']:+.3f}]"
     )
-    console.print(f"[bold]VERDICT: {out['verdict']}[/]")
+    print(f"VERDICT: {out['verdict']}")
 
 
 @app.command()
@@ -787,7 +807,7 @@ def serve(
     except ImportError as e:
         raise typer.BadParameter("serve requires the [server] extra: uv sync --extra server") from e
     app_ = create_app(replay_dir=replay_dir, asset_dir=asset_dir, gamelog_dir=gamelog_dir)
-    console.print(f"serving on http://{host}:{port}")
+    print(f"serving on http://{host}:{port}")
     uvicorn.run(app_, host=host, port=port)
 
 
@@ -796,7 +816,7 @@ def fetch_cards_cmd():
     from locma.data.fetch import fetch_cards  # noqa: PLC0415 — lazy import
 
     path = fetch_cards()
-    console.print(f"cards at {path}")
+    print(f"cards at {path}")
 
 
 @app.command("fetch-art")
@@ -810,8 +830,8 @@ def fetch_art_cmd(
 
     n = fetch_art(force=force)
     cache_dir = resources.files("locma.data").joinpath("assets")
-    console.print(f"fetched {n} art assets into {cache_dir}")
-    console.print(
-        "[yellow]Card art is downloaded for local use only; "
-        "seek permission from the authors before redistribution.[/]"
+    print(f"fetched {n} art assets into {cache_dir}")
+    print(
+        "Card art is downloaded for local use only; "
+        "seek permission from the authors before redistribution."
     )

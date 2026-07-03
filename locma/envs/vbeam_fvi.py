@@ -296,12 +296,14 @@ def train_value_head(
     import torch  # noqa: PLC0415 — optional [ml] dep
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
 
-    model = MaskablePPO.load(base_model)
+    from locma.depot import resolve_path  # noqa: PLC0415
+
+    model = MaskablePPO.load(resolve_path(base_model))
     policy = model.policy
     policy.set_training_mode(False)  # dropout off: deterministic frozen features
     device = policy.device
 
-    d = np.load(data)
+    d = np.load(resolve_path(data))
     y_np = _value_targets(d)
     n = int(len(y_np))
     if n == 0:

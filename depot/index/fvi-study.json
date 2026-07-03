@@ -1,0 +1,79 @@
+{
+  "name": "fvi-study",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-03T01:16:01+00:00",
+      "git_commit": "99abee0",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish fvi-study runs/fvi_s0.zip runs/fvi_s1.zip runs/fvi_s2.zip runs/fvi2_s0.zip runs/fvi2_s1.zip runs/fvi2_s2.zip runs/fviaz2_s0.zip runs/fviaz2_s1.zip runs/fviaz2_s2.zip runs/fviaz10_s0.zip runs/fviaz10_s1.zip runs/fviaz10_s2.zip --kind model --parent b0@1 --note E5 variant 2 FVI study bundle (PR #57, closed, both flavors null/negative). Critic-branch-only fine-tunes of depot:b0 -- policy path byte-identical. Flavors: fvi_sX = MC targets 10ep (vbeam play delta -0.086), fvi2_sX = MC 2ep (-0.009), fviaz2/fviaz10_sX = AZ backed-up targets 2/10ep (-0.007 @10ep; pre-training Bellman residual 0.019 MSE -- b0 critic is a fixed point of its own one-step beam backup). Archival: regenerable from depot:b0 + locma/envs/vbeam_fvi.py collectors. --meta {\"verdict\": \"null-to-negative\", \"study\": \"E5v2 FVI\", \"pr\": 57, \"vbeam_play_delta\": {\"fvi_10ep\": -0.086, \"fvi2_2ep\": -0.009, \"fviaz10_10ep\": -0.007}}",
+      "parents": [
+        "b0@1"
+      ],
+      "note": "E5 variant 2 FVI study bundle (PR #57, closed, both flavors null/negative). Critic-branch-only fine-tunes of depot:b0 -- policy path byte-identical. Flavors: fvi_sX = MC targets 10ep (vbeam play delta -0.086), fvi2_sX = MC 2ep (-0.009), fviaz2/fviaz10_sX = AZ backed-up targets 2/10ep (-0.007 @10ep; pre-training Bellman residual 0.019 MSE -- b0 critic is a fixed point of its own one-step beam backup). Archival: regenerable from depot:b0 + locma/envs/vbeam_fvi.py collectors.",
+      "meta": {
+        "verdict": "null-to-negative",
+        "study": "E5v2 FVI",
+        "pr": 57,
+        "vbeam_play_delta": {
+          "fvi_10ep": -0.086,
+          "fvi2_2ep": -0.009,
+          "fviaz10_10ep": -0.007
+        }
+      },
+      "files": {
+        "fvi_s0.zip": {
+          "sha256": "f0f9143122456d48519527a074cd410a368b47cb7e9baf8bd6e0efa5d68a3b0b",
+          "size": 5764639
+        },
+        "fvi_s1.zip": {
+          "sha256": "c30d9ff40a9cf973cd178a38dd409180180214e175f77b2e7ea0c53dcc139532",
+          "size": 5764643
+        },
+        "fvi_s2.zip": {
+          "sha256": "52611ae1316376c504d874bdc75cbe7763927af4681f1de5f2789bdd90c032a3",
+          "size": 5764639
+        },
+        "fvi2_s0.zip": {
+          "sha256": "46148135c552a403c409498090d1458e07613c4e2144abdcf1446fcb6c2f4c1f",
+          "size": 5764639
+        },
+        "fvi2_s1.zip": {
+          "sha256": "b2bbecfe702f6f484d1159359eb540c45db79da51ea0b9b5849a642b7060e0bd",
+          "size": 5764643
+        },
+        "fvi2_s2.zip": {
+          "sha256": "bd2060896ad31067694d450f042312c931bb04d70f8dff398dfef58efb51b664",
+          "size": 5764639
+        },
+        "fviaz2_s0.zip": {
+          "sha256": "7b652e366bcec71338ff98146e15995b6f446fa389c93f0ab086c99900a483b6",
+          "size": 5764639
+        },
+        "fviaz2_s1.zip": {
+          "sha256": "769fe189808db30a28dd267a9decd2881bac04a8e661c3159f363209432365e6",
+          "size": 5764643
+        },
+        "fviaz2_s2.zip": {
+          "sha256": "3a58b2c7f8f671799b981ad3e5299293a4211e1e9242ebfc030ea393cffbd2fc",
+          "size": 5764639
+        },
+        "fviaz10_s0.zip": {
+          "sha256": "84a5f97bcaf71cf46c98d30174afffd84a48e9987a150e7b694cf8002f3ef552",
+          "size": 5764639
+        },
+        "fviaz10_s1.zip": {
+          "sha256": "4975159f6c2d4048479a1392c381c4dcfdc92c59c6b31ddd9039a8fb94fdd984",
+          "size": 5764643
+        },
+        "fviaz10_s2.zip": {
+          "sha256": "f74e38321be6182f7a96a722c73570e9300cb6a4f7d40346c91ce92ef82a0883",
+          "size": 5764639
+        }
+      },
+      "published": "gh:depot/fvi-study-v1"
+    }
+  ]
+}

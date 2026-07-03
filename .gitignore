@@ -5,6 +5,8 @@ __pycache__/
 locma/data/assets/*
 !locma/data/assets/manifest.json
 runs/
+depot/store/
+depot/tmp/
 docs/superpowers/*
 .ruff_cache/*
 .pytest_cache/*
