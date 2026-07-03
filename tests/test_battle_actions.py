@@ -107,6 +107,31 @@ def test_guard_restricts_attack_targets():
     assert 2 in targets and 3 not in targets and -1 not in targets
 
 
+def test_zero_attack_creature_cannot_attack():
+    # House rule (stricter than the LOCM 1.5 referee): a creature with 0 attack
+    # has no legal Attack actions -- neither face nor creatures.
+    gs = _bare_battle()
+    wall = _creature(1, atk=0, dfn=5)
+    wall.can_attack = True
+    gs.players[0].board.append(wall)
+    gs.players[1].board.append(_creature(2))
+    assert not any(isinstance(a, Attack) and a.attacker_id == 1 for a in battle_legal(gs))
+
+
+def test_zero_attack_gate_follows_current_attack():
+    # The gate reads the instance's CURRENT attack: a green buff mid-turn
+    # re-enables attacking, a red debuff to 0 disables it.
+    gs = _bare_battle()
+    wall = _creature(1, atk=0, dfn=5)
+    wall.can_attack = True
+    gs.players[0].board.append(wall)
+    assert not any(isinstance(a, Attack) and a.attacker_id == 1 for a in battle_legal(gs))
+    wall.attack = 2  # green-item buff
+    assert any(isinstance(a, Attack) and a.attacker_id == 1 for a in battle_legal(gs))
+    wall.attack = 0  # red-item debuff back to 0
+    assert not any(isinstance(a, Attack) and a.attacker_id == 1 for a in battle_legal(gs))
+
+
 def test_blue_item_zero_defense_only_targets_face():
     # Healing Potion (defense 0, +5 self-heal): per the rules a blue item may
     # target an enemy creature only with NEGATIVE defense. With defense 0 the
