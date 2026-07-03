@@ -1,0 +1,11 @@
+{
+  "name": "Baseline league",
+  "kind": "league",
+  "params": {
+    "policies": ["random", "scripted", "greedy", "max-guard", "max-attack"],
+    "games": 30,
+    "seed": 0,
+    "reference": "random"
+  },
+  "note": "Round-robin over the five scripted baselines; quick sanity ladder."
+}

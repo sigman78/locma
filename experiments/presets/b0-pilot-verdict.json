@@ -1,0 +1,21 @@
+{
+  "name": "vbeam(b0) pilot verdict",
+  "kind": "ceiling",
+  "params": {
+    "candidates": [
+      "vbeam:depot:b0/b0_s0.zip",
+      "vbeam:depot:b0/b0_s1.zip",
+      "vbeam:depot:b0/b0_s2.zip"
+    ],
+    "baselines": [
+      "depot:b0/b0_s0.zip",
+      "depot:b0/b0_s1.zip",
+      "depot:b0/b0_s2.zip"
+    ],
+    "seeds": 10,
+    "games_per_seed": 10,
+    "opponents": ["scripted", "max-guard", "max-attack"],
+    "threshold": 0.03
+  },
+  "note": "The 10x10 pilot ruler: planner vs reactive B0 on HARD3 (expected ~+0.20, headroom). Requires the [ml] extra and depot:b0 pulled locally."
+}

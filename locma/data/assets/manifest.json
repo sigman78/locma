@@ -1,1 +1,642 @@
-{}
+{
+  "1": {
+    "file": "001.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/001.png"
+  },
+  "2": {
+    "file": "002.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/002.png"
+  },
+  "3": {
+    "file": "003.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/003.png"
+  },
+  "4": {
+    "file": "004.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/004.png"
+  },
+  "5": {
+    "file": "005.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/005.png"
+  },
+  "6": {
+    "file": "006.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/006.png"
+  },
+  "7": {
+    "file": "007.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/007.png"
+  },
+  "8": {
+    "file": "008.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/008.png"
+  },
+  "9": {
+    "file": "009.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/009.png"
+  },
+  "10": {
+    "file": "010.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/010.png"
+  },
+  "11": {
+    "file": "011.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/011.png"
+  },
+  "12": {
+    "file": "012.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/012.png"
+  },
+  "13": {
+    "file": "013.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/013.png"
+  },
+  "14": {
+    "file": "014.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/014.png"
+  },
+  "15": {
+    "file": "015.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/015.png"
+  },
+  "16": {
+    "file": "016.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/016.png"
+  },
+  "17": {
+    "file": "017.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/017.png"
+  },
+  "18": {
+    "file": "018.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/018.png"
+  },
+  "19": {
+    "file": "019.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/019.png"
+  },
+  "20": {
+    "file": "020.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/020.png"
+  },
+  "21": {
+    "file": "021.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/021.png"
+  },
+  "22": {
+    "file": "022.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/022.png"
+  },
+  "23": {
+    "file": "023.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/023.png"
+  },
+  "24": {
+    "file": "024.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/024.png"
+  },
+  "25": {
+    "file": "025.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/025.png"
+  },
+  "26": {
+    "file": "026.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/026.png"
+  },
+  "27": {
+    "file": "027.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/027.png"
+  },
+  "28": {
+    "file": "028.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/028.png"
+  },
+  "29": {
+    "file": "029.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/029.png"
+  },
+  "30": {
+    "file": "030.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/030.png"
+  },
+  "31": {
+    "file": "031.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/031.png"
+  },
+  "32": {
+    "file": "032.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/032.png"
+  },
+  "33": {
+    "file": "033.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/033.png"
+  },
+  "34": {
+    "file": "034.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/034.png"
+  },
+  "35": {
+    "file": "035.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/035.png"
+  },
+  "36": {
+    "file": "036.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/036.png"
+  },
+  "37": {
+    "file": "037.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/037.png"
+  },
+  "38": {
+    "file": "038.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/038.png"
+  },
+  "39": {
+    "file": "039.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/039.png"
+  },
+  "40": {
+    "file": "040.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/040.png"
+  },
+  "41": {
+    "file": "041.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/041.png"
+  },
+  "42": {
+    "file": "042.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/042.png"
+  },
+  "43": {
+    "file": "043.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/043.png"
+  },
+  "44": {
+    "file": "044.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/044.png"
+  },
+  "45": {
+    "file": "045.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/045.png"
+  },
+  "46": {
+    "file": "046.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/046.png"
+  },
+  "47": {
+    "file": "047.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/047.png"
+  },
+  "48": {
+    "file": "048.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/048.png"
+  },
+  "49": {
+    "file": "049.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/049.png"
+  },
+  "50": {
+    "file": "050.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/050.png"
+  },
+  "51": {
+    "file": "051.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/051.png"
+  },
+  "52": {
+    "file": "052.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/052.png"
+  },
+  "53": {
+    "file": "053.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/053.png"
+  },
+  "54": {
+    "file": "054.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/054.png"
+  },
+  "55": {
+    "file": "055.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/055.png"
+  },
+  "56": {
+    "file": "056.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/056.png"
+  },
+  "57": {
+    "file": "057.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/057.png"
+  },
+  "58": {
+    "file": "058.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/058.png"
+  },
+  "59": {
+    "file": "059.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/059.png"
+  },
+  "60": {
+    "file": "060.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/060.png"
+  },
+  "61": {
+    "file": "061.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/061.png"
+  },
+  "62": {
+    "file": "062.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/062.png"
+  },
+  "63": {
+    "file": "063.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/063.png"
+  },
+  "64": {
+    "file": "064.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/064.png"
+  },
+  "65": {
+    "file": "065.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/065.png"
+  },
+  "66": {
+    "file": "066.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/066.png"
+  },
+  "67": {
+    "file": "067.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/067.png"
+  },
+  "68": {
+    "file": "068.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/068.png"
+  },
+  "69": {
+    "file": "069.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/069.png"
+  },
+  "70": {
+    "file": "070.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/070.png"
+  },
+  "71": {
+    "file": "071.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/071.png"
+  },
+  "72": {
+    "file": "072.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/072.png"
+  },
+  "73": {
+    "file": "073.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/073.png"
+  },
+  "74": {
+    "file": "074.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/074.png"
+  },
+  "75": {
+    "file": "075.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/075.png"
+  },
+  "76": {
+    "file": "076.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/076.png"
+  },
+  "77": {
+    "file": "077.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/077.png"
+  },
+  "78": {
+    "file": "078.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/078.png"
+  },
+  "79": {
+    "file": "079.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/079.png"
+  },
+  "80": {
+    "file": "080.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/080.png"
+  },
+  "81": {
+    "file": "081.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/081.png"
+  },
+  "82": {
+    "file": "082.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/082.png"
+  },
+  "83": {
+    "file": "083.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/083.png"
+  },
+  "84": {
+    "file": "084.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/084.png"
+  },
+  "85": {
+    "file": "085.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/085.png"
+  },
+  "86": {
+    "file": "086.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/086.png"
+  },
+  "87": {
+    "file": "087.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/087.png"
+  },
+  "88": {
+    "file": "088.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/088.png"
+  },
+  "89": {
+    "file": "089.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/089.png"
+  },
+  "90": {
+    "file": "090.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/090.png"
+  },
+  "91": {
+    "file": "091.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/091.png"
+  },
+  "92": {
+    "file": "092.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/092.png"
+  },
+  "93": {
+    "file": "093.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/093.png"
+  },
+  "94": {
+    "file": "094.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/094.png"
+  },
+  "95": {
+    "file": "095.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/095.png"
+  },
+  "96": {
+    "file": "096.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/096.png"
+  },
+  "97": {
+    "file": "097.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/097.png"
+  },
+  "98": {
+    "file": "098.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/098.png"
+  },
+  "99": {
+    "file": "099.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/099.png"
+  },
+  "100": {
+    "file": "100.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/100.png"
+  },
+  "101": {
+    "file": "101.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/101.png"
+  },
+  "102": {
+    "file": "102.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/102.png"
+  },
+  "103": {
+    "file": "103.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/103.png"
+  },
+  "104": {
+    "file": "104.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/104.png"
+  },
+  "105": {
+    "file": "105.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/105.png"
+  },
+  "106": {
+    "file": "106.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/106.png"
+  },
+  "107": {
+    "file": "107.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/107.png"
+  },
+  "108": {
+    "file": "108.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/108.png"
+  },
+  "109": {
+    "file": "109.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/109.png"
+  },
+  "110": {
+    "file": "110.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/110.png"
+  },
+  "111": {
+    "file": "111.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/111.png"
+  },
+  "112": {
+    "file": "112.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/112.png"
+  },
+  "113": {
+    "file": "113.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/113.png"
+  },
+  "114": {
+    "file": "114.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/114.png"
+  },
+  "115": {
+    "file": "115.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/115.png"
+  },
+  "116": {
+    "file": "116.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/116.png"
+  },
+  "117": {
+    "file": "117.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/117.png"
+  },
+  "118": {
+    "file": "118.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/118.png"
+  },
+  "119": {
+    "file": "119.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/119.png"
+  },
+  "120": {
+    "file": "120.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/120.png"
+  },
+  "121": {
+    "file": "121.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/121.png"
+  },
+  "122": {
+    "file": "122.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/122.png"
+  },
+  "123": {
+    "file": "123.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/123.png"
+  },
+  "124": {
+    "file": "124.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/124.png"
+  },
+  "125": {
+    "file": "125.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/125.png"
+  },
+  "126": {
+    "file": "126.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/126.png"
+  },
+  "127": {
+    "file": "127.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/127.png"
+  },
+  "128": {
+    "file": "128.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/128.png"
+  },
+  "129": {
+    "file": "129.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/129.png"
+  },
+  "130": {
+    "file": "130.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/130.png"
+  },
+  "131": {
+    "file": "131.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/131.png"
+  },
+  "132": {
+    "file": "132.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/132.png"
+  },
+  "133": {
+    "file": "133.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/133.png"
+  },
+  "134": {
+    "file": "134.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/134.png"
+  },
+  "135": {
+    "file": "135.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/135.png"
+  },
+  "136": {
+    "file": "136.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/136.png"
+  },
+  "137": {
+    "file": "137.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/137.png"
+  },
+  "138": {
+    "file": "138.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/138.png"
+  },
+  "139": {
+    "file": "139.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/139.png"
+  },
+  "140": {
+    "file": "140.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/140.png"
+  },
+  "141": {
+    "file": "141.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/141.png"
+  },
+  "142": {
+    "file": "142.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/142.png"
+  },
+  "143": {
+    "file": "143.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/143.png"
+  },
+  "144": {
+    "file": "144.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/144.png"
+  },
+  "145": {
+    "file": "145.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/145.png"
+  },
+  "146": {
+    "file": "146.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/146.png"
+  },
+  "147": {
+    "file": "147.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/147.png"
+  },
+  "148": {
+    "file": "148.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/148.png"
+  },
+  "149": {
+    "file": "149.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/149.png"
+  },
+  "150": {
+    "file": "150.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/150.png"
+  },
+  "151": {
+    "file": "151.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/151.png"
+  },
+  "152": {
+    "file": "152.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/152.png"
+  },
+  "153": {
+    "file": "153.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/153.png"
+  },
+  "154": {
+    "file": "154.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/154.png"
+  },
+  "155": {
+    "file": "155.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/155.png"
+  },
+  "156": {
+    "file": "156.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/156.png"
+  },
+  "157": {
+    "file": "157.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/157.png"
+  },
+  "158": {
+    "file": "158.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/158.png"
+  },
+  "159": {
+    "file": "159.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/159.png"
+  },
+  "160": {
+    "file": "160.png",
+    "url": "https://legendsofcodeandmagic.com/portraits/160.png"
+  }
+}

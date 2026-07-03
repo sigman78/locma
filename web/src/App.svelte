@@ -1,57 +1,81 @@
+<!-- web/src/App.svelte — the consolidated panel: Experiments | Depot | Replays | Play -->
 <script lang="ts">
-  import ReplayLibrary from './components/ReplayLibrary/ReplayLibrary.svelte'
-  import ReplayViewer from './components/ReplayViewer/ReplayViewer.svelte'
-  import { getReplay } from './lib/api'
+  import { onMount } from 'svelte'
+  import Experiments from './components/Experiments/Experiments.svelte'
+  import Depot from './components/Depot/Depot.svelte'
+  import Replays from './components/Replays/Replays.svelte'
+  import Play from './components/Play/Play.svelte'
   import { loadCards } from './lib/cards'
-  import type { Replay } from './lib/replay'
+
+  const TABS = [
+    { id: 'experiments', label: 'Experiments' },
+    { id: 'depot', label: 'Depot' },
+    { id: 'replays', label: 'Replays' },
+    { id: 'play', label: 'Play' },
+  ] as const
+  type TabId = (typeof TABS)[number]['id']
 
   let ready = false
   let error: string | null = null
-  let current: Replay | null = null
+  let tab: TabId = 'experiments'
+
+  function fromHash(): TabId {
+    const h = location.hash.replace(/^#\/?/, '')
+    return (TABS.some((t) => t.id === h) ? h : 'experiments') as TabId
+  }
+  function select(id: TabId) {
+    location.hash = `#/${id}`
+  }
+
+  onMount(() => {
+    tab = fromHash()
+    const onHash = () => (tab = fromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  })
 
   loadCards().then(() => (ready = true)).catch((e) => (error = String(e)))
-
-  async function open(id: string) {
-    try {
-      current = await getReplay(id)
-    } catch (e) {
-      error = String(e)
-    }
-  }
-  function back() { current = null }
 </script>
 
-<main>
+<div class="shell">
+  <nav>
+    <span class="brand">LOCM panel</span>
+    {#each TABS as t}
+      <button class:active={tab === t.id} on:click={() => select(t.id)}>{t.label}</button>
+    {/each}
+  </nav>
+
   {#if error}
-    <p class="error">Error: {error}</p>
-    <button on:click={() => (error = null)}>dismiss</button>
+    <p class="error">Error: {error} <button on:click={() => (error = null)}>dismiss</button></p>
+  {:else if !ready}
+    <p class="loading">loading cards…</p>
+  {:else}
+    <!-- keep tabs mounted so running jobs / an in-progress game survive tab switches -->
+    <section class:hidden={tab !== 'experiments'}>
+      <Experiments active={tab === 'experiments'} />
+    </section>
+    <section class:hidden={tab !== 'depot'}><Depot active={tab === 'depot'} /></section>
+    <section class:hidden={tab !== 'replays'}><Replays /></section>
+    <section class:hidden={tab !== 'play'}><Play /></section>
   {/if}
-  {#if !ready && !error}
-    <p>loading cards…</p>
-  {:else if ready}
-    {#if current}
-      <ReplayViewer replay={current} on:back={back} />
-    {:else}
-      <div class="topbar">
-        <h1>LOCM Replay Viewer</h1>
-        <a class="playlink" href="game.html">🎮 Play vs AI</a>
-      </div>
-      <ReplayLibrary on:open={(e) => open(e.detail)} />
-    {/if}
-  {/if}
-</main>
+</div>
 
 <style>
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
-  main { width: 100%; margin: 0; padding: 16px; box-sizing: border-box; color: #ddd; }
   :global(#app) { width: 100%; max-width: none; }
-  h1 { font-size: 18px; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .playlink { text-decoration: none; font-weight: 600; font-size: 14px; color: #0e0e12;
-    background: #4fd97a; border: 1px solid #3fbf66; border-radius: 6px; padding: 7px 14px;
-    box-shadow: 0 0 10px rgba(79, 217, 122, 0.35); transition: filter 0.12s ease, transform 0.12s ease; }
-  .playlink:hover { filter: brightness(1.08); transform: translateY(-1px); }
-  .error { color: #ff6b6b; }
-  button { background: #23232b; color: #ddd; border: 1px solid #333; border-radius: 4px;
-    padding: 3px 10px; cursor: pointer; margin-bottom: 8px; }
+  .shell { color: #ddd; min-height: 100vh; }
+  nav { display: flex; align-items: center; gap: 4px; padding: 8px 16px;
+    border-bottom: 1px solid #23232b; background: #121218; position: sticky; top: 0; z-index: 50; }
+  .brand { font-weight: 700; font-size: 14px; color: #8f8fa8; margin-right: 16px;
+    letter-spacing: 0.06em; text-transform: uppercase; }
+  nav button { background: none; border: none; color: #9a9ab0; font-size: 14px; padding: 8px 14px;
+    cursor: pointer; border-radius: 6px; }
+  nav button:hover { color: #ddd; background: #1c1c24; }
+  nav button.active { color: #fff; background: #23233a; }
+  section { padding: 12px 16px; }
+  section.hidden { display: none; }
+  .error { color: #ff6b6b; padding: 16px; }
+  .loading { padding: 16px; color: #888; }
+  .error button { background: #23232b; color: #ddd; border: 1px solid #333;
+    border-radius: 4px; padding: 3px 10px; cursor: pointer; margin-left: 8px; }
 </style>

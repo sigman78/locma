@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, hasArt } from '../../lib/cards'
   import { abilityList } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
@@ -21,7 +21,8 @@
   export let dmgDelay = false // delay the damage number so it lands after the slide
   export let drawn = false // just drawn this step → brief white outline glow that fades
 
-  let imgOk = true
+  let imgFailed = false
+  $: imgOk = !imgFailed && hasArt(card.card_id)
   $: name = cardName(card.card_id)
   $: meta = cardMeta(card.card_id)
   // face shows the live in-play state (incl. buffs); tooltip shows the printed card
@@ -70,7 +71,7 @@
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
-        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
+        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgFailed = true)} />
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
@@ -144,22 +145,36 @@
   /* attacker highlight — declared after .attacked so it wins the filter */
   .card.attacking { outline: 3px solid #ffd23d; outline-offset: 2px;
     filter: brightness(1.18); opacity: 1; z-index: 4; }
+  /* the band BACKGROUND paints under the sprite (and its effects), the numbers
+     stay on top: .stats creates no stacking context, so its negative-z ::before
+     escapes to the isolated .card context and slips below the in-flow <img>,
+     while the positioned .stats element itself paints above it. */
   .stats { position: absolute; bottom: 0; left: 0; right: 0; display: flex;
     justify-content: space-between; padding: 3px 6px; font-weight: 700;
-    background: rgba(0,0,0,0.6); font-size: 16px; }
+    font-size: 16px; text-shadow: 0 1px 2px #000; }
+  .stats::before { content: ''; position: absolute; inset: 0; z-index: -1;
+    background: rgba(56, 58, 68, 0.8); border-top: 1px solid rgba(255, 255, 255, 0.08); }
   .atk { color: #ffcc55; } .def { color: #66ccff; }
   /* live stat deviations from the printed card: green = buffed, red = reduced/damaged */
   .stats .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
   .stats .reduced { color: #ff6b6b; text-shadow: 0 0 6px rgba(255, 107, 107, 0.7); }
   /* spell (item) effect panel: a dimmed bottom bar tinted with the item colour,
-     showing compact effect text instead of atk/def stats. */
-  .spell-bar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 1;
+     showing compact effect text instead of atk/def stats. The tinted BACKGROUND
+     paints under the sprite via the same negative-z ::before trick as .stats
+     (no z-index here — that would trap the pseudo inside a stacking context). */
+  .spell-bar { position: absolute; bottom: 0; left: 0; right: 0;
     padding: 3px 5px; font-size: 12px; font-weight: 400; line-height: 1.25;
-    text-align: center; color: #fff; text-shadow: 0 1px 2px #000;
+    text-align: center; color: #fff;
+    /* the element paints ABOVE the sprite, so a neutral scrim here dims bright
+       artwork behind the glyphs (the colored tint stays below the sprite);
+       the layered shadows add a dark halo that hugs the text itself */
+    background: rgba(10, 10, 14, 0.45);
+    text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000;
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .spell-bar::before { content: ''; position: absolute; inset: 0; z-index: -1;
     background-color: rgba(8, 8, 12, 0.82);
     background-image: linear-gradient(var(--sp-fill), var(--sp-fill));
-    border-top: 1px solid var(--sp-edge);
-    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    border-top: 1px solid var(--sp-edge); }
   .abil { position: absolute; top: 3px; right: 3px; display: flex; flex-wrap: wrap;
     gap: 2px; max-width: 60%; justify-content: flex-end; }
   .chip { display: inline-block; min-width: 20px; text-align: center;

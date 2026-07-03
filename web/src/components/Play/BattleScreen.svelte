@@ -17,6 +17,7 @@
   import { mergeDisplayBoard, planStepFx, type RectOf } from '../../lib/stepfx'
   import { nearestTarget, type AimTarget } from '../../lib/aim'
   import { dock } from '../../lib/dock'
+  import { card as cardMeta } from '../../lib/cards'
   import CardView from '../ReplayViewer/CardView.svelte'
   import MinionView from './MinionView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
@@ -40,6 +41,8 @@
 
   $: view = liveStep ? liveStep.view : pending.view
   $: legal = pending.legal
+  // the common turn-1 case: nothing summonable, pass is the only move — say so
+  $: passOnly = legal.length === 1 && legal[0].t === 'pass'
   $: meSeat = you
   $: opSeat = 1 - you
   $: interactive = !playing
@@ -51,6 +54,7 @@
     drag = null
     snapId = null
     overField = false
+    handDrag = null
     dispatch('act', a)
   }
 
@@ -171,7 +175,8 @@
   }
 
   // --- drag-to-aim state (unchanged from Slice B) ---
-  type Drag = { kind: 'attack' | 'use' | 'summon'; src: number; from: { x: number; y: number } }
+  // summons are NOT a Drag: the hand card itself is carried (see handDrag below)
+  type Drag = { kind: 'attack' | 'use'; src: number; from: { x: number; y: number } }
   let drag: Drag | null = null
   let cursor = { x: 0, y: 0 }
   let snapId: number | 'face' | null = null
@@ -206,65 +211,173 @@
     return out
   }
 
+  // illegal-action feedback: quick head-shake on the clicked card
+  let jiggleIid: number | null = null
+  let jiggleTimer: ReturnType<typeof setTimeout> | null = null
+  function jiggle(iid: number) {
+    // synchronous set (no rAF: throttled in occluded windows); a re-click during
+    // the 400ms window extends the timer instead of restarting the animation
+    jiggleIid = iid
+    if (jiggleTimer) clearTimeout(jiggleTimer)
+    jiggleTimer = setTimeout(() => (jiggleIid = null), 400)
+  }
+
   function startAttack(e: MouseEvent, c: CardState) {
     if (!interactive) return
-    if (attackTargets(legal, c.iid).length === 0) return
+    if (attackTargets(legal, c.iid).length === 0) {
+      jiggle(c.iid) // summoning-sick / already attacked / no targets
+      return
+    }
     e.preventDefault()
     drag = { kind: 'attack', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
     cursor = { x: e.clientX, y: e.clientY }
     snapId = null
   }
+  // HAND-CARD drag: the card itself is carried (no pointer-line arrow while
+  // carrying). Four kinds:
+  //   summon — playable creature: drop on the own battlefield to summon
+  //   cast   — playable untargeted spell: drop on the own battlefield to play
+  //   aim    — playable targeted spell: carry to the battlefield area, where
+  //            the card DOCKS (freezes) and the targeting arrow takes over;
+  //            releasing without a valid target springs the card home
+  //   tether — unplayable card: elastic give toward DEAD_MAX, snaps out of
+  //            your grip past DEAD_BREAK
+  // Any release outside its drop zone returns the card to the hand.
+  type HandDragKind = 'tether' | 'summon' | 'cast' | 'aim'
+  const DEAD_MAX = 56
+  const DEAD_BREAK = 150
+  let handDrag: {
+    iid: number
+    kind: HandDragKind
+    sx: number
+    sy: number
+    dx: number
+    dy: number
+    from: { x: number; y: number } // card center at grab time (aim-dock origin)
+    returning: boolean
+    docked: boolean
+  } | null = null
+  let deadMoved = false // suppress the click-jiggle when the tether already gave feedback
+
+  $: carrying = !!handDrag && !handDrag.returning && !handDrag.docked && handDrag.kind !== 'tether'
+
+  function startHandDrag(e: MouseEvent, iid: number, kind: HandDragKind) {
+    e.preventDefault()
+    deadMoved = false
+    handDrag = {
+      iid,
+      kind,
+      sx: e.clientX,
+      sy: e.clientY,
+      dx: 0,
+      dy: 0,
+      from: centerOf(e.currentTarget as HTMLElement),
+      returning: false,
+      docked: false,
+    }
+    if (kind !== 'tether') {
+      cursor = { x: e.clientX, y: e.clientY }
+      overField = false
+    }
+  }
+  function handRelease() {
+    if (!handDrag || handDrag.returning) return
+    const iid = handDrag.iid
+    handDrag = { ...handDrag, dx: 0, dy: 0, returning: true, docked: false }
+    overField = false
+    setTimeout(() => {
+      if (handDrag?.iid === iid && handDrag.returning) handDrag = null
+    }, 340)
+  }
+
   function downHand(e: MouseEvent, c: CardState) {
     if (!interactive) return
-    // a summonable creature: drag onto your own battlefield (or click) to summon
+    // a summonable creature: carry it — drop on your battlefield to summon
     if (canSummon(legal, c.iid)) {
-      e.preventDefault()
-      drag = { kind: 'summon', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
-      cursor = { x: e.clientX, y: e.clientY }
-      snapId = null
-      overField = false
+      startHandDrag(e, c.iid, 'summon')
+      return
+    }
+    // a creature that CAN'T be summoned (mana / board space): elastic tether
+    if ((cardMeta(c.card_id)?.type ?? 'creature') === 'creature') {
+      startHandDrag(e, c.iid, 'tether')
       return
     }
     const ts = itemTargets(legal, c.iid)
-    if (ts.length === 0) return
-    if (ts.length === 1 && ts[0] === -1) return
-    e.preventDefault()
-    drag = { kind: 'use', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
-    cursor = { x: e.clientX, y: e.clientY }
-    snapId = null
+    if (ts.length === 0) {
+      startHandDrag(e, c.iid, 'tether') // unplayable spell
+    } else if (ts.length === 1 && ts[0] === -1) {
+      startHandDrag(e, c.iid, 'cast') // untargeted spell: play by dropping on the field
+    } else {
+      startHandDrag(e, c.iid, 'aim') // targeted spell: carry to the field, then aim
+    }
   }
   function clickHand(c: CardState) {
     if (!interactive || drag) return
-    if (canSummon(legal, c.iid)) {
-      send({ t: 'summon', id: c.iid })
-      return
+    // playing a card is drag-and-drop ONLY: a click (or a carry released outside
+    // the drop zone, which the browser also reports as a click) must never act
+    if (canSummon(legal, c.iid)) return
+    if (itemTargets(legal, c.iid).length === 0 && !deadMoved) {
+      jiggle(c.iid) // plain click on an unplayable card (a real tether pull already said no)
     }
-    const ts = itemTargets(legal, c.iid)
-    if (ts.length === 1 && ts[0] === -1) send({ t: 'use', item: c.iid, target: -1 })
   }
   function onMove(e: MouseEvent) {
-    if (!drag) return
-    cursor = { x: e.clientX, y: e.clientY }
-    if (drag.kind === 'summon') {
+    if (handDrag && !handDrag.returning && !handDrag.docked) {
+      const rx = e.clientX - handDrag.sx
+      const ry = e.clientY - handDrag.sy
+      const dist = Math.hypot(rx, ry)
+      if (dist > 8) deadMoved = true
+      if (handDrag.kind === 'tether') {
+        if (dist > DEAD_BREAK) {
+          handRelease() // pulled too far: the card escapes the grip
+          return
+        }
+        // rubber-band: displacement saturates toward DEAD_MAX as the pull grows
+        const f = dist > 0 ? (DEAD_MAX * (1 - Math.exp(-dist / DEAD_MAX))) / dist : 0
+        handDrag = { ...handDrag, dx: rx * f, dy: ry * f }
+        return
+      }
+      // free 1:1 carry; the own battlefield highlights as the drop zone
+      handDrag = { ...handDrag, dx: rx, dy: ry }
+      cursor = { x: e.clientX, y: e.clientY }
       overField = pointInField(cursor)
+      if (handDrag.kind === 'aim' && overField) {
+        // reached the battlefield: dock the card and hand over to the arrow
+        handDrag = { ...handDrag, docked: true }
+        overField = false
+        drag = {
+          kind: 'use',
+          src: handDrag.iid,
+          from: { x: handDrag.from.x + rx, y: handDrag.from.y + ry },
+        }
+        snapId = null
+      }
       return
     }
+    if (!drag) return
+    cursor = { x: e.clientX, y: e.clientY }
     const best = nearestTarget(cursor.x, cursor.y, aimTargets(drag))
     snapId = best ? best.id : null
   }
   function onUp() {
+    if (handDrag && !handDrag.returning && !handDrag.docked) {
+      if (overField && handDrag.kind === 'summon') {
+        send({ t: 'summon', id: handDrag.iid }) // dropped on the own battlefield
+      } else if (overField && handDrag.kind === 'cast') {
+        send({ t: 'use', item: handDrag.iid, target: -1 }) // untargeted spell played
+      } else {
+        handRelease() // dropped anywhere else: spring back to the hand
+      }
+      return
+    }
     if (!drag) return
     const d = drag
     const sid = snapId
     drag = null
     snapId = null
-    if (d.kind === 'summon') {
-      const drop = overField
-      overField = false
-      if (drop) send({ t: 'summon', id: d.src }) // released over the own battlefield
+    if (sid === null) {
+      if (handDrag) handRelease() // docked spell released with no valid target
       return
     }
-    if (sid === null) return
     const target = sid === 'face' ? -1 : sid
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
     else send({ t: 'use', item: d.src, target })
@@ -274,6 +387,7 @@
       drag = null
       snapId = null
       overField = false
+      if (handDrag) handRelease()
     }
   }
   $: lineTo = drag
@@ -342,12 +456,14 @@
   <hr />
 
   <div class="field bottom"
-    class:summon-target={drag?.kind === 'summon'}
-    class:summon-over={drag?.kind === 'summon' && overField}
+    class:summon-target={carrying}
+    class:summon-over={carrying && overField}
     use:anchor={'myfield'}>
     {#each displayMe as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
-        class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
+        class:armed={drag?.src === c.iid} class:jiggling={jiggleIid === c.iid}
+        class:ready={interactive && !drag && attackTargets(legal, c.iid).length > 0}
+        use:anchor={c.iid} in:spring out:deathFx
         on:mousedown={(e) => startAttack(e, c)}>
         <MinionView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
@@ -358,9 +474,18 @@
     {/each}
   </div>
 
-  <div class="hand mine" use:dock={{ enabled: interactive && !drag, target: '.card' }}>
+  <div class="hand mine" use:dock={{ enabled: interactive && !drag && !handDrag, target: '.card' }}>
     {#each view.me.hand as c (c.iid)}
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
+        class:jiggling={jiggleIid === c.iid}
+        class:tethered={handDrag?.iid === c.iid && !handDrag.returning}
+        class:carrying={handDrag?.iid === c.iid && handDrag.kind !== 'tether' && !handDrag.returning}
+        class:tether-return={handDrag?.iid === c.iid && handDrag.returning}
+        style={handDrag?.iid === c.iid
+          ? `transform: translate(${handDrag.dx}px, ${handDrag.dy}px) ` +
+            `rotate(${handDrag.docked ? 0 : Math.max(-7, Math.min(7, handDrag.dx * 0.06))}deg)` +
+            (handDrag.kind !== 'tether' && !handDrag.returning ? ' scale(1.06)' : '') + ';'
+          : ''}
         in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} />
       </button>
@@ -375,9 +500,13 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Aim at a highlighted target — release to confirm, Esc to cancel.{:else if carrying}Drop the card on your battlefield to play it.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, drag cards onto your field to play them, or end turn.{/if}
     </span>
-    <button class="endturn" on:click={() => send({ t: 'pass' })} disabled={!interactive}>End Turn ⏭</button>
+    <button
+      class="endturn"
+      class:urge={passOnly && interactive}
+      on:click={() => send({ t: 'pass' })}
+      disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
 
@@ -416,21 +545,79 @@
      browser's default ~6px inline padding — so a slot's layout width == --card-w and
      all 8 hand cards fit the panel. Highlights use outline, which takes no layout space. */
   .slot { background: none; border: none; padding: 0; outline: 2px solid transparent;
-    outline-offset: -2px; border-radius: 8px; cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.12s ease; }
+    outline-offset: -2px; border-radius: 8px; cursor: pointer; position: relative;
+    transition: transform 0.14s ease, box-shadow 0.14s ease, outline-color 0.14s ease; }
   .slot:hover { outline-color: #4a4f6a; }
-  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
-  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
-  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
+  /* hover juice: hand cards lift toward you with a "raised" look — a tight
+     contact shadow, a deep soft under-shadow, and a faint light rim so the
+     elevation reads against the dark felt. animation: none pauses the
+     playable-breathe so it can't override the elevation shadows. */
+  .hand.mine .slot:hover { transform: translateY(-12px) scale(1.06); z-index: 30;
+    animation: none;
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.55),
+      0 20px 30px 4px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(255, 255, 255, 0.09); }
+  /* a playable card keeps its green glow on top of the elevation */
+  .hand.mine .slot.playable:hover {
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.55),
+      0 20px 30px 4px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(255, 255, 255, 0.09),
+      0 0 13px rgba(79, 217, 122, 0.6); }
+  /* carried / tethered hand card: tight cursor tracking while held (the inline
+     transform wins over :hover), springy overshoot on the way back */
+  .slot.tethered { transition: transform 0.05s linear; z-index: 40;
+    cursor: grabbing; }
+  .slot.carrying { box-shadow: 0 16px 30px rgba(0, 0, 0, 0.55); }
+  .slot.tether-return { transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 40; }
+  /* never show the hover tooltip on a card that is being dragged (carried,
+     tethered, springing back, or aim-armed) — the cursor rides the card, so
+     the :hover reveal would flicker it in mid-drag */
+  .slot.tethered :global(.tooltip),
+  .slot.tether-return :global(.tooltip),
+  .slot.armed :global(.tooltip) {
+    opacity: 0 !important; visibility: hidden !important;
+  }
+  .field .slot:hover { transform: translateY(-3px) scale(1.03); z-index: 30; }
+  /* a minion with legal attack targets: soft amber ready-glow */
+  .slot.ready { outline-color: rgba(255, 210, 61, 0.55);
+    animation: ready-breathe 2.6s ease-in-out infinite; }
+  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45);
+    animation: playable-breathe 2.4s ease-in-out infinite; }
+  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5);
+    animation: none; }
+  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5);
+    animation: none; }
+  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85);
+    animation: none; }
+  @keyframes playable-breathe {
+    50% { box-shadow: 0 0 15px rgba(79, 217, 122, 0.75); }
+  }
+  @keyframes ready-breathe {
+    50% { outline-color: rgba(255, 210, 61, 0.25); }
+  }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
-  .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
+  /* always on screen: the board can be taller than the viewport inside the
+     tabbed shell, and an invisible End Turn reads as a frozen game */
+  .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px;
+    position: sticky; bottom: 0; z-index: 40; background: rgba(14, 14, 18, 0.92);
+    padding: 8px 4px; border-top: 1px solid #23232b; }
+  .endturn.urge { border-color: #3fbf66; box-shadow: 0 0 10px rgba(79, 217, 122, 0.35);
+    animation: urge-pulse 1.6s ease-in-out infinite; }
+  @keyframes urge-pulse {
+    50% { box-shadow: 0 0 16px rgba(79, 217, 122, 0.6); }
+  }
   .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
     background: rgba(255, 210, 61, 0.12); border: 1px solid #ffd23d55;
     border-radius: 10px; padding: 2px 10px; }
   .hint { color: #aaa; font-size: 14px; }
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
-    border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
+    border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600;
+    transition: transform 0.12s ease, filter 0.12s ease; }
+  .endturn:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.2); }
+  .endturn:not(:disabled):active { transform: translateY(0) scale(0.97); }
   .endturn:disabled { opacity: 0.5; cursor: default; }
   /* a player panel acting as the face hit-area */
   .faceplate { border: 2px solid transparent; border-radius: 8px; padding: 2px 6px;

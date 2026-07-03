@@ -172,16 +172,21 @@ Example: `uv run locma fetch-art`
 > before redistribution.
 
 ## serve
-`locma serve [--host 127.0.0.1] [--port 8000] [--replay-dir replays] [--asset-dir locma/data/assets] [--gamelog-dir .]`
+`locma serve [--host 127.0.0.1] [--port 8000] [--replay-dir replays] [--asset-dir locma/data/assets] [--gamelog-dir .] [--presets-dir experiments/presets] [--results-dir runs/experiments] [--workers W]`
 
-Start the local web replay viewer API (run matchups, browse/import replays, and
-play them back in the browser). **Requires the `[server]` extra**
-(`uv sync --extra server`); without it the command exits with a clear error.
+Start the local **web panel**: run experiments (match / noise-floor / league /
+ceiling verdicts) with savable presets and live job progress, manage the
+artifact depot, browse/import replays, and play-test any configured policy.
+**Requires the `[server]` extra** (`uv sync --extra server`); model-backed
+policies additionally need `[ml]`. See `docs/webapp.md`.
 
 - `--host` / `--port` bind address (default `127.0.0.1:8000`).
 - `--replay-dir` where generated replays are persisted (gitignored, default `replays/`).
 - `--asset-dir` card-art cache served at `/api/art/{id}` (default `locma/data/assets`; see `fetch-art`).
 - `--gamelog-dir` directory scanned for `*.jsonl` game-logs to import (default `.`).
+- `--presets-dir` experiment preset JSON files (committed, default `experiments/presets`).
+- `--results-dir` finished experiment jobs (gitignored, default `runs/experiments`).
+- `--workers` process-pool size for experiment jobs (0 = all CPUs minus one).
 
 In development, also run the Vite UI which proxies `/api` to this server:
 `cd web && npm install && npm run dev`. In production, build the bundle

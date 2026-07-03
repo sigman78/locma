@@ -62,6 +62,8 @@ def test_build_env_strides_seed_per_worker(monkeypatch):
         return SimpleNamespace(close=lambda: None)
 
     monkeypatch.setattr("stable_baselines3.common.vec_env.SubprocVecEnv", _fake_subproc_vec_env)
+    # identity: the real VecMonitor needs a real VecEnv, not the fake namespace
+    monkeypatch.setattr("stable_baselines3.common.vec_env.VecMonitor", lambda v: v)
 
     _build_env("random", seed=7, n_envs=3, both_seat=True, obs_mode="flat")
 

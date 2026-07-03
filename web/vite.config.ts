@@ -1,16 +1,8 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [svelte()],
-  build: {
-    rollupOptions: {
-      input: {
-        main: 'index.html',
-        game: 'game.html',
-      },
-    },
-  },
   server: {
     proxy: { '/api': 'http://127.0.0.1:8000' },
   },

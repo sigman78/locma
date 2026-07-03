@@ -8,6 +8,7 @@ from rich.console import Console
 from locma.cli.depot import depot_app
 from locma.cli.render import GameRenderer
 from locma.cli.textfmt import ascii_table
+from locma.harness.ceiling_eval import _disjoint_eval_seeds
 from locma.harness.draft_bench import draft_names, make_battle, make_draft, round_robin
 from locma.harness.match import run_match
 from locma.harness.tournament import run_tournament
@@ -738,21 +739,8 @@ def az_selfplay_cmd(
     )
 
 
-def _disjoint_eval_seeds(seeds: int, games_per_seed: int, start: int = 1_000_000) -> list[int]:
-    """Build ``seeds`` eval-seed anchors whose ``run_match`` game blocks never overlap.
-
-    ``run_match(policy_a, policy_b, games=games_per_seed, seed=s)`` internally plays base
-    seeds ``s, s+1, ..., s+games_per_seed-1`` (each mirrored). If eval seeds were spaced by
-    1 (e.g. ``1_000_000, 1_000_001, ...``), consecutive blocks would overlap in all but one
-    game, making the per-seed avg-hard3 values a heavily autocorrelated sliding-window
-    average rather than independent samples -- which would make the bootstrap CI in
-    ``paired_bootstrap_ci`` far too tight (anti-conservative) and risk a false "headroom"
-    verdict. Spacing anchors by ``games_per_seed`` instead makes each block
-    ``[start + i*games_per_seed, start + i*games_per_seed + games_per_seed - 1]`` disjoint
-    from its neighbors, while still playing the same total number of base seeds
-    (``seeds * games_per_seed``) as before.
-    """
-    return list(range(start, start + seeds * games_per_seed, games_per_seed))
+# _disjoint_eval_seeds moved to locma/harness/ceiling_eval.py (shared with the
+# web panel's experiments); imported at the top and re-exported for tests.
 
 
 @app.command("ceiling-eval")
@@ -802,15 +790,28 @@ def serve(
     replay_dir: str = "replays",
     asset_dir: str = "locma/data/assets",
     gamelog_dir: str = ".",
+    presets_dir: str = typer.Option("experiments/presets", help="experiment preset JSON files"),
+    results_dir: str = typer.Option("runs/experiments", help="finished experiment job results"),
+    workers: int = typer.Option(
+        0, help="process-pool workers for experiment jobs (0 = all CPUs minus one)"
+    ),
 ):
-    """Run the local replay-viewer web server (requires the [server] extra)."""
+    """Run the local web panel: experiments, depot, replays, play-testing
+    (requires the [server] extra)."""
     try:
         import uvicorn  # noqa: PLC0415 — optional [server] dep
 
         from locma.server.app import create_app  # noqa: PLC0415
     except ImportError as e:
         raise typer.BadParameter("serve requires the [server] extra: uv sync --extra server") from e
-    app_ = create_app(replay_dir=replay_dir, asset_dir=asset_dir, gamelog_dir=gamelog_dir)
+    app_ = create_app(
+        replay_dir=replay_dir,
+        asset_dir=asset_dir,
+        gamelog_dir=gamelog_dir,
+        presets_dir=presets_dir,
+        results_dir=results_dir,
+        workers=workers,
+    )
     print(f"serving on http://{host}:{port}")
     uvicorn.run(app_, host=host, port=port)
 

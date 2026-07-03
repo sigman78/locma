@@ -15,6 +15,7 @@ in the domain of TcG like games.
 - [Architecture](docs/architecture.md) — engine, trace hook, game-log format
 - [Baseline](docs/baseline.md) — reference results for the built-in policies
 - [Artifact depot](docs/depot.md) — versioned checkpoints/datasets with provenance (`depot:` refs)
+- [Web panel](docs/webapp.md) — experiments, depot, replays, and play-testing in the browser
 
 ## Install
 
@@ -32,10 +33,11 @@ uv run locma tournament random scripted greedy --games 30 --matrix
 uv run pytest
 ```
 
-## Web replay viewer
+## Web panel
 
-Run matchups and watch replays in the browser — the single-lane field with
-both players' hands, draft + battle phases, live card stats and portraits.
+Run experiments (matches, leagues, paired verdicts) with savable presets and
+live progress, manage the artifact depot, watch replays, and play-test any
+configured policy — all in the browser. See [docs/webapp.md](docs/webapp.md).
 
 ```bash
 uv sync --extra server                 # one-time: install web server deps

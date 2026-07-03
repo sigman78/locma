@@ -35,6 +35,23 @@ def decide(mean_delta: float, ci_lo: float, ci_hi: float, threshold: float = 0.0
 HARD3 = ("scripted", "max-guard", "max-attack")
 
 
+def _disjoint_eval_seeds(seeds: int, games_per_seed: int, start: int = 1_000_000) -> list[int]:
+    """Build ``seeds`` eval-seed anchors whose ``run_match`` game blocks never overlap.
+
+    ``run_match(policy_a, policy_b, games=games_per_seed, seed=s)`` internally plays base
+    seeds ``s, s+1, ..., s+games_per_seed-1`` (each mirrored). If eval seeds were spaced by
+    1 (e.g. ``1_000_000, 1_000_001, ...``), consecutive blocks would overlap in all but one
+    game, making the per-seed avg-hard3 values a heavily autocorrelated sliding-window
+    average rather than independent samples -- which would make the bootstrap CI in
+    ``paired_bootstrap_ci`` far too tight (anti-conservative) and risk a false "headroom"
+    verdict. Spacing anchors by ``games_per_seed`` instead makes each block
+    ``[start + i*games_per_seed, start + i*games_per_seed + games_per_seed - 1]`` disjoint
+    from its neighbors, while still playing the same total number of base seeds
+    (``seeds * games_per_seed``) as before.
+    """
+    return list(range(start, start + seeds * games_per_seed, games_per_seed))
+
+
 def _ppo_policy(model_path: str, draft_noise: int = 0):
     """Build the candidate policy for one eval cell.
 
