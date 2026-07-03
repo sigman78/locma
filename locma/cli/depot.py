@@ -5,36 +5,14 @@ from __future__ import annotations
 import json
 
 import typer
-from rich.console import Console
 
 from locma import depot as dep
+from locma.cli.textfmt import ascii_table, human_size
 
 depot_app = typer.Typer(
     help="Versioned artifact depot: publish/pin/push/pull checkpoints and datasets "
     "with provenance. Refs: depot:<name>[@N|@latest][/<file>]"
 )
-console = Console()
-
-
-def _human(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024 or unit == "GB":
-            return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
-        n /= 1024
-    return f"{n}B"
-
-
-def _ascii_table(headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
-    """Plain space-padded columns with a dashed header rule — no box drawing."""
-    widths = [len(h) for h in headers]
-    for r in rows:
-        widths = [max(w, len(c)) for w, c in zip(widths, r, strict=True)]
-    lines = [
-        "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)),
-        "  ".join("-" * w for w in widths),
-    ]
-    lines += ["  ".join(r[i].ljust(widths[i]) for i in range(len(headers))) for r in rows]
-    return "\n".join(line.rstrip() for line in lines)
 
 
 def _split_selector(name: str) -> tuple[str, str]:
@@ -44,7 +22,7 @@ def _split_selector(name: str) -> tuple[str, str]:
 
 
 def _fail(e: Exception) -> None:
-    console.print(f"[red]error:[/] {e}")
+    print(f"error: {e}")
     raise typer.Exit(1)
 
 
@@ -75,10 +53,7 @@ def publish(
     except (dep.DepotError, json.JSONDecodeError) as e:
         _fail(e)
     rec = dep.load_record(name)
-    console.print(
-        f"published [bold]{name}[/] v{vrec['version']} ({len(vrec['files'])} files), "
-        f"pin -> v{rec['pin']}"
-    )
+    print(f"published {name} v{vrec['version']} ({len(vrec['files'])} files), pin -> v{rec['pin']}")
 
 
 @depot_app.command("list")
@@ -90,7 +65,7 @@ def list_(kind: str = typer.Option(None, help="filter by kind")):
         if kind and rec["kind"] != kind:
             continue
         vrec = next((v for v in rec["versions"] if v["version"] == rec["pin"]), None)
-        size = _human(sum(e["size"] for e in vrec["files"].values())) if vrec else "-"
+        size = human_size(sum(e["size"] for e in vrec["files"].values())) if vrec else "-"
         status = dep.version_status(rec, vrec) if vrec else "-"
         published = "yes" if vrec and vrec.get("published") else "no"
         rows.append(
@@ -104,8 +79,8 @@ def list_(kind: str = typer.Option(None, help="filter by kind")):
                 published,
             )
         )
-    print(f"depot: {dep.depot_root()}")
-    print(_ascii_table(("name", "kind", "pin", "versions", "size@pin", "local", "published"), rows))
+    headers = ("name", "kind", "pin", "versions", "size@pin", "local", "published")
+    print(ascii_table(headers, rows, align="lllrr", title=f"depot: {dep.depot_root()}"))
 
 
 @depot_app.command()
@@ -115,7 +90,7 @@ def show(name: str):
         rec = dep.load_record(name)
     except dep.DepotError as e:
         _fail(e)
-    console.print_json(json.dumps(rec))
+    print(json.dumps(rec, indent=2))
 
 
 @depot_app.command("pin")
@@ -125,7 +100,7 @@ def pin_(name: str, version: int):
         dep.pin(name, version)
     except dep.DepotError as e:
         _fail(e)
-    console.print(f"pinned [bold]{name}[/] -> v{version}")
+    print(f"pinned {name} -> v{version}")
 
 
 @depot_app.command()
@@ -136,7 +111,7 @@ def push(name: str):
         locator = dep.push(base, ver)
     except dep.DepotError as e:
         _fail(e)
-    console.print(f"pushed [bold]{name}[/] -> {locator}")
+    print(f"pushed {name} -> {locator}")
 
 
 @depot_app.command()
@@ -148,9 +123,9 @@ def pull(name: str):
     except dep.DepotError as e:
         _fail(e)
     if fetched:
-        console.print(f"pulled [bold]{name}[/]: {', '.join(fetched)}")
+        print(f"pulled {name}: {', '.join(fetched)}")
     else:
-        console.print(f"[bold]{name}[/] already complete locally")
+        print(f"{name} already complete locally")
 
 
 @depot_app.command()
@@ -168,9 +143,9 @@ def verify():
     problems = dep.verify()
     if problems:
         for p in problems:
-            console.print(f"[red]BAD[/] {p}")
+            print(f"BAD {p}")
         raise typer.Exit(1)
-    console.print("all local blobs verified OK")
+    print("all local blobs verified OK")
 
 
 @depot_app.command()
@@ -178,6 +153,6 @@ def gc(yes: bool = typer.Option(False, "--yes", help="actually delete (default: 
     """Drop local blobs not reachable from any pin (they stay on the remote)."""
     removed, freed = dep.gc(dry_run=not yes)
     verb = "removed" if yes else "would remove"
-    console.print(f"{verb} {len(removed)} blob(s), {_human(freed)}")
+    print(f"{verb} {len(removed)} blob(s), {human_size(freed)}")
     if removed and not yes:
-        console.print("re-run with --yes to delete")
+        print("re-run with --yes to delete")
