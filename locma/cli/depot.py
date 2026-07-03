@@ -6,7 +6,6 @@ import json
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from locma import depot as dep
 
@@ -23,6 +22,19 @@ def _human(n: int) -> str:
             return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
         n /= 1024
     return f"{n}B"
+
+
+def _ascii_table(headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
+    """Plain space-padded columns with a dashed header rule — no box drawing."""
+    widths = [len(h) for h in headers]
+    for r in rows:
+        widths = [max(w, len(c)) for w, c in zip(widths, r, strict=True)]
+    lines = [
+        "  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)),
+        "  ".join("-" * w for w in widths),
+    ]
+    lines += ["  ".join(r[i].ljust(widths[i]) for i in range(len(headers))) for r in rows]
+    return "\n".join(line.rstrip() for line in lines)
 
 
 def _split_selector(name: str) -> tuple[str, str]:
@@ -72,9 +84,7 @@ def publish(
 @depot_app.command("list")
 def list_(kind: str = typer.Option(None, help="filter by kind")):
     """All artifacts: pin, versions, local blob status, published state."""
-    table = Table(title=f"depot: {dep.depot_root()}")
-    for col in ("name", "kind", "pin", "versions", "size@pin", "local", "published"):
-        table.add_column(col)
+    rows = []
     for name in dep.artifact_names():
         rec = dep.load_record(name)
         if kind and rec["kind"] != kind:
@@ -83,16 +93,19 @@ def list_(kind: str = typer.Option(None, help="filter by kind")):
         size = _human(sum(e["size"] for e in vrec["files"].values())) if vrec else "-"
         status = dep.version_status(rec, vrec) if vrec else "-"
         published = "yes" if vrec and vrec.get("published") else "no"
-        table.add_row(
-            name,
-            rec["kind"],
-            f"v{rec['pin']}" if rec["pin"] else "-",
-            str(len(rec["versions"])),
-            size,
-            status,
-            published,
+        rows.append(
+            (
+                name,
+                rec["kind"],
+                f"v{rec['pin']}" if rec["pin"] else "-",
+                str(len(rec["versions"])),
+                size,
+                status,
+                published,
+            )
         )
-    console.print(table)
+    print(f"depot: {dep.depot_root()}")
+    print(_ascii_table(("name", "kind", "pin", "versions", "size@pin", "local", "published"), rows))
 
 
 @depot_app.command()
