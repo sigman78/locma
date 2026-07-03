@@ -233,33 +233,49 @@
     cursor = { x: e.clientX, y: e.clientY }
     snapId = null
   }
-  // CREATURE drag: the hand card itself is carried (no pointer-line arrow).
-  // live=true (summonable): the card tracks the cursor 1:1 and may be dropped
-  // on the own battlefield to summon — dropped anywhere else it springs back
-  // to its hand slot. live=false (unplayable: mana / board space): an elastic
-  // tether — displacement saturates toward DEAD_MAX and pulling past
-  // DEAD_BREAK snaps the card out of your grip. Spell cards keep the old
-  // click / aim-drag behavior.
+  // HAND-CARD drag: the card itself is carried (no pointer-line arrow while
+  // carrying). Four kinds:
+  //   summon — playable creature: drop on the own battlefield to summon
+  //   cast   — playable untargeted spell: drop on the own battlefield to play
+  //   aim    — playable targeted spell: carry to the battlefield area, where
+  //            the card DOCKS (freezes) and the targeting arrow takes over;
+  //            releasing without a valid target springs the card home
+  //   tether — unplayable card: elastic give toward DEAD_MAX, snaps out of
+  //            your grip past DEAD_BREAK
+  // Any release outside its drop zone returns the card to the hand.
+  type HandDragKind = 'tether' | 'summon' | 'cast' | 'aim'
   const DEAD_MAX = 56
   const DEAD_BREAK = 150
   let handDrag: {
     iid: number
-    live: boolean
+    kind: HandDragKind
     sx: number
     sy: number
     dx: number
     dy: number
+    from: { x: number; y: number } // card center at grab time (aim-dock origin)
     returning: boolean
+    docked: boolean
   } | null = null
   let deadMoved = false // suppress the click-jiggle when the tether already gave feedback
 
-  $: carrying = !!handDrag && handDrag.live && !handDrag.returning
+  $: carrying = !!handDrag && !handDrag.returning && !handDrag.docked && handDrag.kind !== 'tether'
 
-  function startHandDrag(e: MouseEvent, iid: number, live: boolean) {
+  function startHandDrag(e: MouseEvent, iid: number, kind: HandDragKind) {
     e.preventDefault()
     deadMoved = false
-    handDrag = { iid, live, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, returning: false }
-    if (live) {
+    handDrag = {
+      iid,
+      kind,
+      sx: e.clientX,
+      sy: e.clientY,
+      dx: 0,
+      dy: 0,
+      from: centerOf(e.currentTarget as HTMLElement),
+      returning: false,
+      docked: false,
+    }
+    if (kind !== 'tether') {
       cursor = { x: e.clientX, y: e.clientY }
       overField = false
     }
@@ -267,7 +283,7 @@
   function handRelease() {
     if (!handDrag || handDrag.returning) return
     const iid = handDrag.iid
-    handDrag = { ...handDrag, dx: 0, dy: 0, returning: true }
+    handDrag = { ...handDrag, dx: 0, dy: 0, returning: true, docked: false }
     overField = false
     setTimeout(() => {
       if (handDrag?.iid === iid && handDrag.returning) handDrag = null
@@ -278,54 +294,63 @@
     if (!interactive) return
     // a summonable creature: carry it — drop on your battlefield to summon
     if (canSummon(legal, c.iid)) {
-      startHandDrag(e, c.iid, true)
+      startHandDrag(e, c.iid, 'summon')
       return
     }
     // a creature that CAN'T be summoned (mana / board space): elastic tether
     if ((cardMeta(c.card_id)?.type ?? 'creature') === 'creature') {
-      startHandDrag(e, c.iid, false)
+      startHandDrag(e, c.iid, 'tether')
       return
     }
     const ts = itemTargets(legal, c.iid)
-    if (ts.length === 0) return
-    if (ts.length === 1 && ts[0] === -1) return
-    e.preventDefault()
-    drag = { kind: 'use', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
-    cursor = { x: e.clientX, y: e.clientY }
-    snapId = null
+    if (ts.length === 0) {
+      startHandDrag(e, c.iid, 'tether') // unplayable spell
+    } else if (ts.length === 1 && ts[0] === -1) {
+      startHandDrag(e, c.iid, 'cast') // untargeted spell: play by dropping on the field
+    } else {
+      startHandDrag(e, c.iid, 'aim') // targeted spell: carry to the field, then aim
+    }
   }
   function clickHand(c: CardState) {
     if (!interactive || drag) return
-    // summoning is drag-and-drop ONLY: a click (or a carry released outside the
-    // drop zone, which the browser also reports as a click) must never summon
+    // playing a card is drag-and-drop ONLY: a click (or a carry released outside
+    // the drop zone, which the browser also reports as a click) must never act
     if (canSummon(legal, c.iid)) return
-    const ts = itemTargets(legal, c.iid)
-    if (ts.length === 1 && ts[0] === -1) {
-      send({ t: 'use', item: c.iid, target: -1 })
-    } else if (ts.length === 0 && !deadMoved) {
+    if (itemTargets(legal, c.iid).length === 0 && !deadMoved) {
       jiggle(c.iid) // plain click on an unplayable card (a real tether pull already said no)
     }
   }
   function onMove(e: MouseEvent) {
-    if (handDrag && !handDrag.returning) {
+    if (handDrag && !handDrag.returning && !handDrag.docked) {
       const rx = e.clientX - handDrag.sx
       const ry = e.clientY - handDrag.sy
       const dist = Math.hypot(rx, ry)
       if (dist > 8) deadMoved = true
-      if (handDrag.live) {
-        // free 1:1 carry; the own battlefield highlights as the drop zone
-        handDrag = { ...handDrag, dx: rx, dy: ry }
-        cursor = { x: e.clientX, y: e.clientY }
-        overField = pointInField(cursor)
+      if (handDrag.kind === 'tether') {
+        if (dist > DEAD_BREAK) {
+          handRelease() // pulled too far: the card escapes the grip
+          return
+        }
+        // rubber-band: displacement saturates toward DEAD_MAX as the pull grows
+        const f = dist > 0 ? (DEAD_MAX * (1 - Math.exp(-dist / DEAD_MAX))) / dist : 0
+        handDrag = { ...handDrag, dx: rx * f, dy: ry * f }
         return
       }
-      if (dist > DEAD_BREAK) {
-        handRelease() // pulled too far: the card escapes the grip
-        return
+      // free 1:1 carry; the own battlefield highlights as the drop zone
+      handDrag = { ...handDrag, dx: rx, dy: ry }
+      cursor = { x: e.clientX, y: e.clientY }
+      overField = pointInField(cursor)
+      if (handDrag.kind === 'aim' && overField) {
+        // reached the battlefield: dock the card and hand over to the arrow
+        handDrag = { ...handDrag, docked: true }
+        overField = false
+        drag = {
+          kind: 'use',
+          src: handDrag.iid,
+          from: { x: handDrag.from.x + rx, y: handDrag.from.y + ry },
+        }
+        snapId = null
       }
-      // rubber-band: displacement saturates toward DEAD_MAX as the pull grows
-      const f = dist > 0 ? (DEAD_MAX * (1 - Math.exp(-dist / DEAD_MAX))) / dist : 0
-      handDrag = { ...handDrag, dx: rx * f, dy: ry * f }
       return
     }
     if (!drag) return
@@ -334,9 +359,11 @@
     snapId = best ? best.id : null
   }
   function onUp() {
-    if (handDrag && !handDrag.returning) {
-      if (handDrag.live && overField) {
+    if (handDrag && !handDrag.returning && !handDrag.docked) {
+      if (overField && handDrag.kind === 'summon') {
         send({ t: 'summon', id: handDrag.iid }) // dropped on the own battlefield
+      } else if (overField && handDrag.kind === 'cast') {
+        send({ t: 'use', item: handDrag.iid, target: -1 }) // untargeted spell played
       } else {
         handRelease() // dropped anywhere else: spring back to the hand
       }
@@ -347,7 +374,10 @@
     const sid = snapId
     drag = null
     snapId = null
-    if (sid === null) return
+    if (sid === null) {
+      if (handDrag) handRelease() // docked spell released with no valid target
+      return
+    }
     const target = sid === 'face' ? -1 : sid
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
     else send({ t: 'use', item: d.src, target })
@@ -449,12 +479,12 @@
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
         class:jiggling={jiggleIid === c.iid}
         class:tethered={handDrag?.iid === c.iid && !handDrag.returning}
-        class:carrying={handDrag?.iid === c.iid && handDrag.live && !handDrag.returning}
+        class:carrying={handDrag?.iid === c.iid && handDrag.kind !== 'tether' && !handDrag.returning}
         class:tether-return={handDrag?.iid === c.iid && handDrag.returning}
         style={handDrag?.iid === c.iid
           ? `transform: translate(${handDrag.dx}px, ${handDrag.dy}px) ` +
-            `rotate(${Math.max(-7, Math.min(7, handDrag.dx * 0.06))}deg)` +
-            (handDrag.live && !handDrag.returning ? ' scale(1.06)' : '') + ';'
+            `rotate(${handDrag.docked ? 0 : Math.max(-7, Math.min(7, handDrag.dx * 0.06))}deg)` +
+            (handDrag.kind !== 'tether' && !handDrag.returning ? ' scale(1.06)' : '') + ';'
           : ''}
         in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} />
@@ -470,7 +500,7 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, drag a card onto your field to summon, drag an item to its target, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Aim at a highlighted target — release to confirm, Esc to cancel.{:else if carrying}Drop the card on your battlefield to play it.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, drag cards onto your field to play them, or end turn.{/if}
     </span>
     <button
       class="endturn"
