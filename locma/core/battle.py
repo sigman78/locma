@@ -270,7 +270,13 @@ def battle_legal(gs: GameState) -> list[Action]:
     guards = _enemy_guards(opp)
     targets = guards if guards else opp.board
     for c in p.board:
-        if c.can_attack and not c.has_attacked:
+        # House rule (diverges from the LOCM 1.5 referee / gym-locm, which allow
+        # it): a creature with 0 attack cannot attack. Such an attack is strictly
+        # worthless -- it deals 0, cannot even consume a Ward (_deal_to_unit
+        # returns early on amount <= 0), and only feeds the attacker to the
+        # defender's counter-damage. Gated on CURRENT attack, so a green buff
+        # mid-turn re-enables attacking and a red debuff to 0 disables it.
+        if c.can_attack and not c.has_attacked and c.attack > 0:
             for t in targets:
                 actions.append(Attack(c.instance_id, t.instance_id))
             if not guards:

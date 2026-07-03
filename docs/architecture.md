@@ -49,6 +49,18 @@ and gym-locm's `Version15BattlePhase`. The subtle, easy-to-miss pieces:
 - **50-turn penalty.** Once a player has played over 50 turns they take 10
   self-damage at the start of every turn. `gs.turn` counts plies, so the
   threshold is `gs.turn > 100`.
+- **House rule — 0-attack creatures cannot attack.** A deliberate divergence
+  from the reference (the official referee and gym-locm allow attacking with 0
+  attack): `battle_legal` only offers `Attack` for creatures with *current*
+  attack > 0. Such attacks were strictly worthless — 0 damage, no Ward
+  consumption (`_deal_to_unit` returns early on `amount <= 0`), full
+  counter-damage taken — so this only prunes null/suicide actions from the
+  action space. The gate reads the instance's current attack, so a green buff
+  mid-turn re-enables attacking and a red debuff to 0 disables it.
+  `apply_battle`/`_resolve_attack` stay permissive (legality is checked by the
+  callers), so replaying pre-change recorded actions still works. Rule added
+  2026-07-03; eval numbers measured before/after differ by a hair (the random
+  baseline can no longer suicide 0-attack minions).
 
 A turn-start deck-out or 50-turn hit can be lethal, so `start_turn` calls
 `check_winner` itself (the `Pass` path in `apply_battle` returns before its own
