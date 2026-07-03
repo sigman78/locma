@@ -1,0 +1,10 @@
+{
+  "name": "Noise floor (greedy)",
+  "kind": "noise-floor",
+  "params": {
+    "policy": "greedy",
+    "games": 200,
+    "seed": 0
+  },
+  "note": "Luck baseline: greedy vs itself. Edges smaller than the resolution limit are indistinguishable from noise."
+}
