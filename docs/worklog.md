@@ -1225,3 +1225,64 @@ margin/ranking losses over beam siblings, Q-filtered imitation, or RL
 fine-tuning against the planner. (Both baselines reproduced on the ruler this
 run: reactive 0.660, vbeam 0.8642.) Artifacts: `runs/vdst-*` (data, models,
 summary.json, overnight.log); tooling + tests merged with this branch.
+
+## E6: recurrent PPO (LSTM memory) -- VERDICT: negative (memory costs -0.105 at the B0 recipe) (2026-07-03)
+
+`locma/envs/rppo.py` (branch feat/rppo-lstm): **MaskableRecurrentPPO**, the
+maskable+recurrent hybrid sb3-contrib doesn't ship (MaskablePPO has no memory,
+RecurrentPPO has no masking, and the 155-slot action space is mostly illegal
+per decision). Maskable distribution head on the recurrent policy, mask-
+carrying recurrent rollout buffers (padded timesteps get all-ones masks -- an
+all-illegal row would NaN the categorical; padding is loss-excluded anyway),
+masks fetched in collect_rollouts and replayed through evaluate_actions.
+`train`/`train-zoo --recurrent`, and `rppo:path` deploys it statefully --
+LSTM hidden state carried across a game's decisions, cleared per game,
+balanced-draft pairing like `ppo:`.
+
+**Arm:** B0 recipe with LSTM as the only lever -- token V0,
+TokenSetExtractor defaults (dropout 0.1), lr=1e-4, target_kl=0.025,
+ent_coef=0.02, n_steps=2048, 800k zoo, both-seat, n_envs=16, cuda, seeds
+{0,1,2}; LSTM at sb3 defaults (256 hidden, 1 layer, separate critic LSTM).
+One forced deviation: **batch 2048, not B0's 64** -- a 64-timestep padded
+minibatch holds 1-2 episode fragments, degenerating the LSTM pass into a
+serial per-timestep loop (119 fps, ~112 min/seed, CPU+GPU both starved);
+sequence-parallel minibatches are the standard recurrent geometry (825 fps,
+~16 min/seed). Not a confound worth worrying about: the HP sweep (R2/R3)
+already showed batch geometry does not separate at this budget.
+
+**Verdicts (paired vs depot:b0, standard ruler):**
+
+```
+pilot 10x10:  cand=0.523  B0=0.655  delta=-0.132  95% CI [-0.158, -0.106]
+full  40x25:  cand=0.555  B0=0.660  delta=-0.105  95% CI [-0.115, -0.094]
+VERDICT: ceiling-confirmed (B0 reproduced at 0.660, matching E4v2's run)
+```
+
+**Read:** the memory-as-free-lift hypothesis is dead at this recipe. The LSTM
+had every opportunity to accumulate genuinely hidden information (opponent's
+played-card history, draw-order evidence, mana patterns) and the arm landed
+a solid -0.105 BELOW the memoryless net at identical budget. The plateau
+holds against a strictly more expressive policy class, which sharpens the
+structural story: whatever separates 0.66 from vbeam's 0.863 is not
+missing episode context -- it is within-turn plan composition (E5), which
+recurrence over *decision points* cannot buy back. The likely tax:
+recurrent PPO's harder credit assignment + the LSTM trunk inserted between
+the trained-from-scratch extractor and both heads, at a budget tuned for
+the feedforward net.
+
+**Caveats (bounded):** one recipe, LSTM knobs untuned (hidden size, shared
+vs separate critic LSTM, n_steps-as-sequence-length), and warm-starting the
+extractor from B0 weights was not tried. Those could plausibly close the
+-0.105 gap; nothing here suggests they'd overshoot it into a lift.
+
+**Ops notes for future runs on this box:** (1) recurrent minibatches must be
+sequence-parallel (batch >= ~2k) or the padded-sequence loop starves
+everything; (2) parallel seed training caps at 2 concurrent runs -- every
+SubprocVecEnv worker imports the torch CUDA stack (~2.5 GB commit each,
+the worker fn lives inside the sb3 package), and 3x17 processes blew the
+142 GB Windows commit limit (WinError 1455). 2x17 fits; stage 1 ran 46 min
+wall for 3 seeds (29+29 parallel, 17 solo).
+
+**Artifacts:** `runs/rppo_s{0,1,2}.zip`, `runs/rppo-summary.json`,
+`runs/rppo-overnight.log`; tooling + tests (`tests/test_rppo.py`) on the
+branch. Reproduce: `uv run python scripts/rppo_driver.py` (idempotent).
