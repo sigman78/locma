@@ -219,6 +219,12 @@ def draft_bench_cmd(
     workers: int = typer.Option(
         1, help="process-pool workers for the pair grid (0 = all CPUs minus one)"
     ),
+    shared: bool = typer.Option(
+        False,
+        "--shared",
+        help="shared draft variant: a pick removes the card from the other seat's "
+        "offer, first pick alternates by round (offers are contested, not identical)",
+    ),
 ):
     """Rank draft (deck-building) policies in isolation.
 
@@ -226,8 +232,9 @@ def draft_bench_cmd(
     draft, so the win-rate edge is pure deck quality (the draft deals both seats
     identical offers on a fixed seed; a self-duel is exactly 0.500). A ``+rndK``
     suffix (e.g. ``balanced+rnd4``) makes K of that draft's 30 picks uniformly
-    random. Prints a ranking by average win rate vs the field and the pair-score
-    matrix. See docs/experiments.md.
+    random. ``--shared`` switches to the shared draft variant, where picks deplete
+    the offer and the duel measures drafting under competition. Prints a ranking by
+    average win rate vs the field and the pair-score matrix. See docs/experiments.md.
     """
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
@@ -245,12 +252,20 @@ def draft_bench_cmd(
         raise typer.BadParameter(str(e)) from e
     from locma.harness.parallel import resolve_workers  # noqa: PLC0415
 
-    s = round_robin(names, battle=battle, games=games, seed=seed, workers=resolve_workers(workers))
+    s = round_robin(
+        names,
+        battle=battle,
+        games=games,
+        seed=seed,
+        workers=resolve_workers(workers),
+        shared=shared,
+    )
 
     # Resolution limit: Wilson half-width of a single cell at this n.
     lo, hi = wilson_ci(games, 2 * games)
     half = (hi - lo) / 2
-    print(f"battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}")
+    mode = "  draft=shared" if shared else ""
+    print(f"battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}{mode}")
 
     rank_rows = [
         (n, f"{s.avg_win_rate[n]:.3f}") for n in sorted(names, key=lambda k: -s.avg_win_rate[k])
