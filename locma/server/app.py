@@ -173,6 +173,20 @@ def create_app(
         write_replay(replay_dir, rep)
         return rep["header"]
 
+    @app.get("/api/art-index")
+    def art_index() -> list[int]:
+        """Card ids with cached portraits — the client consults this once and
+        never requests missing art (no 404 spam when the cache is empty;
+        populate it with `locma fetch-art`)."""
+        if not os.path.isdir(asset_dir):
+            return []
+        ids = []
+        for fname in os.listdir(asset_dir):
+            stem, ext = os.path.splitext(fname)
+            if ext == ".png" and stem.isdigit():
+                ids.append(int(stem))
+        return sorted(ids)
+
     @app.get("/api/art/{card_id}")
     def get_art(card_id: int):
         path = os.path.join(asset_dir, f"{card_id:03d}.png")

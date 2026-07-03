@@ -97,3 +97,23 @@ def test_art_endpoint(tmp_path):
     assert c.get("/api/art/1").status_code == 200
     assert c.get("/api/art/1").headers["content-type"] == "image/png"
     assert c.get("/api/art/999").status_code == 404
+
+
+def test_art_index(tmp_path):
+    """Empty cache -> []; populated cache -> sorted ids (the client consults
+    this once instead of 404-ing per card)."""
+    assets = tmp_path / "assets"
+    c = TestClient(
+        create_app(
+            replay_dir=str(tmp_path / "replays"),
+            asset_dir=str(assets),
+            gamelog_dir=str(tmp_path / "logs"),
+        )
+    )
+    assert c.get("/api/art-index").json() == []
+
+    assets.mkdir()
+    for cid in (2, 129, 29):
+        (assets / f"{cid:03d}.png").write_bytes(b"png")
+    (assets / "manifest.json").write_text("{}")  # non-png entries are ignored
+    assert c.get("/api/art-index").json() == [2, 29, 129]

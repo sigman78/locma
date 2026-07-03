@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, hasArt } from '../../lib/cards'
   import { abilityList, auraSplit } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from '../ReplayViewer/Tooltip.svelte'
@@ -17,7 +17,8 @@
   export let dim = false
   export let fxToken = 0
 
-  let imgOk = true
+  let imgFailed = false
+  $: imgOk = !imgFailed && hasArt(card.card_id)
   $: name = cardName(card.card_id)
   $: meta = cardMeta(card.card_id)
   $: baseAbil = abilityList(meta?.abilities)
@@ -102,7 +103,7 @@
 
       {#if imgOk}
         <!-- M2: Lethal (L) glow applied via .lethal img CSS (drop-shadow traces alpha cutout) -->
-        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
+        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgFailed = true)} />
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}

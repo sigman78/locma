@@ -31,6 +31,7 @@ export const importReplay = (body: { path: string; row: number }) =>
   }).then(j<ReplayHeader>)
 
 export const artUrl = (cardId: number) => `/api/art/${cardId}`
+export const getArtIndex = () => fetch('/api/art-index').then(j<number[]>)
 
 // -- policy catalog ---------------------------------------------------------
 

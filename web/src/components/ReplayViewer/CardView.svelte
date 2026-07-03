@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CardState } from '../../lib/replay'
-  import { artUrl, cardName, card as cardMeta } from '../../lib/cards'
+  import { artUrl, cardName, card as cardMeta, hasArt } from '../../lib/cards'
   import { abilityList } from '../../lib/abilities'
   import { restartAnim } from '../../lib/motion'
   import Tooltip from './Tooltip.svelte'
@@ -21,7 +21,8 @@
   export let dmgDelay = false // delay the damage number so it lands after the slide
   export let drawn = false // just drawn this step → brief white outline glow that fades
 
-  let imgOk = true
+  let imgFailed = false
+  $: imgOk = !imgFailed && hasArt(card.card_id)
   $: name = cardName(card.card_id)
   $: meta = cardMeta(card.card_id)
   // face shows the live in-play state (incl. buffs); tooltip shows the printed card
@@ -70,7 +71,7 @@
       use:restartAnim={{ cls: animCls, token: fxToken }}
     >
       {#if imgOk}
-        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgOk = false)} />
+        <img src={artUrl(card.card_id)} alt={name} draggable="false" on:error={() => (imgFailed = true)} />
       {:else}
         <div class="placeholder"><span class="nm">{name}</span></div>
       {/if}
