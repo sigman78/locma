@@ -1,7 +1,7 @@
 <!-- web/src/components/Play/Play.svelte -->
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { createGame, submitAction, submitDraft } from '../../lib/api'
+  import { createGame, getGame, submitAction, submitDraft } from '../../lib/api'
   import { loadCards } from '../../lib/cards'
   import type { ActionDict, EventDict } from '../../lib/replay'
   import type {
@@ -125,8 +125,14 @@
     }
   }
 
+  // In-flight request lock: `playing` only turns on AFTER a response arrives,
+  // so without this a second click during a slow AI reply (vbeam thinking,
+  // first-move model load) double-submits and the server answers 409 WrongPhase.
+  let inFlight = false
+
   async function pick(p: number) {
-    if (!gameId || playing) return
+    if (!gameId || playing || inFlight) return
+    inFlight = true
     try {
       const r = await submitDraft(gameId, p)
       if (r.pending && r.pending.phase === 'battle') {
@@ -135,13 +141,16 @@
         await applyResponse(r, true)
       }
     } catch (e) {
-      error = String(e)
+      await recover(e)
+    } finally {
+      inFlight = false
     }
   }
 
   // Auto-draft every remaining round with random picks; stage at the end.
   async function autoDraft() {
-    if (!gameId || playing) return
+    if (!gameId || playing || inFlight) return
+    inFlight = true
     try {
       let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       while (r.pending && r.pending.phase === 'draft') {
@@ -149,8 +158,24 @@
       }
       staged = { cardIds: r.drafted ?? [], response: r }
     } catch (e) {
-      error = String(e)
+      await recover(e)
+    } finally {
+      inFlight = false
     }
+  }
+
+  // A 409 means the action raced a phase change (double-submit, stale turn):
+  // the game state is fine, so resync the snapshot instead of the error overlay.
+  async function recover(e: unknown) {
+    if (gameId && String(e).startsWith('Error: 409')) {
+      try {
+        snap = await getGame(gameId)
+        return
+      } catch {
+        /* fall through to the overlay */
+      }
+    }
+    error = String(e)
   }
 
   async function play() {
@@ -166,11 +191,14 @@
   }
 
   async function act(a: ActionDict) {
-    if (!gameId || playing) return
+    if (!gameId || playing || inFlight) return
+    inFlight = true
     try {
       await applyResponse(await submitAction(gameId, a), a.t === 'pass')
     } catch (e) {
-      error = String(e)
+      await recover(e)
+    } finally {
+      inFlight = false
     }
   }
 
@@ -217,7 +245,7 @@
         {currentAction}
         {fxToken}
         {liveStep}
-        playing={playing || !!snap?.result}
+        playing={playing || inFlight || !!snap?.result}
         on:act={(e) => act(e.detail)}
       />
       {#if showEnd && snap?.result}
