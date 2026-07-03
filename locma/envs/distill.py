@@ -85,6 +85,23 @@ def split_by_game(game_id, val_frac: float, seed: int) -> tuple[list[int], list[
     return train_idx, val_idx
 
 
+def _load_init_model(init_model: str, want_dict_obs: bool):
+    """Load a warm-start model and reject an obs-family mismatch loudly."""
+    import gymnasium  # noqa: PLC0415 — optional [ml] dep
+    from sb3_contrib import MaskablePPO  # noqa: PLC0415
+
+    from locma.depot import resolve_path  # noqa: PLC0415
+
+    model = MaskablePPO.load(resolve_path(init_model))
+    is_dict = isinstance(model.observation_space, gymnasium.spaces.Dict)
+    if is_dict != want_dict_obs:
+        want = "token (Dict)" if want_dict_obs else "flat (Box)"
+        raise ValueError(
+            f"init_model {init_model!r} obs space does not match practicum: need {want}"
+        )
+    return model
+
+
 def behavior_clone(
     data: str = "practicum.npz",
     out: str = "model.zip",
@@ -95,6 +112,7 @@ def behavior_clone(
     seed: int = 0,
     verbose: int = 1,
     obs_mode: str | None = None,
+    init_model: str | None = None,
 ) -> dict:
     """Masked-CE behavior cloning of a practicum into a MaskablePPO model.zip.
 
@@ -103,6 +121,10 @@ def behavior_clone(
     rather than a cryptic ``KeyError``.
     ``obs_mode="flat"`` uses MlpPolicy and a flat obs vector.
     ``obs_mode="token"`` uses MultiInputPolicy + TokenSetExtractor and a dict obs.
+    ``init_model`` warm-starts from a saved model.zip (or ``depot:`` ref) of the
+    matching obs mode instead of a fresh net — ALL parameters train (the critic
+    drifts with the shared extractor; use ``vbeam_distill.train_policy_head``
+    when the critic must stay intact).
     """
     arrays, manifest = load_practicum(data)
 
@@ -128,18 +150,21 @@ def behavior_clone(
     train_idx, val_idx = split_by_game(arrays["game_id"], val_frac, seed)
 
     if obs_mode == "token":
-        from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
+        if init_model is not None:
+            model = _load_init_model(init_model, want_dict_obs=True)
+        else:
+            from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
 
-        # Throwaway env to supply the Dict obs/action spaces + policy architecture.
-        env = DummyVecEnv([lambda: _make_battle_env("random", seed, obs_mode="token")])
-        model = MaskablePPO(
-            "MultiInputPolicy",
-            env,
-            policy_kwargs=dict(features_extractor_class=TokenSetExtractor),
-            seed=seed,
-            verbose=0,
-        )
-        env.close()
+            # Throwaway env to supply the Dict obs/action spaces + policy architecture.
+            env = DummyVecEnv([lambda: _make_battle_env("random", seed, obs_mode="token")])
+            model = MaskablePPO(
+                "MultiInputPolicy",
+                env,
+                policy_kwargs=dict(features_extractor_class=TokenSetExtractor),
+                seed=seed,
+                verbose=0,
+            )
+            env.close()
 
         device = model.device
         # Build per-key tensors mapping practicum storage names → obs-space keys.
@@ -198,10 +223,13 @@ def behavior_clone(
         # "flat" path — unchanged from the original implementation.
         obs = arrays["obs"].astype(np.float32)
 
-        # A throwaway env only supplies the obs/action spaces + policy architecture.
-        env = DummyVecEnv([lambda: _make_battle_env("random", seed)])
-        model = MaskablePPO("MlpPolicy", env, seed=seed, verbose=0)
-        env.close()
+        if init_model is not None:
+            model = _load_init_model(init_model, want_dict_obs=False)
+        else:
+            # A throwaway env only supplies the obs/action spaces + policy architecture.
+            env = DummyVecEnv([lambda: _make_battle_env("random", seed)])
+            model = MaskablePPO("MlpPolicy", env, seed=seed, verbose=0)
+            env.close()
 
         device = model.device
         obs_t = torch.as_tensor(obs, device=device)

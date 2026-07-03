@@ -1159,3 +1159,69 @@ Canonical refs from here on: reactive `depot:b0/b0_sX.zip`, planner
 via the table above. The FVI npz datasets were NOT promoted (regenerable in
 minutes from `depot:b0` + `locma/envs/vbeam_fvi.py` collectors); `runs/` is
 now officially disposable. Second machine: `git pull && locma depot pull b0`.
+
+## E4v2: distill the vbeam teacher + EXIT round -- VERDICT: null (plans do not compress into a reactive policy) (2026-07-03)
+
+`locma/envs/vbeam_distill.py` (branch feat/vbeam-distill): `train_policy_head`
+is `train_value_head`'s mirror image -- masked CE toward the planner's
+recorded actions on frozen precomputed features, training ONLY
+`mlp_extractor.policy_net` + `action_net` so the critic stays byte-identical
+(pinned by test) and the output drops into `vbeam:` as the expert-iteration
+arm. `behavior_clone` gained `init_model` warm-starts. vbeam is the first
+FAIR teacher here (mcts/dmcts cheat; every vbeam decision is a function of
+the public BattleView), so the PR #18 "info ceiling" excuse was gone going in.
+
+**Data:** ~99k decision states per seed from 4,000 vbeam(b0_sX) game-sides
+each (4 zoo opponents + vbeam self-play, 400 games/opp x 2 seats, seeds
+20000+, ~5.4 min/seed at 19 workers, 0 failed games).
+
+**Verdicts (full 40x25 ruler, paired vs b0 / vbeam:b0):**
+
+| arm | val agreement | avg-hard3 | delta | 95% CI |
+|---|---|---|---|---|
+| B0 argmax vs teacher | 0.444 | 0.660 | -- | reference |
+| PH (policy-head FT of B0) | 0.492 | 0.645 | -0.015 | [-0.024, -0.007] |
+| BC (scratch) | 0.502 | 0.562 | -0.098 | [-0.106, -0.091] |
+| FF (warm full FT, lr 1e-4) | 0.529 | 0.662 | +0.002 | [-0.006, +0.010] |
+| **vbeam:PH (EXIT)** | -- | 0.8641 | **-0.0001** | [-0.0008, +0.0006] |
+
+Round 2 (compounding) correctly skipped by the pre-registered trigger.
+
+**Mechanism (three findings):**
+
+1. **Agreement was never the binding metric.** The fair teacher lifted top-1
+   agreement 0.37 -> 0.50 exactly as predicted, and play did not follow. Two
+   structural reasons: (a) *label ambiguity* -- commuting action orders score
+   identically in the beam and tie-break by insertion order, so within an
+   equivalence class the recorded label is arbitrary and CE signal dilutes;
+   (b) *fragile lines* -- the planner's +0.206 concentrates in rare precisely
+   ordered sequences (found lethals, buff-then-attack chains). Executing
+   those reactively needs near-perfect step fidelity; at 0.5 top-1 the
+   student falls off the line mid-turn and reverts to B0-or-worse play.
+   Imitation transfers the *typical* decision; the planner's value lives in
+   the *exceptional* ones.
+2. **The EXIT channel is empty by construction.** `plan_turn` expands all
+   legal actions and ranks by critic alone; the policy head enters only via
+   the `would_pass` stop rule. Pass-with-alternatives examples are ~0.3% of
+   the data AND occur precisely where B0's argmax already IS Pass (that is
+   what makes a stop scoreable), so distillation had zero signal to move
+   stopping behavior. The full-eval CI [-0.0008, +0.0006] says the planner is
+   empirically invariant to a policy-head shift -- tightest null this project
+   has produced.
+3. **B0's plateau is stable under imitation pressure.** FF (warm start) lands
+   at +0.002 -- the CE objective had nothing to add to B0 at a lr that does
+   not damage it; PH's -0.015 shows head-only optimization toward ambiguous
+   labels slightly hurts; BC-from-scratch (0.562) beats the old cheater
+   distills (~0.54) a bit, in line with the cleaner signal.
+
+**Read (E4 closed):** the beam search is not compressible into this reactive
+net by behavioral cloning at practical scale -- with FVI (E5v2) this closes
+BOTH cheap distillation directions: the critic is already the fixed point of
+its own backup, and the policy cannot absorb the plan distribution from
+labels alone. `vbeam:depot:b0/b0_sX.zip` (0.863) stays the recipe of record;
+the +0.206 is play-time compute, full stop. A future transfer attempt needs
+objectives that carry *why* a line is better, not just *what* was played:
+margin/ranking losses over beam siblings, Q-filtered imitation, or RL
+fine-tuning against the planner. (Both baselines reproduced on the ruler this
+run: reactive 0.660, vbeam 0.8642.) Artifacts: `runs/vdst-*` (data, models,
+summary.json, overnight.log); tooling + tests merged with this branch.
