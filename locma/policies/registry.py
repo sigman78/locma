@@ -148,6 +148,20 @@ def _ppo(params, spec):
     )
 
 
+def _rppo(params, spec):
+    """Recurrent (LSTM) PPO battle net — spec ``rppo:model_path``.
+
+    Same balanced-draft pairing as ``ppo:`` so comparisons are apples-to-apples;
+    the battle half carries LSTM state across a game (reset per game).
+    """
+    from locma.policies.ppo import RecurrentPPOBattlePolicy  # noqa: PLC0415
+
+    model_path = resolve_path(params[0] if params else "model.zip")
+    return Composer(
+        RecurrentPPOBattlePolicy(model_path=model_path), BalancedDraftPolicy(), name=spec
+    )
+
+
 # The pool of baseline opponents a `mixed` training opponent draws from.
 _MIXED_POOL = ("random", "scripted", "greedy", "max-guard", "max-attack")
 
@@ -173,6 +187,7 @@ _FACTORIES = {
     "netdmcts": _netdmcts,
     "vbeam": _vbeam,
     "ppo": _ppo,
+    "rppo": _rppo,
     "mixed": _mixed,
 }
 
@@ -180,7 +195,7 @@ _FACTORIES = {
 # `ppo`, `netdmcts` and `vbeam` need a model artifact + the [ml] extra (use
 # `ppo:path`, `netdmcts:K,I,c,path` or `vbeam:path,width,max_actions`);
 # `mixed` is a non-stationary training opponent, not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts", "vbeam"}
+_HIDDEN = {"ppo", "rppo", "mixed", "netdmcts", "vbeam"}
 
 
 def policy_names() -> list[str]:
