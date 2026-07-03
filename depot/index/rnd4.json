@@ -1,0 +1,38 @@
+{
+  "name": "rnd4",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-03T01:15:45+00:00",
+      "git_commit": "99abee0",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish rnd4 runs/rnd4_s0.zip runs/rnd4_s1.zip runs/rnd4_s2.zip --kind model --note Draft-noise study arm C: B0 recipe + --draft-noise 4 (the ~free-deck-cost point), 800k zoo, PR #55. Paired ceiling-eval vs b0: 0.649 vs 0.657, delta -0.008 CI [-0.016, +0.001] -- VERDICT: null. Degrades ~half B0's slope under eval deck noise but from a lower clean baseline; B0 ties or beats at every noise level. --meta {\"avg_hard3\": 0.649, \"verdict\": \"null\", \"obs_mode\": \"token\", \"steps\": 800000, \"draft_noise\": 4}",
+      "parents": [],
+      "note": "Draft-noise study arm C: B0 recipe + --draft-noise 4 (the ~free-deck-cost point), 800k zoo, PR #55. Paired ceiling-eval vs b0: 0.649 vs 0.657, delta -0.008 CI [-0.016, +0.001] -- VERDICT: null. Degrades ~half B0's slope under eval deck noise but from a lower clean baseline; B0 ties or beats at every noise level.",
+      "meta": {
+        "avg_hard3": 0.649,
+        "verdict": "null",
+        "obs_mode": "token",
+        "steps": 800000,
+        "draft_noise": 4
+      },
+      "files": {
+        "rnd4_s0.zip": {
+          "sha256": "cd4c3b49811af1703021ed4c441ce0254e796cd88730ed3617c2e812dc2b0159",
+          "size": 5763924
+        },
+        "rnd4_s1.zip": {
+          "sha256": "a5a252afa3a9b2ad52bd29562723e3260d508bb7aa2e8d86f649df61a0a5c80e",
+          "size": 5763928
+        },
+        "rnd4_s2.zip": {
+          "sha256": "915583afdbda570d2aac97602920d11ffcc2c50765aaaf43f037d606fc1f9296",
+          "size": 5763924
+        }
+      },
+      "published": "gh:depot/rnd4-v1"
+    }
+  ]
+}

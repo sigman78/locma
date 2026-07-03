@@ -1,0 +1,37 @@
+{
+  "name": "cand1",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-03T01:15:42+00:00",
+      "git_commit": "99abee0",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish cand1 runs/cand1_s0.zip runs/cand1_s1.zip runs/cand1_s2.zip --kind model --note PPO ceiling study alternative recipe C1 (lr=3e-4, n_steps=1024, batch=128, ent_coef=0.0165, token V0), 800k x3 seeds, PR #54. Paired ceiling-eval vs b0: 0.617 vs 0.657, delta -0.040 CI [-0.048, -0.032] -- VERDICT: ceiling-confirmed. --meta {\"avg_hard3\": 0.617, \"verdict\": \"ceiling-confirmed\", \"obs_mode\": \"token\", \"steps\": 800000}",
+      "parents": [],
+      "note": "PPO ceiling study alternative recipe C1 (lr=3e-4, n_steps=1024, batch=128, ent_coef=0.0165, token V0), 800k x3 seeds, PR #54. Paired ceiling-eval vs b0: 0.617 vs 0.657, delta -0.040 CI [-0.048, -0.032] -- VERDICT: ceiling-confirmed.",
+      "meta": {
+        "avg_hard3": 0.617,
+        "verdict": "ceiling-confirmed",
+        "obs_mode": "token",
+        "steps": 800000
+      },
+      "files": {
+        "cand1_s0.zip": {
+          "sha256": "79b064a40d389e5b37b31de4678489bc04240c31bddc826debf366680413a7fa",
+          "size": 5763984
+        },
+        "cand1_s1.zip": {
+          "sha256": "d40229068dd8379ec489f98f05157149457594f73506ac7773659803f5600ab7",
+          "size": 5763988
+        },
+        "cand1_s2.zip": {
+          "sha256": "076a3a8cb55977bcd8195cd45d54c23ce5dc1638bcaed59920cb9d2752987084",
+          "size": 5763984
+        }
+      },
+      "published": "gh:depot/cand1-v1"
+    }
+  ]
+}
