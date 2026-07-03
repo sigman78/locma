@@ -173,10 +173,17 @@
   .placeholder { display: grid; place-items: center; height: 100%; padding: 4px;
     text-align: center; font-size: 13px; color: #ddd; }
 
-  /* stat mini-plates: small dark pill at bottom corners */
-  .atk-plate, .def-plate { position: absolute; bottom: 4px; z-index: 2;
-    background: rgba(0,0,0,0.7); border-radius: 5px; padding: 1px 6px;
-    font-weight: 700; font-size: 15px; pointer-events: none; }
+  /* stat mini-plates: small dark pill at bottom corners. The pill BACKGROUND
+     paints under the sprite and its auras (negative-z ::before escapes to the
+     isolated .minion context, below .sprite-stack), the number stays on top —
+     so no z-index here, it would trap the pseudo. */
+  .atk-plate, .def-plate { position: absolute; bottom: 4px;
+    border-radius: 5px; padding: 1px 6px;
+    font-weight: 700; font-size: 15px; pointer-events: none;
+    text-shadow: 0 1px 2px #000; }
+  .atk-plate::before, .def-plate::before { content: ''; position: absolute; inset: 0;
+    z-index: -1; background: rgba(24, 24, 32, 0.75); border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.07); }
   .atk-plate { left: 4px; color: #ffcc55; }
   .def-plate { right: 4px; color: #66ccff; }
   .buffed { color: #4fd97a; text-shadow: 0 0 6px rgba(79, 217, 122, 0.7); }
