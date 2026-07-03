@@ -3,10 +3,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
   import {
-    cancelJob, deletePreset, getExperimentKinds, listJobs, listPresets,
-    runExperiment, savePreset,
-    type ExperimentKind, type ExpJob, type Preset,
+    cancelJob, deletePreset, getExperimentKinds, getJobLog, getJobSeries, listJobs,
+    listPresets, runExperiment, savePreset,
+    type ExperimentKind, type ExpJob, type JobSeries, type Preset,
   } from '../../lib/api'
+  import JobCharts from './JobCharts.svelte'
   import ParamsForm from './ParamsForm.svelte'
   import ResultView from './ResultView.svelte'
 
@@ -26,6 +27,8 @@
   let loadedPresetId: string | null = null
 
   let expanded: Record<string, boolean> = {}
+  let seriesMap: Record<string, JobSeries> = {}
+  let logMap: Record<string, string | null> = {} // null = show panel, still loading
   let timer: ReturnType<typeof setInterval> | null = null
 
   $: currentKind = kinds.find((k) => k.kind === kind)
@@ -55,11 +58,44 @@
   const slug = (s: string) =>
     s.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'preset'
 
+  async function fetchSeries(id: string) {
+    try {
+      seriesMap[id] = await getJobSeries(id)
+    } catch {
+      /* series may not exist yet */
+    }
+  }
+
+  const ACTIVE = new Set(['queued', 'running'])
+
   async function refreshJobs() {
     try {
+      const prev = Object.fromEntries(jobs.map((j) => [j.job_id, j.state]))
       jobs = await listJobs()
+      for (const j of jobs) {
+        // refresh curves for expanded jobs while they run, and once more on finish
+        const wasActive = ACTIVE.has(prev[j.job_id] ?? '')
+        if (expanded[j.job_id] && (ACTIVE.has(j.state) || (wasActive && !ACTIVE.has(j.state)))) {
+          fetchSeries(j.job_id)
+        }
+      }
     } catch (e) {
       error = String(e)
+    }
+  }
+
+  function toggle(id: string) {
+    expanded[id] = !expanded[id]
+    if (expanded[id] && !seriesMap[id]) fetchSeries(id)
+  }
+
+  async function showLog(id: string) {
+    if (logMap[id] !== undefined) { delete logMap[id]; logMap = logMap; return } // toggle off
+    logMap[id] = null
+    try {
+      logMap[id] = (await getJobLog(id)).log || '(log is empty)'
+    } catch (e) {
+      logMap[id] = String(e)
     }
   }
 
@@ -187,7 +223,7 @@
   <h3>Runs</h3>
   {#each jobs as j (j.job_id)}
     <div class="job">
-      <button class="jobhead" on:click={() => (expanded[j.job_id] = !expanded[j.job_id])}>
+      <button class="jobhead" on:click={() => toggle(j.job_id)}>
         <span class="state" style="color: {stateColor[j.state] ?? '#888'}">{j.state}</span>
         <span class="jname">{j.name}</span>
         <span class="jkind">{j.kind}</span>
@@ -208,6 +244,13 @@
       {/if}
       {#if expanded[j.job_id]}
         <div class="detail">
+          {#if seriesMap[j.job_id]}
+            <JobCharts
+              kind={j.kind}
+              series={seriesMap[j.job_id].series}
+              live={seriesMap[j.job_id].live}
+            />
+          {/if}
           {#if j.result}
             <ResultView kind={j.kind} result={j.result} />
           {:else if j.error}
@@ -215,10 +258,18 @@
           {:else}
             <p class="dim">running…</p>
           {/if}
-          <details>
-            <summary>params</summary>
-            <pre>{JSON.stringify(j.params, null, 2)}</pre>
-          </details>
+          <div class="detailrow">
+            <details>
+              <summary>params</summary>
+              <pre>{JSON.stringify(j.params, null, 2)}</pre>
+            </details>
+            <button class="loglink" on:click={() => showLog(j.job_id)}>
+              {logMap[j.job_id] === undefined ? 'view log' : 'hide log'}
+            </button>
+          </div>
+          {#if logMap[j.job_id] !== undefined}
+            <pre class="log">{logMap[j.job_id] ?? 'loading…'}</pre>
+          {/if}
         </div>
       {/if}
     </div>
@@ -278,10 +329,17 @@
     color: #999; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
   .cancel:hover { color: #ff6b6b; border-color: #ff6b6b; }
   .detail { border: 1px solid #23232b; border-top: none; border-radius: 0 0 6px 6px;
-    padding: 12px 14px; background: #101016; }
-  details { margin-top: 10px; }
+    padding: 12px 14px; background: #101016; display: flex; flex-direction: column;
+    gap: 10px; }
+  .detailrow { display: flex; gap: 16px; align-items: flex-start; }
+  details { margin-top: 0; flex: 1; }
   summary { color: #666; font-size: 12px; cursor: pointer; }
   pre { font-size: 12px; color: #999; }
+  .loglink { background: none; border: 1px solid #333; color: #888; border-radius: 4px;
+    padding: 2px 10px; cursor: pointer; font-size: 11px; }
+  .loglink:hover { color: #ddd; }
+  .log { background: #0c0c10; border: 1px solid #1c1c24; border-radius: 6px;
+    padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
   .dim { color: #777; font-size: 13px; }
   .error { color: #ff6b6b; font-size: 13px; }
   .error button { background: none; border: 1px solid #444; color: #999; border-radius: 4px;

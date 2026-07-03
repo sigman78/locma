@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 from locma.server.app import create_app
@@ -36,7 +38,7 @@ def test_kinds_schema(tmp_path):
     r = _client(tmp_path).get("/api/experiments/kinds")
     assert r.status_code == 200
     kinds = {k["kind"]: k for k in r.json()}
-    assert set(kinds) == {"match", "noise-floor", "league", "ceiling"}
+    assert set(kinds) == {"match", "noise-floor", "league", "ceiling", "train-zoo"}
     for k in kinds.values():
         assert k["label"] and k["schema"]
         for f in k["schema"]:
@@ -190,6 +192,164 @@ def test_presets_crud(tmp_path):
     assert c.delete("/api/experiments/presets/quick-match").status_code == 200
     assert c.get("/api/experiments/presets").json() == []
     assert c.delete("/api/experiments/presets/quick-match").status_code == 404
+
+
+def test_match_series_stream(tmp_path):
+    """Per-cell streaming: running win rate + CI band, one point per chunk."""
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={
+            "kind": "match",
+            "params": {"policy_a": "greedy", "policy_b": "random", "games": 25, "seed": 0},
+        },
+    )
+    job = _wait(c, r.json()["job_id"])
+    assert job["state"] == "done", job.get("error")
+    assert "series" not in job  # jobs endpoints stay slim
+
+    s = c.get(f"/api/experiments/jobs/{job['job_id']}/series").json()["series"]
+    assert set(s) == {"win_rate", "ci_lo", "ci_hi"}
+    assert len(s["win_rate"]) == 3  # 25 pairs = 3 chunks
+    last_x, last_y = s["win_rate"][-1]
+    assert last_x == 50  # 25 pairs mirrored
+    assert abs(last_y - job["result"]["win_rate"]) < 1e-9
+    for (_, lo), (_, wr), (_, hi) in zip(s["ci_lo"], s["win_rate"], s["ci_hi"], strict=True):
+        assert lo <= wr <= hi
+
+
+def test_ceiling_series_stream(tmp_path):
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={
+            "kind": "ceiling",
+            "params": {
+                "candidates": ["greedy"],
+                "baselines": ["random"],
+                "seeds": 3,
+                "games_per_seed": 2,
+                "opponents": ["scripted"],
+            },
+        },
+    )
+    job = _wait(c, r.json()["job_id"])
+    assert job["state"] == "done", job.get("error")
+    s = c.get(f"/api/experiments/jobs/{job['job_id']}/series").json()["series"]
+    assert len(s["delta"]) == 3  # one paired delta per seed
+    assert len(s["mean_delta"]) == 3
+    # the final running mean equals the reduce's mean delta
+    assert abs(s["mean_delta"][-1][1] - job["result"]["mean_delta"]) < 1e-9
+
+
+def test_league_live_matrix(tmp_path):
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={
+            "kind": "league",
+            "params": {"policies": ["random", "greedy", "scripted"], "games": 2, "seed": 0},
+        },
+    )
+    job = _wait(c, r.json()["job_id"])
+    assert job["state"] == "done", job.get("error")
+    live = c.get(f"/api/experiments/jobs/{job['job_id']}/series").json()["live"]
+    assert live["policies"] == ["random", "greedy", "scripted"]
+    assert live["matrix"] == job["result"]["matrix"]  # fully filled at the end
+
+
+def test_series_survive_restart(tmp_path):
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={"kind": "match", "params": {"policy_a": "random", "policy_b": "random", "games": 4}},
+    )
+    job = _wait(c, r.json()["job_id"])
+
+    c2 = _client(tmp_path)  # fresh app, same results_dir: history only
+    listed = c2.get("/api/experiments/jobs").json()
+    doc = next(j for j in listed if j["job_id"] == job["job_id"])
+    assert "series" not in doc  # stripped from the list
+    s = c2.get(f"/api/experiments/jobs/{job['job_id']}/series").json()["series"]
+    assert s["win_rate"], "series must be readable from the persisted job"
+
+
+def test_log_endpoint_and_error_traceback(tmp_path):
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={"kind": "match", "params": {"policy_a": "nope", "policy_b": "random", "games": 2}},
+    )
+    job = _wait(c, r.json()["job_id"])
+    assert job["state"] == "error"
+    log = c.get(f"/api/experiments/jobs/{job['job_id']}/log").json()["log"]
+    assert "Traceback" in log and "nope" in log
+    assert c.get("/api/experiments/jobs/nope/log").status_code == 404
+
+
+def test_runner_tail_follows_metrics_file(tmp_path):
+    """The tail channel: a cell streams JSONL; numeric fields become series and
+    the x field drives progress (the training-job mechanism, sans SB3)."""
+    from locma.server.jobs import JobRunner, TailConfig  # noqa: PLC0415
+
+    metrics = tmp_path / "metrics.jsonl"
+    runner = JobRunner(results_dir=str(tmp_path / "results"), workers=1)
+    job = runner.submit(
+        kind="t",
+        name="t",
+        params={},
+        cells=[(_write_metrics_cell, (str(metrics),))],
+        reduce_fn=lambda p, r: {"ok": True},
+        tail=TailConfig(path=str(metrics), x="timesteps", total=300),
+    )
+    deadline = time.time() + 30
+    while job.state in ("queued", "running") and time.time() < deadline:
+        time.sleep(0.05)
+    assert job.state == "done"
+    assert job.progress_total == 300
+    assert job.progress_done == 300
+    assert job.series["ep_rew_mean"] == [[100.0, 0.1], [200.0, 0.5], [300.0, 0.9]]
+    assert "note" not in job.series  # non-numeric fields are ignored
+
+
+def _write_metrics_cell(path: str) -> dict:
+    import json as _json  # noqa: PLC0415
+    import time as _time  # noqa: PLC0415
+
+    for ts, rew in ((100, 0.1), (200, 0.5), (300, 0.9)):
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(_json.dumps({"timesteps": ts, "ep_rew_mean": rew, "note": "x"}) + "\n")
+        _time.sleep(0.05)
+    return {}
+
+
+@pytest.mark.slow
+def test_train_zoo_job_slow(tmp_path):
+    """End-to-end training job: metrics stream -> series + progress; model saved."""
+    pytest.importorskip("sb3_contrib")
+    c = _client(tmp_path)
+    r = c.post(
+        "/api/experiments/run",
+        json={
+            "kind": "train-zoo",
+            "params": {
+                "opponents": ["random"],
+                "steps_per_opponent": 300,
+                "obs_mode": "flat",
+                "n_steps": 64,
+                "seed": 0,
+            },
+        },
+    )
+    assert r.status_code == 200, r.text
+    job = _wait(c, r.json()["job_id"], timeout=300)
+    assert job["state"] == "done", job.get("error")
+    assert job["result"]["cancelled"] is False
+    assert os.path.isfile(job["result"]["out"])
+    assert job["progress_total"] == 300
+    assert job["progress_done"] > 0
+    s = c.get(f"/api/experiments/jobs/{job['job_id']}/series").json()["series"]
+    assert s.get("ep_rew_mean"), "training must stream reward points"
 
 
 def test_policy_catalog(tmp_path, monkeypatch):

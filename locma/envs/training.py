@@ -73,6 +73,7 @@ def _build_env(
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
+        VecMonitor,
     )
 
     # Stride per-env seeds: each BattleEnv draws episode seeds base+ep, so a
@@ -87,7 +88,9 @@ def _build_env(
         )
         for i in range(n_envs)
     ]
-    return DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns)
+    # VecMonitor fills ep_info_buffer (ep_rew_mean for logs and the web panel's
+    # live reward curve); it does not touch rewards, obs, or RNG.
+    return VecMonitor(DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns))
 
 
 def _make_model(

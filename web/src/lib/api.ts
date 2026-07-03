@@ -109,6 +109,16 @@ export const listJobs = () => fetch('/api/experiments/jobs').then(j<ExpJob[]>)
 export const cancelJob = (id: string) =>
   post(`/api/experiments/jobs/${id}/cancel`).then(j<{ cancelled: string }>)
 
+export type SeriesMap = Record<string, [number, number][]>
+export interface JobSeries {
+  series: SeriesMap
+  live: Record<string, unknown>
+}
+export const getJobSeries = (id: string) =>
+  fetch(`/api/experiments/jobs/${id}/series`).then(j<JobSeries>)
+export const getJobLog = (id: string) =>
+  fetch(`/api/experiments/jobs/${id}/log`).then(j<{ log: string }>)
+
 // -- depot --------------------------------------------------------------------
 
 export interface DepotVersion {

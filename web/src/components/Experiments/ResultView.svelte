@@ -1,11 +1,37 @@
 <!-- Per-kind experiment result rendering; unknown kinds fall back to JSON. -->
 <script lang="ts">
+  import { depotPublish } from '../../lib/api'
+  import Heatmap from '../shared/Heatmap.svelte'
+
   export let kind: string
   export let result: Record<string, any>
 
   const pct = (v: number) => (v ?? 0).toFixed(3)
 
   $: matrixNames = (result?.policies ?? []) as string[]
+
+  // publish-to-depot for finished training jobs
+  let pubName = ''
+  let pubBusy = false
+  let pubMsg: string | null = null
+
+  async function publishModel() {
+    pubBusy = true
+    pubMsg = null
+    try {
+      const r = await depotPublish({
+        name: pubName.trim(),
+        files: [String(result.out)],
+        kind: 'model',
+        note: `trained in the web panel (${result.total_timesteps} steps vs ${(result.opponents ?? []).join(', ')})`,
+      })
+      pubMsg = `published depot:${r.record.name} v${r.version}`
+    } catch (e) {
+      pubMsg = String(e)
+    } finally {
+      pubBusy = false
+    }
+  }
 </script>
 
 {#if kind === 'match' || kind === 'noise-floor'}
@@ -39,21 +65,7 @@
       {/each}
     </tbody>
   </table>
-  <table class="matrix">
-    <thead>
-      <tr><th></th>{#each matrixNames as n}<th class="mono">{n}</th>{/each}</tr>
-    </thead>
-    <tbody>
-      {#each matrixNames as row}
-        <tr>
-          <td class="mono">{row}</td>
-          {#each matrixNames as col}
-            <td>{row === col ? '—' : pct(result.matrix[row][col])}</td>
-          {/each}
-        </tr>
-      {/each}
-    </tbody>
-  </table>
+  <Heatmap names={matrixNames} matrix={result.matrix} />
 {:else if kind === 'ceiling'}
   <div class="card">
     <div class="big">
@@ -70,6 +82,23 @@
       (opponents: {result.opponents.join(', ')})
     </div>
   </div>
+{:else if kind === 'train-zoo'}
+  <div class="card">
+    <div class="big">
+      <strong>{result.cancelled ? 'stopped early — model saved' : 'training complete'}</strong>
+    </div>
+    <div class="dim mono">{result.out}</div>
+    <div class="dim">
+      {result.total_timesteps} steps planned vs {(result.opponents ?? []).join(', ')}
+    </div>
+    <div class="pubrow">
+      <input bind:value={pubName} placeholder="depot artifact name (e.g. web-run-1)" />
+      <button on:click={publishModel} disabled={pubBusy || !pubName.trim()}>
+        publish to depot
+      </button>
+      {#if pubMsg}<span class="dim">{pubMsg}</span>{/if}
+    </div>
+  </div>
 {:else}
   <pre>{JSON.stringify(result, null, 2)}</pre>
 {/if}
@@ -84,6 +113,11 @@
   table { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
   th, td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 1px solid #222; }
   th { color: #777; font-weight: 500; }
-  .matrix td, .matrix th { padding-right: 14px; }
   pre { font-size: 12px; color: #aaa; overflow-x: auto; }
+  .pubrow { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .pubrow input { background: #23232b; color: #ddd; border: 1px solid #3a3f55;
+    border-radius: 4px; padding: 5px 10px; font-size: 12px; width: 240px; }
+  .pubrow button { background: #234a2c; border: 1px solid #3fbf66; color: #d7ffd7;
+    border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
+  .pubrow button:disabled { opacity: 0.5; cursor: default; }
 </style>
