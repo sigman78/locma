@@ -96,7 +96,9 @@ def _load_init_model(init_model: str, want_dict_obs: bool):
     is_dict = isinstance(model.observation_space, gymnasium.spaces.Dict)
     if is_dict != want_dict_obs:
         want = "token (Dict)" if want_dict_obs else "flat (Box)"
-        raise ValueError(f"init_model {init_model!r} obs space does not match practicum: need {want}")
+        raise ValueError(
+            f"init_model {init_model!r} obs space does not match practicum: need {want}"
+        )
     return model
 
 

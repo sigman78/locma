@@ -53,7 +53,7 @@ def b0(s: int) -> str:
 
 def collect(teacher_model: str, out: str, seed: int) -> dict:
     """Zoo + self-play collection for one teacher model."""
-    from locma.envs.vbeam_fvi import collect_value_data
+    from locma.envs.vbeam_fvi import collect_value_data  # noqa: PLC0415 — lazy heavy import
 
     t0 = time.time()
     spec = f"vbeam:{teacher_model}"
@@ -73,7 +73,10 @@ def collect(teacher_model: str, out: str, seed: int) -> dict:
 
 
 def verdict(tag: str, candidates: list[str], baselines: list[str], seeds: int, games: int) -> dict:
-    from locma.harness.ceiling_eval import _disjoint_eval_seeds, run_verdict
+    from locma.harness.ceiling_eval import (  # noqa: PLC0415 — lazy heavy import
+        _disjoint_eval_seeds,
+        run_verdict,
+    )
 
     t0 = time.time()
     out = run_verdict(
@@ -92,7 +95,8 @@ def verdict(tag: str, candidates: list[str], baselines: list[str], seeds: int, g
 def main() -> None:
     os.makedirs("runs", exist_ok=True)
     if os.path.exists(SUMMARY_PATH):
-        summary.update(json.load(open(SUMMARY_PATH, encoding="utf-8")))
+        with open(SUMMARY_PATH, encoding="utf-8") as f:
+            summary.update(json.load(f))
     log("=== E4v2 overnight driver start ===")
 
     # ---- Stage 1: collection --------------------------------------------
@@ -105,8 +109,8 @@ def main() -> None:
         record(f"collect_s{s}", collect(b0(s), out, seed=20000 + 500 * s))
 
     # ---- Stage 2: training ----------------------------------------------
-    from locma.envs.distill import behavior_clone
-    from locma.envs.vbeam_distill import train_policy_head
+    from locma.envs.distill import behavior_clone  # noqa: PLC0415 — lazy heavy import
+    from locma.envs.vbeam_distill import train_policy_head  # noqa: PLC0415
 
     for s in SEEDS:
         data = f"runs/vdst-data-s{s}.npz"
@@ -115,23 +119,37 @@ def main() -> None:
         if not (os.path.exists(ph) and f"train_ph_s{s}" in summary):
             log(f"stage2 s{s}: PH policy-head fine-tune")
             m = train_policy_head(b0(s), data, ph, epochs=10, verbose=1)
-            record(f"train_ph_s{s}", {k: round(v, 4) if isinstance(v, float) else v
-                                      for k, v in m.items()})
+            record(
+                f"train_ph_s{s}",
+                {k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
+            )
 
         bc = f"runs/vdst-bc_s{s}.zip"
         if not (os.path.exists(bc) and f"train_bc_s{s}" in summary):
             log(f"stage2 s{s}: BC from scratch")
             m = behavior_clone(data=data, out=bc, epochs=10, batch=256, seed=s, verbose=0)
-            record(f"train_bc_s{s}", {k: round(v, 4) if isinstance(v, float) else v
-                                      for k, v in m.items()})
+            record(
+                f"train_bc_s{s}",
+                {k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
+            )
 
         ff = f"runs/vdst-ff_s{s}.zip"
         if not (os.path.exists(ff) and f"train_ff_s{s}" in summary):
             log(f"stage2 s{s}: FF warm-start full fine-tune (lr 1e-4)")
-            m = behavior_clone(data=data, out=ff, epochs=10, batch=256, lr=1e-4,
-                               seed=s, verbose=0, init_model=b0(s))
-            record(f"train_ff_s{s}", {k: round(v, 4) if isinstance(v, float) else v
-                                      for k, v in m.items()})
+            m = behavior_clone(
+                data=data,
+                out=ff,
+                epochs=10,
+                batch=256,
+                lr=1e-4,
+                seed=s,
+                verbose=0,
+                init_model=b0(s),
+            )
+            record(
+                f"train_ff_s{s}",
+                {k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
+            )
 
     # ---- Stage 3: pilots (10x10) ----------------------------------------
     b0s = [b0(s) for s in SEEDS]
@@ -176,13 +194,16 @@ def main() -> None:
             out = f"runs/vdst2-data-s{s}.npz"
             if not (os.path.exists(out) and f"collect2_s{s}" in summary):
                 log(f"stage5 s{s}: round-2 collection from vbeam:runs/vdst-ph_s{s}.zip")
-                record(f"collect2_s{s}",
-                       collect(f"runs/vdst-ph_s{s}.zip", out, seed=30000 + 500 * s))
+                record(
+                    f"collect2_s{s}", collect(f"runs/vdst-ph_s{s}.zip", out, seed=30000 + 500 * s)
+                )
             ph2 = f"runs/vdst-ph2_s{s}.zip"
             if not (os.path.exists(ph2) and f"train_ph2_s{s}" in summary):
                 m = train_policy_head(f"runs/vdst-ph_s{s}.zip", out, ph2, epochs=10, verbose=1)
-                record(f"train_ph2_s{s}", {k: round(v, 4) if isinstance(v, float) else v
-                                           for k, v in m.items()})
+                record(
+                    f"train_ph2_s{s}",
+                    {k: round(v, 4) if isinstance(v, float) else v for k, v in m.items()},
+                )
 
         vb2 = [f"vbeam:runs/vdst-ph2_s{s}.zip" for s in SEEDS]
         if "pilot_vbeam_ph2" not in summary:
