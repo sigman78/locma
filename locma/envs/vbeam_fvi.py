@@ -129,8 +129,145 @@ def collect_value_data(
 
 
 def _value_targets(data: dict) -> np.ndarray:
-    """Monte-Carlo value labels: +1 where the recorded seat won, else -1."""
+    """Value labels for training.
+
+    Prefers an explicit ``target`` column (AZ-style backed-up scores from
+    ``collect_backup_data``); otherwise falls back to Monte-Carlo game labels
+    (+1 where the recorded seat won, else -1) from a practicum dataset.
+    """
+    keys = getattr(data, "files", data)
+    if "target" in keys:
+        return np.asarray(data["target"], dtype=np.float32)
     return np.where(data["winner"] == data["seat"], 1.0, -1.0).astype(np.float32)
+
+
+def _collect_backup_shard(
+    model_path: str,
+    opponents,
+    games: int,
+    out: str,
+    seed: int,
+    width: int,
+    max_actions: int,
+) -> int:
+    """Top-level picklable unit of work: one backed-up-target shard (E5 v2b).
+
+    Plays vbeam(model) vs each opponent (both seats), harvesting plan_turn's
+    backed-up targets. Keeps the states whose ranking decides play: the root,
+    the depth-1 siblings (the action-choice comparison), and every
+    stop-eligible state (the final plan argmax). Returns the example count.
+    """
+    from locma.core.engine import run_game  # noqa: PLC0415
+    from locma.envs.encode import encode_battle_tokens  # noqa: PLC0415
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+    from locma.policies.vbeam import VBeamBattlePolicy  # noqa: PLC0415
+
+    sink: list = []
+    vb = VBeamBattlePolicy(
+        model_path=model_path, width=width, max_actions=max_actions, collect=sink
+    )
+    me = Composer(vb, BalancedDraftPolicy(), name="vbeam-harvest")
+
+    kept_views: list = []
+    kept_targets: list = []
+    for opp_spec in opponents:
+        opp = make_policy(opp_spec)
+        for g in range(games):
+            for my_seat in (0, 1):
+                sink.clear()
+                p0, p1 = (me, opp) if my_seat == 0 else (opp, me)
+                run_game(p0, p1, seed + g)
+                for view, target, depth, stop_ok in sink:
+                    if depth <= 1 or stop_ok:
+                        kept_views.append(view)
+                        kept_targets.append(target)
+
+    n = len(kept_targets)
+    obs = [encode_battle_tokens(v) for v in kept_views]
+    np.savez_compressed(
+        out,
+        obs_tokens=np.asarray([o["tokens"] for o in obs], dtype=np.float32),
+        obs_card_ids=np.asarray([o["card_ids"] for o in obs], dtype=np.float32),
+        obs_token_mask=np.asarray([o["token_mask"] for o in obs], dtype=np.float32),
+        obs_scalars=np.asarray([o["scalars"] for o in obs], dtype=np.float32),
+        target=np.asarray(kept_targets, dtype=np.float32),
+    )
+    return n
+
+
+def collect_backup_data(
+    teacher_model: str,
+    out: str,
+    opponents=DEFAULT_OPPONENTS,
+    games: int = 100,
+    seed: int = 0,
+    workers: int = 1,
+    width: int = 8,
+    max_actions: int = 20,
+) -> dict:
+    """Record AZ-style backed-up value targets from vbeam's own searches.
+
+    ``teacher_model`` is a token model .zip (the planner runs on it). Shards
+    the per-opponent game count over a process pool like ``collect_value_data``
+    and merges into ``out`` (.npz with obs arrays + a ``target`` column that
+    ``train_value_head`` picks up automatically). Returns a small manifest.
+    """
+    opponents = list(opponents)
+    workers = max(1, min(workers, games))
+
+    base, extra = divmod(games, workers)
+    counts = [base + (1 if w < extra else 0) for w in range(workers)]
+    starts = [sum(counts[:w]) for w in range(workers)]
+    shard_paths = [f"{out}.shard{w}.npz" for w in range(workers)]
+
+    if workers == 1:
+        _collect_backup_shard(
+            teacher_model, opponents, games, shard_paths[0], seed, width, max_actions
+        )
+    else:
+        from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
+
+        from locma.harness.parallel import init_eval_worker  # noqa: PLC0415
+
+        with ProcessPoolExecutor(max_workers=workers, initializer=init_eval_worker) as ex:
+            list(
+                ex.map(
+                    _collect_backup_shard,
+                    [teacher_model] * workers,
+                    [opponents] * workers,
+                    counts,
+                    shard_paths,
+                    [seed + s for s in starts],
+                    [width] * workers,
+                    [max_actions] * workers,
+                )
+            )
+
+    merged: dict[str, list] = {k: [] for k in (*_TOKEN_KEYS, "target")}
+    for path in shard_paths:
+        with np.load(path) as d:
+            for k, chunks in merged.items():
+                chunks.append(d[k])
+        os.remove(path)
+    arrays = {k: np.concatenate(v) for k, v in merged.items()}
+    np.savez_compressed(out, **arrays)
+
+    manifest = {
+        "kind": "vbeam-backup-targets",
+        "teacher_model": teacher_model,
+        "opponents": opponents,
+        "games": games,
+        "seed": seed,
+        "width": width,
+        "max_actions": max_actions,
+        "n_examples": int(len(arrays["target"])),
+        "shards": workers,
+    }
+    with open(_manifest_path(out), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
 
 
 def train_value_head(
@@ -165,10 +302,10 @@ def train_value_head(
     device = policy.device
 
     d = np.load(data)
-    n = int(len(d["seat"]))
+    y_np = _value_targets(d)
+    n = int(len(y_np))
     if n == 0:
         raise ValueError(f"no examples in {data}")
-    y_np = _value_targets(d)
 
     # Precompute frozen-extractor features once, in chunks.
     feats_chunks = []

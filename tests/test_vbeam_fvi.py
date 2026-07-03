@@ -37,6 +37,15 @@ def test_value_targets_sign():
     assert _value_targets(data).tolist() == [1.0, -1.0, 1.0, -1.0]
 
 
+def test_value_targets_prefers_explicit_target_column():
+    data = {
+        "winner": np.array([0, 1]),
+        "seat": np.array([0, 0]),
+        "target": np.array([0.25, -0.5], dtype=np.float32),
+    }
+    assert _value_targets(data).tolist() == [0.25, -0.5]
+
+
 # ---------------------------------------------------------------------------
 # train_value_head — [ml]-gated
 # ---------------------------------------------------------------------------
@@ -88,6 +97,38 @@ def test_train_value_head_freezes_policy_path(tmp_path):
 
     assert metrics["n_examples"] > 0
     assert np.isfinite(metrics["val_mse_before"]) and np.isfinite(metrics["val_mse_after"])
+
+
+def test_collect_backup_data_end_to_end(tmp_path):
+    """Backed-up-target collection writes a target column that train_value_head
+    consumes; the pi-frozen invariant holds on that path too."""
+    pytest.importorskip("sb3_contrib")
+    import torch  # noqa: PLC0415
+    from sb3_contrib import MaskablePPO  # noqa: PLC0415
+
+    from locma.envs.vbeam_fvi import collect_backup_data, train_value_head  # noqa: PLC0415
+
+    base = _make_token_model(tmp_path)
+    data = str(tmp_path / "backup.npz")
+    m = collect_backup_data(
+        base, data, opponents=("random",), games=2, seed=0, workers=1, width=4, max_actions=10
+    )
+    assert m["n_examples"] > 0
+    with np.load(data) as d:
+        assert "target" in d.files
+        assert d["target"].min() >= -1.0 and d["target"].max() <= 1.0
+        assert len(d["target"]) == len(d["obs_tokens"]) == m["n_examples"]
+
+    out = str(tmp_path / "fvi-az.zip")
+    metrics = train_value_head(base, data, out, epochs=2, batch_size=64, seed=0)
+    assert np.isfinite(metrics["val_mse_after"])
+
+    ref = MaskablePPO.load(base).policy.state_dict()
+    new = MaskablePPO.load(out).policy.state_dict()
+    for k in ref:
+        if "mlp_extractor.value_net" in k or k.startswith("value_net"):
+            continue
+        assert torch.equal(ref[k], new[k]), f"non-critic parameter changed: {k}"
 
 
 def test_trained_model_is_vbeam_drop_in(tmp_path):

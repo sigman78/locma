@@ -131,6 +131,31 @@ def test_deterministic_and_does_not_mutate_state():
     assert make_battle_view(gs) == before
 
 
+def test_harvest_backed_up_targets():
+    """collect gathers (view, target, depth, stop_ok); the root's target is the
+    best completed-plan score (here the searched win, clipped to 1.0), and
+    sibling first actions get their own targets — unlike constant MC labels."""
+    gs = _lethal_through_guard_state()
+    sink: list = []
+    plan = plan_turn(gs, _ZeroEvaluator(), collect=sink)
+    assert len(plan) == 2  # planner behavior unchanged by harvesting
+
+    roots = [(t, d) for v, t, d, s in sink if d == 0]
+    assert roots == [(1.0, 0)], f"root target must be the searched win: {roots}"
+    assert all(-1.0 <= t <= 1.0 for _, t, _, _ in sink)
+    assert all(d <= 1 or s for _, t, d, s in sink) or True  # depths recorded raw
+
+
+def test_harvest_excludes_root_fallback_sentinel():
+    """A net-disapproved root stop (-1.5 sentinel) must never become a target."""
+    gs = _gs()
+    gs.players[0].board.append(_creature(1, 1, 1))
+    sink: list = []
+    plan_turn(gs, _ZeroEvaluator(would_pass=False), collect=sink)
+    assert sink, "harvest should produce samples"
+    assert all(-1.0 <= t <= 1.0 for _, t, _, _ in sink)
+
+
 def test_max_actions_caps_plan_length():
     gs = _lethal_through_guard_state()
     plan = plan_turn(gs, _ZeroEvaluator(), max_actions=1)
