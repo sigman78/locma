@@ -1,7 +1,7 @@
 # E4v2: distill the vbeam teacher back into the reactive net (+ expert iteration)
 
 **Date:** 2026-07-03
-**Status:** overnight experiment, running
+**Status:** complete — VERDICT: null on every arm (see Results and the worklog)
 **Branch:** `feat/vbeam-distill`
 
 ## Motivation
@@ -83,4 +83,27 @@ re-run both evals — the compounding test that AZ-lite failed.
 
 ## Results
 
-(filled in as stages complete — see worklog for the final verdict tables)
+Overnight run 2026-07-03, 03:56–06:09 (2h13m, 19 workers). ~99k examples/seed,
+0 failed games. Full verdicts (40x25 ruler, paired vs B0 / vbeam:B0):
+
+| arm | val agreement | avg-hard3 | delta | 95% CI | verdict |
+|-----|---------------|-----------|-------|--------|---------|
+| (B0 argmax vs teacher) | 0.444 | 0.660 | — | — | reference |
+| PH reactive | 0.492 | 0.645 | -0.015 | [-0.024, -0.007] | ceiling-confirmed |
+| BC reactive | 0.502 | 0.562 | -0.098 | [-0.106, -0.091] | ceiling-confirmed |
+| FF reactive | 0.529 | 0.662 | +0.002 | [-0.006, +0.010] | ceiling-confirmed |
+| vbeam:PH (EXIT) | — | 0.8641 | -0.0001 | [-0.0008, +0.0006] | ceiling-confirmed |
+
+Round 2 skipped by the pre-registered trigger (no EXIT or reactive signal).
+
+**Prediction check:** agreement-before beat the 0.37 cheater plateau as
+predicted (0.444), but the reactive-lift prediction was **falsified** — the
+fair teacher raised agreement, not play. The EXIT null was predicted, and
+landed with remarkable precision; a key part of the mechanism is that
+Pass-with-alternatives examples are only ~0.3% of the data and occur exactly
+where B0 already passes (the stop rule construction), so the `would_pass`
+channel carries zero trainable signal by design.
+
+Full mechanism reading in `docs/worklog.md` (E4v2 entry). Artifacts:
+`runs/vdst-data-s{0,1,2}.npz`, `runs/vdst-{ph,bc,ff}_s{0,1,2}.zip`,
+`runs/vdst-summary.json`, `runs/vdst-overnight.log`.
