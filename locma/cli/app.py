@@ -132,10 +132,18 @@ def tournament(
     seed: int = 0,
     reference: str = "random",
     matrix: bool = typer.Option(False, help="print the pair-score matrix"),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="play all matches under the shared draft variant (picks deplete the "
+        "offer; first pick alternates by round)",
+    ),
 ):
     """Round-robin tournament with openskill (primary) and Elo ratings."""
     pols = [make_policy(n) for n in names]
-    res = run_tournament(pols, games=games, seed=seed, reference=reference)
+    res = run_tournament(
+        pols, games=games, seed=seed, reference=reference, shared_draft=shared_draft
+    )
 
     # openskill from the same win matrix (reconstruct per-game results from win rates)
     pairs: list[tuple[str, str, float]] = []
@@ -383,6 +391,12 @@ def train(
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
     ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="shared draft variant: picks deplete the offer, first pick alternates "
+        "by round (asymmetric decks)",
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -427,6 +441,7 @@ def train(
             device=device,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            shared_draft=shared_draft,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -458,6 +473,12 @@ def train_zoo_cmd(
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
+    ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="shared draft variant: picks deplete the offer, first pick alternates "
+        "by round (asymmetric decks)",
     ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
@@ -500,6 +521,7 @@ def train_zoo_cmd(
             n_envs=n_envs,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            shared_draft=shared_draft,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -774,6 +796,12 @@ def ceiling_eval_cmd(
     workers: int = typer.Option(
         1, help="process-pool workers over the (model, seed) grid (0 = all CPUs minus one)"
     ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="run all eval matches under the shared draft variant (picks deplete "
+        "the offer; first pick alternates by round)",
+    ),
 ):
     """Rigorous paired-difference verdict for the PPO ceiling study (requires [ml])."""
     try:
@@ -790,6 +818,7 @@ def ceiling_eval_cmd(
         games_per_seed=games_per_seed,
         threshold=threshold,
         workers=resolve_workers(workers),
+        shared_draft=shared_draft,
     )
     print(
         f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "

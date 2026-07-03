@@ -21,6 +21,7 @@ def run_tournament(
     games: int = 50,
     seed: int = 0,
     reference: str | None = None,
+    shared_draft: bool = False,
 ) -> TournamentResult:
     """Run a round-robin tournament among all policies.
 
@@ -33,6 +34,8 @@ def run_tournament(
         games: Number of game-pairs per match (passed to run_match).
         seed: Random seed for match reproducibility.
         reference: Name of the reference policy for p_vs_reference.
+        shared_draft: play every match under the shared draft variant (picks
+            deplete the offer; first pick alternates by round).
 
     Returns:
         TournamentResult with policies, win_matrix, ratings, p_vs_reference.
@@ -44,7 +47,7 @@ def run_tournament(
     totals: dict[str, list[int]] = {n: [0, 0] for n in names}
 
     for a, b in combinations(policies, 2):
-        res = run_match(a, b, games=games, seed=seed)
+        res = run_match(a, b, games=games, seed=seed, shared_draft=shared_draft)
         win_matrix[(a.name, b.name)] = res.win_rate_a
         win_matrix[(b.name, a.name)] = res.wins_b / res.games
 

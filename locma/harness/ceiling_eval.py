@@ -101,6 +101,7 @@ def avg_hard3_at_seed(
     games_per_seed: int,
     opponents=HARD3,
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ) -> float:
     """avg-hard3 (mean win-rate over the opponents) at ONE eval seed.
 
@@ -108,13 +109,18 @@ def avg_hard3_at_seed(
     for a process pool. ``model_path`` is a ``.zip`` path or a registry spec
     (see ``_ppo_policy``). ``draft_noise`` (k) replaces k of the candidate
     side's 30 draft picks with uniform random ones (deck-robustness probes).
+    ``shared_draft`` plays the eval matches under the shared draft variant
+    (picks deplete the offer; first pick alternates by round).
     """
     from locma.harness.match import run_match  # noqa: PLC0415
     from locma.policies.registry import make_policy  # noqa: PLC0415
 
     me = _cached_ppo_policy(model_path, draft_noise)
     rates = [
-        run_match(me, make_policy(o), games=games_per_seed, seed=seed).win_rate_a for o in opponents
+        run_match(
+            me, make_policy(o), games=games_per_seed, seed=seed, shared_draft=shared_draft
+        ).win_rate_a
+        for o in opponents
     ]
     return sum(rates) / len(rates)
 
@@ -125,12 +131,16 @@ def avg_hard3_per_seed(
     games_per_seed,
     opponents=HARD3,
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ):
     """avg-hard3 (mean win-rate over the 3 opponents) at each eval seed."""
-    return [avg_hard3_at_seed(model_path, s, games_per_seed, opponents, draft_noise) for s in seeds]
+    return [
+        avg_hard3_at_seed(model_path, s, games_per_seed, opponents, draft_noise, shared_draft)
+        for s in seeds
+    ]
 
 
-def _rate_table(paths, seeds, games_per_seed, workers: int = 1) -> dict:
+def _rate_table(paths, seeds, games_per_seed, workers: int = 1, shared_draft: bool = False) -> dict:
     """{(path, seed): avg-hard3} for every path x seed, serial or process-parallel."""
     keys = [(p, s) for p in paths for s in seeds]
     if workers > 1:
@@ -147,21 +157,35 @@ def _rate_table(paths, seeds, games_per_seed, workers: int = 1) -> dict:
                     [p for p, _ in keys],
                     [s for _, s in keys],
                     [games_per_seed] * len(keys),
+                    [HARD3] * len(keys),
+                    [0] * len(keys),
+                    [shared_draft] * len(keys),
                 )
             )
         return dict(zip(keys, rates, strict=True))
-    return {(p, s): avg_hard3_at_seed(p, s, games_per_seed) for p, s in keys}
+    return {
+        (p, s): avg_hard3_at_seed(p, s, games_per_seed, shared_draft=shared_draft) for p, s in keys
+    }
 
 
 def run_verdict(
-    candidate_paths, b0_paths, seeds, games_per_seed, threshold: float = 0.03, workers: int = 1
+    candidate_paths,
+    b0_paths,
+    seeds,
+    games_per_seed,
+    threshold: float = 0.03,
+    workers: int = 1,
+    shared_draft: bool = False,
 ):
     """Paired per-seed avg-hard3 difference (candidate models minus B0 models), averaged
     over each arm's model list, with a bootstrap CI and the symmetric verdict.
 
     ``workers > 1`` fans the (model, seed) grid out over a process pool — results
-    are identical to the serial run (each cell is an independent seeded match)."""
-    table = _rate_table(list(candidate_paths) + list(b0_paths), seeds, games_per_seed, workers)
+    are identical to the serial run (each cell is an independent seeded match).
+    ``shared_draft`` runs every eval match under the shared draft variant."""
+    table = _rate_table(
+        list(candidate_paths) + list(b0_paths), seeds, games_per_seed, workers, shared_draft
+    )
 
     def arm_matrix(paths):
         # rows = models, cols = seeds

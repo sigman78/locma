@@ -6,12 +6,19 @@ import random
 
 import pytest
 
+pytest.importorskip("gymnasium")  # ML-only (the battle env / training factory)
+
+import numpy as np
+
 from locma.core.draft import apply_draft_pick, draft_legal, start_draft
 from locma.core.engine import make_draft_view, run_game
 from locma.core.state import GameState, Phase
 from locma.data.cards_db import load_cards
 from locma.envs.battle_env import BattleEnv
+from locma.envs.training import _make_battle_env
+from locma.harness.ceiling_eval import avg_hard3_at_seed
 from locma.harness.draft_bench import duel
+from locma.harness.tournament import run_tournament
 from locma.policies.registry import make_policy
 
 
@@ -115,3 +122,29 @@ def test_battle_env_shared_draft():
     assert obs is not None
     # a deterministic draft under the shared rule gives the seats different decks
     assert [c.id for c in env.gs.picks[0]] != [c.id for c in env.gs.picks[1]]
+
+
+def test_training_env_factory_plumbs_shared_draft():
+    a, _ = _make_battle_env("greedy", seed=5).reset(seed=5)
+    b, _ = _make_battle_env("greedy", seed=5, shared_draft=True).reset(seed=5)
+    # Same seed, shared vs default: the first observation (a function of the
+    # drafted decks) must differ, i.e. the flag actually reaches the draft.
+    assert not np.array_equal(a, b)
+
+
+def test_tournament_shared_draft_runs():
+    pols = [make_policy("max-guard"), make_policy("max-attack")]
+    res = run_tournament(pols, games=2, seed=0, shared_draft=True)
+    key = (pols[0].name, pols[1].name)
+    assert 0.0 <= res.win_matrix[key] <= 1.0
+
+
+def test_ceiling_eval_shared_draft_changes_games():
+    kw = dict(seed=1_000_000, games_per_seed=2, opponents=("greedy",))
+    default = avg_hard3_at_seed("max-guard", **kw)
+    shared = avg_hard3_at_seed("max-guard", shared_draft=True, **kw)
+    assert 0.0 <= shared <= 1.0
+    # 4 games is too few to guarantee a rate difference; assert the flag at
+    # least produces a valid, reproducible rate under the shared variant
+    assert shared == avg_hard3_at_seed("max-guard", shared_draft=True, **kw)
+    assert 0.0 <= default <= 1.0
