@@ -4,18 +4,23 @@ from __future__ import annotations
 import glob
 import os
 import random as _random
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from locma import depot as dep
 from locma.data.cards_db import catalog, load_cards
 from locma.harness.interactive import IllegalMove, InteractiveGame, WrongPhase
 from locma.harness.replay_store import get_replay, list_headers, write_replay
 from locma.harness.replay_stream import build_replay, build_replay_from_log_row
 from locma.harness.trace import read_game_log
 from locma.policies.registry import make_policy, policy_names
+from locma.server.depot_api import depot_router
+from locma.server.experiments import experiments_router
+from locma.server.jobs import JobRunner
 from locma.server.session_store import SessionStore
 
 
@@ -43,11 +48,38 @@ class ActionRequest(BaseModel):
     action: dict
 
 
-def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
-    app = FastAPI(title="locma replay server")
+def create_app(
+    replay_dir: str,
+    asset_dir: str,
+    gamelog_dir: str,
+    presets_dir: str = "experiments/presets",
+    results_dir: str = "runs/experiments",
+    workers: int = 0,
+) -> FastAPI:
+    runner = JobRunner(results_dir=results_dir, workers=workers)
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        yield
+        runner.shutdown()
+
+    app = FastAPI(title="locma panel server", lifespan=_lifespan)
     cards = catalog()  # static; load once
     engine_cards = load_cards()  # Card objects for the engine (catalog() is JSON for the UI)
     sessions = SessionStore()
+    app.include_router(experiments_router(runner, presets_dir))
+    app.include_router(depot_router())
+
+    def _make_policy(spec: str):
+        """make_policy with web-friendly errors (bad spec / missing [ml] extra)."""
+        try:
+            return make_policy(spec)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except ImportError as e:
+            raise HTTPException(
+                status_code=400, detail=f"'{spec}' requires the [ml] extra: {e}"
+            ) from e
 
     def _persist_if_finished(game: InteractiveGame) -> None:
         if game.result is not None and not getattr(game, "_persisted", False):
@@ -62,13 +94,43 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
     def get_policies() -> list[str]:
         return policy_names()
 
+    @app.get("/api/policy-catalog")
+    def policy_catalog() -> dict:
+        """Everything the UI needs to build a policy spec: baseline names,
+        model-backed spec templates, and the depot's pinned model artifacts."""
+        models = []
+        for name in dep.artifact_names():
+            rec = dep.load_record(name)
+            if rec["kind"] != "model" or not rec["pin"]:
+                continue
+            vrec = next(v for v in rec["versions"] if v["version"] == rec["pin"])
+            models.append(
+                {
+                    "name": name,
+                    "version": rec["pin"],
+                    "refs": [f"depot:{name}/{f}" for f in sorted(vrec["files"])],
+                }
+            )
+        suggestions = list(policy_names())
+        suggestions += ["mcts:100", "dmcts:15,30", "azlite:100"]
+        for m in models:
+            for ref in m["refs"]:
+                suggestions += [f"ppo:{ref}", f"vbeam:{ref}"]
+        return {
+            "baselines": policy_names(),
+            "model_bases": [
+                {"base": "ppo", "template": "ppo:MODEL"},
+                {"base": "vbeam", "template": "vbeam:MODEL,8,20"},
+                {"base": "netdmcts", "template": "netdmcts:15,80,1.5,MODEL"},
+            ],
+            "depot_models": models,
+            "suggestions": suggestions,
+        }
+
     @app.post("/api/replays")
     def run_replay(req: RunRequest) -> dict:
-        try:
-            p_a = make_policy(req.policy_a)
-            p_b = make_policy(req.policy_b)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        p_a = _make_policy(req.policy_a)
+        p_b = _make_policy(req.policy_b)
         rep = build_replay(p_a, p_b, req.seed, source="ad-hoc")
         write_replay(replay_dir, rep)
         return rep["header"]
@@ -120,10 +182,7 @@ def create_app(replay_dir: str, asset_dir: str, gamelog_dir: str) -> FastAPI:
 
     @app.post("/api/games")
     def new_game(req: NewGameRequest) -> dict:
-        try:
-            ai = make_policy(req.opponent)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        ai = _make_policy(req.opponent)
         seed = req.seed if req.seed is not None else _random.randint(0, 2**31 - 1)
         game = sessions.create(ai_policy=ai, seed=seed, cards=engine_cards, rng=_random)
         _persist_if_finished(game)
