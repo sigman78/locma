@@ -17,6 +17,7 @@
   import { mergeDisplayBoard, planStepFx, type RectOf } from '../../lib/stepfx'
   import { nearestTarget, type AimTarget } from '../../lib/aim'
   import { dock } from '../../lib/dock'
+  import { card as cardMeta } from '../../lib/cards'
   import CardView from '../ReplayViewer/CardView.svelte'
   import MinionView from './MinionView.svelte'
   import Player from '../ReplayViewer/Player.svelte'
@@ -230,6 +231,31 @@
     cursor = { x: e.clientX, y: e.clientY }
     snapId = null
   }
+  // Unplayable-CREATURE drag: an elastic tether. The card follows the cursor
+  // with diminishing give (max ~DEAD_MAX px); pull past DEAD_BREAK and it
+  // "snaps out" of your grip and springs back to its hand slot. Pure feedback —
+  // no game action. Spell cards keep the old click/aim-drag behavior.
+  const DEAD_MAX = 56
+  const DEAD_BREAK = 150
+  let deadDrag: {
+    iid: number; sx: number; sy: number; dx: number; dy: number; returning: boolean
+  } | null = null
+  let deadMoved = false // suppress the click-jiggle when the tether already gave feedback
+
+  function startDeadDrag(e: MouseEvent, iid: number) {
+    e.preventDefault()
+    deadMoved = false
+    deadDrag = { iid, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, returning: false }
+  }
+  function deadRelease() {
+    if (!deadDrag || deadDrag.returning) return
+    const iid = deadDrag.iid
+    deadDrag = { ...deadDrag, dx: 0, dy: 0, returning: true }
+    setTimeout(() => {
+      if (deadDrag?.iid === iid && deadDrag.returning) deadDrag = null
+    }, 340)
+  }
+
   function downHand(e: MouseEvent, c: CardState) {
     if (!interactive) return
     // a summonable creature: drag onto your own battlefield (or click) to summon
@@ -239,6 +265,11 @@
       cursor = { x: e.clientX, y: e.clientY }
       snapId = null
       overField = false
+      return
+    }
+    // a creature that CAN'T be summoned (mana / board space): elastic tether
+    if ((cardMeta(c.card_id)?.type ?? 'creature') === 'creature') {
+      startDeadDrag(e, c.iid)
       return
     }
     const ts = itemTargets(legal, c.iid)
@@ -258,11 +289,25 @@
     const ts = itemTargets(legal, c.iid)
     if (ts.length === 1 && ts[0] === -1) {
       send({ t: 'use', item: c.iid, target: -1 })
-    } else if (ts.length === 0) {
-      jiggle(c.iid) // not playable this turn (mana / full board / wrong phase)
+    } else if (ts.length === 0 && !deadMoved) {
+      jiggle(c.iid) // plain click on an unplayable card (a real tether pull already said no)
     }
   }
   function onMove(e: MouseEvent) {
+    if (deadDrag && !deadDrag.returning) {
+      const rx = e.clientX - deadDrag.sx
+      const ry = e.clientY - deadDrag.sy
+      const dist = Math.hypot(rx, ry)
+      if (dist > 8) deadMoved = true
+      if (dist > DEAD_BREAK) {
+        deadRelease() // pulled too far: the card escapes the grip
+        return
+      }
+      // rubber-band: displacement saturates toward DEAD_MAX as the pull grows
+      const f = dist > 0 ? (DEAD_MAX * (1 - Math.exp(-dist / DEAD_MAX))) / dist : 0
+      deadDrag = { ...deadDrag, dx: rx * f, dy: ry * f }
+      return
+    }
     if (!drag) return
     cursor = { x: e.clientX, y: e.clientY }
     if (drag.kind === 'summon') {
@@ -273,6 +318,7 @@
     snapId = best ? best.id : null
   }
   function onUp() {
+    if (deadDrag) deadRelease()
     if (!drag) return
     const d = drag
     const sid = snapId
@@ -384,6 +430,11 @@
     {#each view.me.hand as c (c.iid)}
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
         class:jiggling={jiggleIid === c.iid}
+        class:tethered={deadDrag?.iid === c.iid && !deadDrag.returning}
+        class:tether-return={deadDrag?.iid === c.iid && deadDrag.returning}
+        style={deadDrag?.iid === c.iid
+          ? `transform: translate(${deadDrag.dx}px, ${deadDrag.dy}px) rotate(${deadDrag.dx * 0.08}deg);`
+          : ''}
         in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} />
       </button>
@@ -449,6 +500,12 @@
   /* hover juice: hand cards lift toward you, board minions perk up */
   .hand.mine .slot:hover { transform: translateY(-10px) scale(1.05); z-index: 30;
     box-shadow: 0 12px 22px rgba(0, 0, 0, 0.5); }
+  /* unplayable-creature tether: tight cursor tracking while held (the inline
+     transform wins over :hover), springy overshoot on the way back */
+  .slot.tethered { transition: transform 0.05s linear; z-index: 40;
+    cursor: grabbing; }
+  .slot.tether-return { transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 40; }
   .field .slot:hover { transform: translateY(-3px) scale(1.03); z-index: 30; }
   /* a minion with legal attack targets: soft amber ready-glow */
   .slot.ready { outline-color: rgba(255, 210, 61, 0.55);
