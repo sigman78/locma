@@ -164,7 +164,12 @@
      (no z-index here — that would trap the pseudo inside a stacking context). */
   .spell-bar { position: absolute; bottom: 0; left: 0; right: 0;
     padding: 3px 5px; font-size: 12px; font-weight: 400; line-height: 1.25;
-    text-align: center; color: #fff; text-shadow: 0 1px 2px #000;
+    text-align: center; color: #fff;
+    /* the element paints ABOVE the sprite, so a neutral scrim here dims bright
+       artwork behind the glyphs (the colored tint stays below the sprite);
+       the layered shadows add a dark halo that hugs the text itself */
+    background: rgba(10, 10, 14, 0.45);
+    text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .spell-bar::before { content: ''; position: absolute; inset: 0; z-index: -1;
     background-color: rgba(8, 8, 12, 0.82);
