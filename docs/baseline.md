@@ -680,7 +680,8 @@ behavior-cloned it into a `MaskablePPO` net via masked cross-entropy
 (`record-practicum` → `distill`). The student sees only the imperfect
 `BattleView` obs; the teacher cheats (perfect information). Pipeline and
 commands are reproducible; the practicum/model artifacts live in gitignored
-`runs/`.
+`runs/`. (Since 2026-07-02, checkpoints of record are published to the
+versioned artifact depot instead — `depot:` refs, see `docs/depot.md`.)
 
 ## Result 1 — top-1 agreement plateaus at ~0.25 (information gap, not underfit)
 

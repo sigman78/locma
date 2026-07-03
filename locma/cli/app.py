@@ -758,9 +758,13 @@ def _disjoint_eval_seeds(seeds: int, games_per_seed: int, start: int = 1_000_000
 @app.command("ceiling-eval")
 def ceiling_eval_cmd(
     candidates: str = typer.Option(
-        ..., help="comma-separated candidate model .zip paths or policy specs (e.g. vbeam:path)"
+        ...,
+        help="comma-separated candidates: model paths, depot: refs, or policy "
+        "specs (e.g. vbeam:depot:b0/b0_s0.zip)",
     ),
-    baselines: str = typer.Option(..., help="comma-separated B0 model .zip paths"),
+    baselines: str = typer.Option(
+        ..., help="comma-separated B0 model paths or depot: refs (e.g. depot:b0/b0_s0.zip)"
+    ),
     seeds: int = typer.Option(40, help="number of held-out eval seeds (from 1_000_000)"),
     games_per_seed: int = typer.Option(25, help="paired games per opponent per seed"),
     threshold: float = typer.Option(0.03, help="avg-hard3 lift required for 'headroom'"),

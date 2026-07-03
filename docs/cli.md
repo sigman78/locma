@@ -19,9 +19,22 @@ Any command that takes a policy name (`play`, `tournament`, `noise-floor`,
   opponent hands, runs MCTS (`I` iters) on each, votes. ~as strong as `mcts` but
   fair (public info only). Slower than the heuristics.
 
+Model-backed specs (**require the `[ml]` extra** and a checkpoint):
+
+- `ppo:PATH` — reactive MaskablePPO battle net + `balanced` draft.
+- `vbeam:PATH,width,max_actions` — own-turn beam planner scored by the token
+  model's value head (defaults 8/20). The current strongest policy:
+  `vbeam:depot:b0/b0_s0.zip` (avg-hard3 0.863).
+- `netdmcts:K,I,c_puct,PATH` — net-guided determinized PUCT.
+
+`PATH` is a plain file **or a `depot:` ref** (`depot:<name>[@N|@latest]/<file>`,
+see [docs/depot.md](depot.md)) — depot refs are the canonical way to name
+published checkpoints: `ppo:depot:b0/b0_s0.zip`, `vbeam:depot:b0/b0_s2.zip`.
+
 `max-guard` and `max-attack` share a "ground" battle: develop the board and
 swing at the enemy face, falling back to clearing Guards when the face is not a
-legal target. `mcts`/`dmcts` pair their search battle with a greedy draft.
+legal target. `mcts`/`dmcts` pair their search battle with a greedy draft;
+`ppo`/`vbeam`/`netdmcts` pair with the `balanced` draft.
 
 ## play
 `locma play A B [--games N] [--seed S] [--render] [--log FILE]`
@@ -118,6 +131,25 @@ e.g. `locma tournament random scripted greedy max-guard max-attack ppo:zoo.zip
 `docs/ppo-review.md`.
 
 Example: `uv run locma train-zoo --steps-per-opponent 200000 --out runs/zoo.zip`
+
+Train into `runs/` (scratch); once a checkpoint earns a verdict worth keeping,
+promote it: `locma depot publish <name> runs/... --note "..."` (see `depot`).
+
+## depot
+`locma depot publish|list|show|pin|push|pull|resolve|verify|gc`
+
+Versioned artifact storage for checkpoints and datasets with provenance —
+`runs/` stays disposable scratch, published artifacts get content-addressed
+blobs, a git-committed index, and cross-machine sharing via GitHub Releases.
+Anywhere a command takes a model path, a `depot:` ref works too. Full
+reference: [docs/depot.md](depot.md).
+
+```
+locma depot pull b0                                # fetch the b0 seed-triple
+locma play vbeam:depot:b0/b0_s0.zip greedy         # play the recipe of record
+locma depot publish my-net runs/my_s0.zip --note "..."
+locma depot push my-net                            # share via GitHub Releases
+```
 
 ## fetch-cards
 `locma fetch-cards`
