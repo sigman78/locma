@@ -1134,3 +1134,28 @@ trajectories, or full AZ self-play where search depth spans the opponent's
 reply). The nearer open levers are E4 (distill the 0.863 vbeam teacher --
 cheaper AND stronger than netdmcts was) and E6/H3 (belief features).
 Artifacts kept: `runs/fviaz-data-s*.npz`, `runs/fviaz{2,10}_s*.zip`.
+
+## Artifact depot: checkpoints of record move to `depot:` refs (2026-07-02)
+
+`runs/` had grown to 181 files / 1.2 GB of recipe-of-record checkpoints mixed
+with dead experiments -- no provenance on model zips, and refs like
+`vbeam:runs/b0_s0.zip` in this log had no guarantee the file still matched
+what was measured. PR #58 added the versioned artifact depot (`docs/depot.md`):
+git-committed index (provenance + sha256 + pin) over a gitignored
+content-addressed store, `depot:` refs resolved at the registry/ceiling-eval
+choke points, GitHub Releases as the (swappable) remote, `locma depot` CLI.
+
+Everything this log cites as load-bearing is now published and pushed:
+
+| depot artifact | was (runs/) | provenance highlights |
+|---|---|---|
+| `depot:b0` v1 | `b0_s{0,1,2}.zip` | reactive 0.657 / vbeam 0.863, recipe of record |
+| `depot:cand1` v1 | `cand1_s{0,1,2}.zip` | ceiling study C1, -0.040 ceiling-confirmed |
+| `depot:rnd4` v1 | `rnd4_s{0,1,2}.zip` | draft-noise arm C, -0.008 null |
+| `depot:fvi-study` v1 | `fvi{,2}_s*.zip`, `fviaz{2,10}_s*.zip` | E5v2 bundle, parent b0@1, null/negative |
+
+Canonical refs from here on: reactive `depot:b0/b0_sX.zip`, planner
+**`vbeam:depot:b0/b0_sX.zip`** (0.863). Earlier entries' `runs/...` paths map
+via the table above. The FVI npz datasets were NOT promoted (regenerable in
+minutes from `depot:b0` + `locma/envs/vbeam_fvi.py` collectors); `runs/` is
+now officially disposable. Second machine: `git pull && locma depot pull b0`.

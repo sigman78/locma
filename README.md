@@ -14,6 +14,7 @@ in the domain of TcG like games.
 - [Experiment methodology](docs/experiments.md) — noise floor, SPRT, ratings, replay
 - [Architecture](docs/architecture.md) — engine, trace hook, game-log format
 - [Baseline](docs/baseline.md) — reference results for the built-in policies
+- [Artifact depot](docs/depot.md) — versioned checkpoints/datasets with provenance (`depot:` refs)
 
 ## Install
 

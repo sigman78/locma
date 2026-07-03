@@ -116,8 +116,8 @@ def _vbeam(params, spec):
 
     Plans whole turns by beam-searching own-turn action sequences and scoring
     stopping points with the token model's value head (E5 "planning-lite").
-    Model path first so the common case (``vbeam:runs/b0_s0.zip``) needs no
-    commas. Paired with the ``balanced`` draft like ``ppo``/``azlite``/
+    Model path first so the common case (``vbeam:depot:b0/b0_s0.zip``) needs
+    no commas. Paired with the ``balanced`` draft like ``ppo``/``azlite``/
     ``netdmcts`` for apples-to-apples comparisons.
     """
     from locma.policies.vbeam import VBeamBattlePolicy  # noqa: PLC0415
@@ -203,6 +203,8 @@ def make_policy(spec: str):
 
     Parameters are positional and split on the first colon only (so paths with
     colons survive); trailing parameters fall back to per-preset defaults.
+    Model-path parameters accept plain files or ``depot:`` refs (resolved via
+    ``locma.depot.resolve_path``), e.g. ``vbeam:depot:b0/b0_s0.zip``.
     Raises ValueError on an unknown base name.
     """
     base, sep, paramstr = spec.partition(":")
