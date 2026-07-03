@@ -67,6 +67,14 @@ def train_one(seed: int, out: str) -> dict:
         obs_mode="token",
         learning_rate=1e-4,
         target_kl=0.025,
+        # batch 2048, not B0's 64: a 64-timestep padded minibatch holds only
+        # 1-2 episode fragments, so the LSTM runs a serial per-timestep loop
+        # that starves both CPU and GPU (probed 119 fps -> ~112 min/seed).
+        # Sequence-parallel minibatches are the standard recurrent-PPO
+        # geometry: batch 2048 probes at 825 fps (~16 min/seed), same
+        # rollout size, KL early-stop still per-minibatch. Recipe deviation
+        # recorded in the worklog.
+        batch_size=2048,
         n_envs=16,
         device="cuda",
         verbose=0,
