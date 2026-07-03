@@ -47,7 +47,7 @@ _LOSS_SCORE = -2.0
 _FALLBACK_STOP_SCORE = -1.5
 
 
-def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20) -> list:
+def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20, collect=None) -> list:
     """Beam-search own-turn action sequences; return the best complete plan.
 
     Parameters
@@ -67,6 +67,14 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20) -> lis
     max_actions:
         Safety cap on plan length (a LOCM turn is at most ~14 atomic actions;
         the beam normally exhausts its legal continuations first).
+    collect:
+        Optional list for AZ-style backed-up value targets (E5 variant 2b).
+        When given, the search appends one ``(view, target, depth, stop_ok)``
+        tuple per explored state whose subtree produced at least one completed
+        plan: ``target`` = the best completed-plan score reachable through
+        that state, clipped to [-1, 1] (so searched wins/losses ground it),
+        which DIFFERS between sibling states — unlike Monte-Carlo game labels.
+        ``None`` (default) changes nothing.
 
     Returns
     -------
@@ -95,6 +103,8 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20) -> lis
 
     beam: list[tuple[object, list, list]] = [(root, root_legal, [])]
     seen = {root_view}  # collapse action-order permutations that meet again
+    explored = [(root_view, (), 0, root_stop_ok)] if collect is not None else None
+    win_found = False
 
     for _depth in range(max_actions):
         sims: list = []
@@ -111,7 +121,11 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20) -> lis
                 plan2 = [*plan, a]
                 if s2.phase == Phase.ENDED:
                     if s2.winner == seat:
-                        return plan2  # nothing can beat an immediate win
+                        # Nothing can beat an immediate win: record and stop.
+                        completed.append((_WIN_SCORE, order, plan2))
+                        order += 1
+                        win_found = True
+                        break
                     completed.append((_LOSS_SCORE, order, plan2))
                     order += 1
                     continue
@@ -125,19 +139,54 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20) -> lis
                 masks.append(action_mask(v2, l2))
                 legals.append(l2)
                 plans.append(plan2)
-        if not sims:
+            if win_found:
+                break
+        if win_found or not sims:
             break
 
         vals, would_pass = evaluator.evaluate(views, masks)
         ranked = sorted(range(len(vals)), key=lambda i: (-vals[i], i))
         for i in ranked:
-            if would_pass[i] or len(legals[i]) == 1:
+            stop_ok = would_pass[i] or len(legals[i]) == 1
+            if explored is not None:
+                explored.append((views[i], tuple(plans[i]), _depth + 1, stop_ok))
+            if stop_ok:
                 completed.append((float(vals[i]), order, [*plans[i], Pass()]))
                 order += 1
         beam = [(sims[i], legals[i], plans[i]) for i in ranked[:width]]
 
+    if collect is not None:
+        _harvest_backups(collect, explored, completed)
     best = max(completed, key=lambda t: (t[0], -t[1]))
     return best[2]
+
+
+def _harvest_backups(collect: list, explored: list, completed: list) -> None:
+    """Map each explored state to its backed-up target (E5 variant 2b).
+
+    A state's target is the best completed-plan score whose action sequence
+    extends the state's prefix, clipped to [-1, 1] (win +2 -> +1, loss
+    -2 -> -1, critic stops as-is). The net-disapproved root fallback is
+    excluded — it is an artificial sentinel, not an achievable value. States
+    whose subtree completed no plan (beam-pruned before any stop) get no
+    sample.
+    """
+    best_ext: dict[tuple, float] = {}
+    root_target = None
+    for score, _order, plan in completed:
+        if score == _FALLBACK_STOP_SCORE:
+            continue
+        t = max(-1.0, min(1.0, float(score)))
+        root_target = t if root_target is None else max(root_target, t)
+        actions = tuple(a for a in plan if not isinstance(a, Pass))
+        for k in range(1, len(actions) + 1):
+            p = actions[:k]
+            if t > best_ext.get(p, -2.0):
+                best_ext[p] = t
+    for view, prefix, depth, stop_ok in explored:
+        t = root_target if prefix == () else best_ext.get(prefix)
+        if t is not None:
+            collect.append((view, t, depth, stop_ok))
 
 
 class NetValueEvaluator:
@@ -225,6 +274,7 @@ class VBeamBattlePolicy:
         width: int = 8,
         max_actions: int = 20,
         evaluator=None,
+        collect=None,
     ) -> None:
         self.name = name
         self.model_path = model_path
@@ -232,6 +282,8 @@ class VBeamBattlePolicy:
         self.max_actions = max_actions
         self._evaluator = evaluator if evaluator is not None else NetValueEvaluator(model_path)
         self._plan: list = []
+        # Optional backed-up-target sink, forwarded to plan_turn (E5 variant 2b).
+        self.collect = collect
 
     def reset(self, seed=None) -> None:
         self._plan = []
@@ -246,6 +298,12 @@ class VBeamBattlePolicy:
             raise ValueError("VBeamBattlePolicy requires the forward-model `state` argument")
         if len(legal) == 1:
             return legal[0]
-        plan = plan_turn(state, self._evaluator, width=self.width, max_actions=self.max_actions)
+        plan = plan_turn(
+            state,
+            self._evaluator,
+            width=self.width,
+            max_actions=self.max_actions,
+            collect=self.collect,
+        )
         self._plan = plan[1:]
         return plan[0]

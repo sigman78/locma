@@ -1051,3 +1051,86 @@ PPO-REVIEW-FB E5, "the reactive deployment constraint should be renegotiated"
 critic against the planner's own play -- the current critic is evaluated
 off-policy under vbeam); E5a (learned-potential PBS shaping with the frozen
 critic); netdmcts with the vbeam-improved net as a stronger teacher for E4.
+
+## E5 variant 2: fitted-value iteration on the vbeam critic -- VERDICT: null-to-negative (2026-07-02)
+
+`locma/envs/vbeam_fvi.py` (branch feat/vbeam-fvi): `collect_value_data` shards
+`record_practicum` over a process pool (the practicum's winner/seat columns ARE
+the Monte-Carlo value labels, +1 if winner == seat else -1); `train_value_head`
+fine-tunes ONLY the critic branch (`mlp_extractor.value_net` + `value_net`) on
+frozen precomputed features. The policy path stays byte-identical (pinned by
+test) -- vbeam's stop rule reads the policy head's masked argmax, so the output
+is a drop-in `vbeam:out.zip` with identical stopping behavior.
+
+**Data:** ~79k own-turn decision states per seed from 3,200 vbeam(b0_sX) games
+each (4 zoo opponents x 400 seeds x 2 seats, 19 workers, ~3.5 min/seed, 0
+failed games; training seeds 10k+, disjoint from the 1M+ eval range).
+
+**Calibration trains beautifully; play does not** (paired pilots, 10x10,
+candidates vbeam:fvi vs baselines vbeam:b0):
+
+```
+epochs=10: val MSE 0.53->0.29, sign acc 79%->91%
+           cand=0.768  B0=0.854  delta=-0.086  95% CI [-0.103, -0.068]
+epochs=2:  val MSE 0.53->0.33, sign acc 79%->89%
+           cand=0.845  B0=0.854  delta=-0.009  95% CI [-0.024, +0.007]
+```
+
+**Mechanism (dose-response confirmed):** MC labels are constant within a game
+-- every recorded state of a won game regresses toward +1. The beam does not
+need "who wins this game" (sign accuracy); it needs ORDERING between sibling
+states one action apart, and pushing all siblings toward the same target
+actively erases that distinction. Calibration saturates by epoch 2; continued
+optimization of the flattening objective damages ranking monotonically
+(-0.009 -> -0.086). Even the light dose never gains: the MC objective is
+wrong for a ranking evaluator, not under-optimized.
+
+**Read:** E5 variant 1's +0.206 stands as the recipe of record
+(vbeam:runs/b0_sX.zip). The PPO critic -- trained on diverse exploratory
+rollouts with per-step GAE targets -- is a better *ranker* than a
+better-calibrated outcome regressor. If a variant-2 retry is ever wanted, the
+targets must differ between siblings: AZ-style backed-up plan scores from
+`plan_turn` itself (grounded by searched terminals), TD/GAE targets, or an
+explicit ranking loss on beam candidates. Tooling + verdict kept; models
+`runs/fvi{,2}_s{0,1,2}.zip` and `runs/fvi-data-s*.npz` kept for reference.
+
+## E5 variant 2b: AZ-style backed-up targets -- VERDICT: null (critic is already a fixed point) (2026-07-02)
+
+The retry the 2a verdict asked for: targets that DIFFER between siblings.
+`plan_turn` gained an optional `collect` sink -- each explored state gets the
+best completed-plan score reachable through its action prefix, clipped to
+[-1,1] (searched wins/losses ground it; the -1.5 root-fallback sentinel is
+excluded). `collect_backup_data` harvests the states whose ranking decides
+play (root + depth-1 siblings + stop-eligible states) from vbeam's own games;
+`train_value_head` picks up the explicit `target` column automatically.
+
+**The dataset itself delivered the verdict before the eval did:** ~78k
+targets/seed from 800 vbeam(b0_sX) games each, and the pre-training val MSE
+against them is 0.019 -- the B0 critic is ALREADY within ~0.14 RMS of its own
+one-step beam backup on the planner's play distribution. Only ~5% of targets
+are terminal-grounded (the "sign acc" column is that fraction, a metric
+artifact for continuous targets). Fine-tuning has nothing to learn
+(0.019 -> 0.016), and play confirms:
+
+```
+az10 pilot 10x10:  cand=0.847  B0=0.854  delta=-0.007  95% CI [-0.018, +0.004]
+VERDICT: ceiling-confirmed
+```
+
+**The two flavors bracket the estimator, closing E5 variant 2:**
+
+| targets | sibling-differing? | new information? | play delta |
+|---|---|---|---:|
+| 2a Monte-Carlo (10 ep) | no (constant per game) | yes (real outcomes) | -0.086 |
+| 2a Monte-Carlo (2 ep) | no | yes | -0.009 |
+| 2b one-step backup (10 ep) | yes | ~none (residual 0.019) | -0.007 |
+
+MC targets carry real information but erase the sibling ordering the beam
+ranks with; one-step backups preserve ordering but the critic already
+satisfies them. Cheap critic retraining cannot improve the E5v1 planner:
+**vbeam:runs/b0_sX.zip stays the recipe of record at 0.863.** A future
+attempt needs multi-turn grounding without flattening (TD-lambda over planner
+trajectories, or full AZ self-play where search depth spans the opponent's
+reply). The nearer open levers are E4 (distill the 0.863 vbeam teacher --
+cheaper AND stronger than netdmcts was) and E6/H3 (belief features).
+Artifacts kept: `runs/fviaz-data-s*.npz`, `runs/fviaz{2,10}_s*.zip`.
