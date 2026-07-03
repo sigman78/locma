@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from locma.cli.depot import depot_app
 from locma.cli.render import GameRenderer
 from locma.harness.draft_bench import draft_names, make_battle, make_draft, round_robin
 from locma.harness.match import run_match
@@ -23,6 +24,7 @@ from locma.stats.openskill_ratings import openskill_from_results, ordinal
 from locma.stats.sprt import sprt as sprt_test
 
 app = typer.Typer(help="Legends of Code & Magic 1.2 explore kit")
+app.add_typer(depot_app, name="depot")
 console = Console()
 
 

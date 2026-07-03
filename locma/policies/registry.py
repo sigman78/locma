@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+from locma.depot import resolve_path
 from locma.policies.battles import (
     GreedyBattlePolicy,
     GroundBattlePolicy,
@@ -100,7 +101,7 @@ def _netdmcts(params, spec):
     k = int(params[0]) if len(params) > 0 else 15
     i = int(params[1]) if len(params) > 1 else 80
     c_puct = float(params[2]) if len(params) > 2 else 1.5
-    model_path = params[3] if len(params) > 3 else "model.zip"
+    model_path = resolve_path(params[3] if len(params) > 3 else "model.zip")
     return Composer(
         NetGuidedDMCTSBattlePolicy(
             determinizations=k, iterations=i, c_puct=c_puct, model_path=model_path
@@ -121,7 +122,7 @@ def _vbeam(params, spec):
     """
     from locma.policies.vbeam import VBeamBattlePolicy  # noqa: PLC0415
 
-    model_path = params[0] if len(params) > 0 and params[0] else "model.zip"
+    model_path = resolve_path(params[0] if len(params) > 0 and params[0] else "model.zip")
     width = int(params[1]) if len(params) > 1 else 8
     max_actions = int(params[2]) if len(params) > 2 else 20
     return Composer(
@@ -136,7 +137,7 @@ def _ppo(params, spec):
         MaskablePPOBattlePolicy,
     )
 
-    model_path = params[0] if params else "model.zip"
+    model_path = resolve_path(params[0] if params else "model.zip")
     # Pair the learned battle net with a `balanced` draft, not `greedy`: the draft
     # sweep (docs/baseline.md "PPO × draft sweep") found the greedy draft is the
     # WORST partner (0.39 avg vs the ground baselines) while `balanced` (0.54) makes

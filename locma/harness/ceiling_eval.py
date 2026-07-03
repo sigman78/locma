@@ -38,11 +38,12 @@ HARD3 = ("scripted", "max-guard", "max-attack")
 def _ppo_policy(model_path: str, draft_noise: int = 0):
     """Build the candidate policy for one eval cell.
 
-    ``model_path`` is either a bare ``.zip`` path (wrapped as the standard
-    ppo+balanced pairing, the historic behavior) or a full registry spec
-    (e.g. ``vbeam:runs/b0_s0.zip``) so play-time-search candidates ride the
-    same paired ruler as reactive nets.
+    ``model_path`` is either a bare ``.zip`` path or ``depot:`` ref (wrapped as
+    the standard ppo+balanced pairing, the historic behavior) or a full
+    registry spec (e.g. ``vbeam:depot:b0/b0_s0.zip``) so play-time-search
+    candidates ride the same paired ruler as reactive nets.
     """
+    from locma.depot import resolve_path  # noqa: PLC0415
     from locma.policies.composer import Composer  # noqa: PLC0415
     from locma.policies.drafts import PartialRandomDraftPolicy  # noqa: PLC0415
     from locma.policies.registry import is_policy_spec, make_policy  # noqa: PLC0415
@@ -53,7 +54,9 @@ def _ppo_policy(model_path: str, draft_noise: int = 0):
         from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
         from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
 
-        policy = Composer(MaskablePPOBattlePolicy(model_path), BalancedDraftPolicy(), name="ppo")
+        policy = Composer(
+            MaskablePPOBattlePolicy(resolve_path(model_path)), BalancedDraftPolicy(), name="ppo"
+        )
     if draft_noise:
         policy = Composer(
             policy.battle,
