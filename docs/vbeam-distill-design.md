@@ -106,4 +106,6 @@ channel carries zero trainable signal by design.
 
 Full mechanism reading in `docs/worklog.md` (E4v2 entry). Artifacts:
 `runs/vdst-data-s{0,1,2}.npz`, `runs/vdst-{ph,bc,ff}_s{0,1,2}.zip`,
-`runs/vdst-summary.json`, `runs/vdst-overnight.log`.
+`runs/vdst-summary.json`, `runs/vdst-overnight.log`. Orchestration:
+`scripts/vdst_driver.py` (idempotent stages; re-running skips completed
+steps via the summary file, so the whole night is resumable/reproducible).
