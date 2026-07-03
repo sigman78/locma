@@ -1093,3 +1093,44 @@ targets must differ between siblings: AZ-style backed-up plan scores from
 `plan_turn` itself (grounded by searched terminals), TD/GAE targets, or an
 explicit ranking loss on beam candidates. Tooling + verdict kept; models
 `runs/fvi{,2}_s{0,1,2}.zip` and `runs/fvi-data-s*.npz` kept for reference.
+
+## E5 variant 2b: AZ-style backed-up targets -- VERDICT: null (critic is already a fixed point) (2026-07-02)
+
+The retry the 2a verdict asked for: targets that DIFFER between siblings.
+`plan_turn` gained an optional `collect` sink -- each explored state gets the
+best completed-plan score reachable through its action prefix, clipped to
+[-1,1] (searched wins/losses ground it; the -1.5 root-fallback sentinel is
+excluded). `collect_backup_data` harvests the states whose ranking decides
+play (root + depth-1 siblings + stop-eligible states) from vbeam's own games;
+`train_value_head` picks up the explicit `target` column automatically.
+
+**The dataset itself delivered the verdict before the eval did:** ~78k
+targets/seed from 800 vbeam(b0_sX) games each, and the pre-training val MSE
+against them is 0.019 -- the B0 critic is ALREADY within ~0.14 RMS of its own
+one-step beam backup on the planner's play distribution. Only ~5% of targets
+are terminal-grounded (the "sign acc" column is that fraction, a metric
+artifact for continuous targets). Fine-tuning has nothing to learn
+(0.019 -> 0.016), and play confirms:
+
+```
+az10 pilot 10x10:  cand=0.847  B0=0.854  delta=-0.007  95% CI [-0.018, +0.004]
+VERDICT: ceiling-confirmed
+```
+
+**The two flavors bracket the estimator, closing E5 variant 2:**
+
+| targets | sibling-differing? | new information? | play delta |
+|---|---|---|---:|
+| 2a Monte-Carlo (10 ep) | no (constant per game) | yes (real outcomes) | -0.086 |
+| 2a Monte-Carlo (2 ep) | no | yes | -0.009 |
+| 2b one-step backup (10 ep) | yes | ~none (residual 0.019) | -0.007 |
+
+MC targets carry real information but erase the sibling ordering the beam
+ranks with; one-step backups preserve ordering but the critic already
+satisfies them. Cheap critic retraining cannot improve the E5v1 planner:
+**vbeam:runs/b0_sX.zip stays the recipe of record at 0.863.** A future
+attempt needs multi-turn grounding without flattening (TD-lambda over planner
+trajectories, or full AZ self-play where search depth spans the opponent's
+reply). The nearer open levers are E4 (distill the 0.863 vbeam teacher --
+cheaper AND stronger than netdmcts was) and E6/H3 (belief features).
+Artifacts kept: `runs/fviaz-data-s*.npz`, `runs/fviaz{2,10}_s*.zip`.
