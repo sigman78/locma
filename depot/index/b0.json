@@ -1,0 +1,38 @@
+{
+  "name": "b0",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-03T01:04:36+00:00",
+      "git_commit": "3f1e760",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish b0 runs/b0_s0.zip runs/b0_s1.zip runs/b0_s2.zip --kind model --note B0 recipe of record: token V0, lr=1e-4, target_kl=0.025, dropout=0.1, 800k zoo curriculum. Reactive avg-hard3 0.657; vbeam:depot:b0/b0_sX.zip = 0.863 (planner recipe of record). Trained at commit d625604, PR #52-56 era. --meta {\"avg_hard3_reactive\": 0.657, \"avg_hard3_vbeam\": 0.863, \"obs_mode\": \"token\", \"steps\": 800000, \"trained_at_commit\": \"d625604\"}",
+      "parents": [],
+      "note": "B0 recipe of record: token V0, lr=1e-4, target_kl=0.025, dropout=0.1, 800k zoo curriculum. Reactive avg-hard3 0.657; vbeam:depot:b0/b0_sX.zip = 0.863 (planner recipe of record). Trained at commit d625604, PR #52-56 era.",
+      "meta": {
+        "avg_hard3_reactive": 0.657,
+        "avg_hard3_vbeam": 0.863,
+        "obs_mode": "token",
+        "steps": 800000,
+        "trained_at_commit": "d625604"
+      },
+      "files": {
+        "b0_s0.zip": {
+          "sha256": "51ac557b0b1f08292b3251639dcfdd830c534ac50391b39039b2540331c3a324",
+          "size": 5763935
+        },
+        "b0_s1.zip": {
+          "sha256": "292633c21eaf02d92bdc2194331c6b684be45f5dfc995ae0bd9ad22b5460a942",
+          "size": 5763939
+        },
+        "b0_s2.zip": {
+          "sha256": "c5941b0c0bdf7e8fd25352af8d0ea6e9eb06958a6e8edc1b80b2366a6f49ab12",
+          "size": 5763935
+        }
+      },
+      "published": "gh:depot/b0-v1"
+    }
+  ]
+}
