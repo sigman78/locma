@@ -50,9 +50,9 @@
   <section class="forms">
     <form on:submit|preventDefault={run}>
       <h3>Run a matchup</h3>
-      <PolicySelect bind:value={pa} compact />
+      <PolicySelect bind:value={pa} />
       vs
-      <PolicySelect bind:value={pb} compact />
+      <PolicySelect bind:value={pb} />
       seed <input type="number" bind:value={seed} style="width:60px" />
       <button disabled={busy}>Run</button>
     </form>

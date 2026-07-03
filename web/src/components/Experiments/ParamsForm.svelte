@@ -2,7 +2,6 @@
      which fields exist, so new experiment kinds need no frontend changes. -->
 <script lang="ts">
   import type { SchemaField } from '../../lib/api'
-  import PolicyInput from '../shared/PolicyInput.svelte'
   import PolicySelect from '../shared/PolicySelect.svelte'
 
   export let schema: SchemaField[] = []
@@ -21,12 +20,12 @@
     <label class="field" class:wide={f.type === 'policies'}>
       <span class="name" title={f.help ?? ''}>{f.name}{#if f.help}<em> — {f.help}</em>{/if}</span>
       {#if f.type === 'policy'}
-        <PolicySelect bind:value={params[f.name]} compact />
+        <PolicySelect bind:value={params[f.name]} />
       {:else if f.type === 'policies'}
         <div class="list">
           {#each params[f.name] ?? [] as _, i}
             <div class="row">
-              <PolicyInput bind:value={params[f.name][i]} />
+              <PolicySelect bind:value={params[f.name][i]} />
               <button type="button" class="mini" on:click={() => removeItem(f.name, i)}>x</button>
             </div>
           {/each}
