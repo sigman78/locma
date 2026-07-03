@@ -518,9 +518,23 @@
     outline-offset: -2px; border-radius: 8px; cursor: pointer; position: relative;
     transition: transform 0.14s ease, box-shadow 0.14s ease, outline-color 0.14s ease; }
   .slot:hover { outline-color: #4a4f6a; }
-  /* hover juice: hand cards lift toward you, board minions perk up */
-  .hand.mine .slot:hover { transform: translateY(-10px) scale(1.05); z-index: 30;
-    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.5); }
+  /* hover juice: hand cards lift toward you with a "raised" look — a tight
+     contact shadow, a deep soft under-shadow, and a faint light rim so the
+     elevation reads against the dark felt. animation: none pauses the
+     playable-breathe so it can't override the elevation shadows. */
+  .hand.mine .slot:hover { transform: translateY(-12px) scale(1.06); z-index: 30;
+    animation: none;
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.55),
+      0 20px 30px 4px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(255, 255, 255, 0.09); }
+  /* a playable card keeps its green glow on top of the elevation */
+  .hand.mine .slot.playable:hover {
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.55),
+      0 20px 30px 4px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(255, 255, 255, 0.09),
+      0 0 13px rgba(79, 217, 122, 0.6); }
   /* carried / tethered hand card: tight cursor tracking while held (the inline
      transform wins over :hover), springy overshoot on the way back */
   .slot.tethered { transition: transform 0.05s linear; z-index: 40;
