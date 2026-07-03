@@ -23,7 +23,13 @@ from locma.stats.intervals import binomial_test, wilson_ci
 from locma.stats.openskill_ratings import openskill_from_results, ordinal
 from locma.stats.sprt import sprt as sprt_test
 
-app = typer.Typer(help="Legends of Code & Magic 1.2 explore kit")
+# rich_markup_mode=None keeps typer's help/usage-error output plain Click text
+# (no framed panels); pretty_exceptions_enable=False does the same for tracebacks.
+app = typer.Typer(
+    help="Legends of Code & Magic 1.2 explore kit",
+    rich_markup_mode=None,
+    pretty_exceptions_enable=False,
+)
 app.add_typer(depot_app, name="depot")
 # rich is used ONLY by the interactive game renderer; CLI reporting is plain
 # text (see locma/cli/textfmt.py for the rationale).

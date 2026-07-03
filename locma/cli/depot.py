@@ -11,7 +11,9 @@ from locma.cli.textfmt import ascii_table, human_size
 
 depot_app = typer.Typer(
     help="Versioned artifact depot: publish/pin/push/pull checkpoints and datasets "
-    "with provenance. Refs: depot:<name>[@N|@latest][/<file>]"
+    "with provenance. Refs: depot:<name>[@N|@latest][/<file>]",
+    rich_markup_mode=None,
+    pretty_exceptions_enable=False,
 )
 
 
