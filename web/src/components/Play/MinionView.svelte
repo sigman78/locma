@@ -2,7 +2,8 @@
   import type { CardState } from '../../lib/replay'
   import { artUrl, cardName, card as cardMeta, hasArt } from '../../lib/cards'
   import { abilityList, auraSplit } from '../../lib/abilities'
-  import { restartAnim } from '../../lib/motion'
+  import { get } from 'svelte/store'
+  import { animate, restartAnim } from '../../lib/motion'
   import Tooltip from '../ReplayViewer/Tooltip.svelte'
 
   export let card: CardState
@@ -18,6 +19,9 @@
   export let fxToken = 0
 
   let imgFailed = false
+  // mounted inside a forward-step animation window == just summoned:
+  // fire the one-shot spawn ring (composes with the spring-in transition)
+  const spawnFx = get(animate)
   $: imgOk = !imgFailed && hasArt(card.card_id)
   $: name = cardName(card.card_id)
   $: meta = cardMeta(card.card_id)
@@ -29,7 +33,8 @@
   // a generic on-summon effect → 📜 pill on the face (detail in the tooltip); served as card_text
   $: special = meta?.card_text ?? ''
   $: sliding = slideX !== 0 || slideY !== 0
-  $: animCls = sliding ? 'sliding' : flash ? 'flashing' : null
+  // priority: attack slide > cast flash > damage-taken shake (all fxToken-retriggered)
+  $: animCls = sliding ? 'sliding' : flash ? 'flashing' : hit ? 'hitshake' : null
   $: slideStyle = sliding ? `--sx:${slideX}px; --sy:${slideY}px;` : ''
   $: tip = facing === 'down' ? ('below' as const) : ('above' as const)
   $: baseAtk = meta ? meta.attack : card.atk
@@ -139,6 +144,7 @@
       {#if damage != null}<div class="locma-dmg" class:delayed={dmgDelay}>-{damage}</div>{/if}
     {/key}
     {#if dying}<div class="death-cross">✕</div>{/if}
+    {#if spawnFx}<div class="spawn-ring"></div>{/if}
   </div>
 
   <!-- sleeping overlay sits above the dimmed minion -->

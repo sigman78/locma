@@ -370,3 +370,38 @@ code {
   color: #ff3030; font-size: 78px; font-weight: 900; line-height: 1;
   text-shadow: 0 0 8px #000, 0 2px 4px #000; animation: locma-crosspop 160ms ease-out;
 }
+
+/* ── play-mode juice: jiggles, shakes, summon impact ─────────────────────── */
+
+/* illegal-action feedback: quick decaying head-shake */
+@keyframes locma-jiggle {
+  0% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-6px) rotate(-2deg); }
+  40% { transform: translateX(5px) rotate(2deg); }
+  60% { transform: translateX(-3px) rotate(-1deg); }
+  80% { transform: translateX(2px) rotate(0.5deg); }
+  100% { transform: translateX(0) rotate(0); }
+}
+.jiggling { animation: locma-jiggle 340ms ease-in-out; }
+
+/* defender impact: short jitter, composes with the red hit-flash overlay */
+@keyframes locma-hitshake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 1px) rotate(-1deg); }
+  50% { transform: translate(3px, -1px) rotate(1deg); }
+  75% { transform: translate(-2px, 0) rotate(-0.5deg); }
+  100% { transform: translate(0, 0); }
+}
+.hitshake { animation: locma-hitshake 300ms ease-out; }
+
+/* summon impact: expanding ring around the arriving minion */
+@keyframes locma-spawn-ring {
+  0% { transform: scale(0.7); opacity: 0.9; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+.spawn-ring {
+  position: absolute; inset: -3px; z-index: 5; pointer-events: none;
+  border: 2px solid rgba(159, 227, 255, 0.9); border-radius: 10px;
+  box-shadow: 0 0 12px rgba(159, 227, 255, 0.6), inset 0 0 10px rgba(159, 227, 255, 0.35);
+  animation: locma-spawn-ring 480ms ease-out forwards;
+}

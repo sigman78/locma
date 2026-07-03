@@ -208,9 +208,23 @@
     return out
   }
 
+  // illegal-action feedback: quick head-shake on the clicked card
+  let jiggleIid: number | null = null
+  let jiggleTimer: ReturnType<typeof setTimeout> | null = null
+  function jiggle(iid: number) {
+    // synchronous set (no rAF: throttled in occluded windows); a re-click during
+    // the 400ms window extends the timer instead of restarting the animation
+    jiggleIid = iid
+    if (jiggleTimer) clearTimeout(jiggleTimer)
+    jiggleTimer = setTimeout(() => (jiggleIid = null), 400)
+  }
+
   function startAttack(e: MouseEvent, c: CardState) {
     if (!interactive) return
-    if (attackTargets(legal, c.iid).length === 0) return
+    if (attackTargets(legal, c.iid).length === 0) {
+      jiggle(c.iid) // summoning-sick / already attacked / no targets
+      return
+    }
     e.preventDefault()
     drag = { kind: 'attack', src: c.iid, from: centerOf(e.currentTarget as HTMLElement) }
     cursor = { x: e.clientX, y: e.clientY }
@@ -242,7 +256,11 @@
       return
     }
     const ts = itemTargets(legal, c.iid)
-    if (ts.length === 1 && ts[0] === -1) send({ t: 'use', item: c.iid, target: -1 })
+    if (ts.length === 1 && ts[0] === -1) {
+      send({ t: 'use', item: c.iid, target: -1 })
+    } else if (ts.length === 0) {
+      jiggle(c.iid) // not playable this turn (mana / full board / wrong phase)
+    }
   }
   function onMove(e: MouseEvent) {
     if (!drag) return
@@ -349,7 +367,9 @@
     use:anchor={'myfield'}>
     {#each displayMe as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
-        class:armed={drag?.src === c.iid} use:anchor={c.iid} in:spring out:deathFx
+        class:armed={drag?.src === c.iid} class:jiggling={jiggleIid === c.iid}
+        class:ready={interactive && !drag && attackTargets(legal, c.iid).length > 0}
+        use:anchor={c.iid} in:spring out:deathFx
         on:mousedown={(e) => startAttack(e, c)}>
         <MinionView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
@@ -363,6 +383,7 @@
   <div class="hand mine" use:dock={{ enabled: interactive && !drag, target: '.card' }}>
     {#each view.me.hand as c (c.iid)}
       <button class="slot" class:playable={isPlayable(c)} class:armed={drag?.src === c.iid}
+        class:jiggling={jiggleIid === c.iid}
         in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} />
       </button>
@@ -422,13 +443,30 @@
      browser's default ~6px inline padding — so a slot's layout width == --card-w and
      all 8 hand cards fit the panel. Highlights use outline, which takes no layout space. */
   .slot { background: none; border: none; padding: 0; outline: 2px solid transparent;
-    outline-offset: -2px; border-radius: 8px; cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.12s ease; }
+    outline-offset: -2px; border-radius: 8px; cursor: pointer; position: relative;
+    transition: transform 0.14s ease, box-shadow 0.14s ease, outline-color 0.14s ease; }
   .slot:hover { outline-color: #4a4f6a; }
-  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45); }
-  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5); }
-  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
-  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
+  /* hover juice: hand cards lift toward you, board minions perk up */
+  .hand.mine .slot:hover { transform: translateY(-10px) scale(1.05); z-index: 30;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.5); }
+  .field .slot:hover { transform: translateY(-3px) scale(1.03); z-index: 30; }
+  /* a minion with legal attack targets: soft amber ready-glow */
+  .slot.ready { outline-color: rgba(255, 210, 61, 0.55);
+    animation: ready-breathe 2.6s ease-in-out infinite; }
+  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45);
+    animation: playable-breathe 2.4s ease-in-out infinite; }
+  .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5);
+    animation: none; }
+  .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5);
+    animation: none; }
+  .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85);
+    animation: none; }
+  @keyframes playable-breathe {
+    50% { box-shadow: 0 0 15px rgba(79, 217, 122, 0.75); }
+  }
+  @keyframes ready-breathe {
+    50% { outline-color: rgba(255, 210, 61, 0.25); }
+  }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
   /* always on screen: the board can be taller than the viewport inside the
      tabbed shell, and an invisible End Turn reads as a frozen game */
@@ -445,7 +483,10 @@
     border-radius: 10px; padding: 2px 10px; }
   .hint { color: #aaa; font-size: 14px; }
   .endturn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a;
-    border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600; }
+    border-radius: 4px; padding: 8px 18px; cursor: pointer; font-weight: 600;
+    transition: transform 0.12s ease, filter 0.12s ease; }
+  .endturn:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.2); }
+  .endturn:not(:disabled):active { transform: translateY(0) scale(0.97); }
   .endturn:disabled { opacity: 0.5; cursor: default; }
   /* a player panel acting as the face hit-area */
   .faceplate { border: 2px solid transparent; border-radius: 8px; padding: 2px 6px;

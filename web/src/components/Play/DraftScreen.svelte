@@ -69,9 +69,13 @@
   h2 { margin: 0; }
   .row { display: flex; gap: 20px; padding: 16px 0; justify-content: center; }
   .pick { background: none; border: 2px solid transparent; border-radius: 8px;
-    padding: 4px; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
+    padding: 4px; cursor: pointer;
+    transition: border-color 0.14s, transform 0.14s ease, box-shadow 0.14s ease; }
   /* lift the hovered card (and its tooltip) above its row neighbours */
-  .pick:hover { border-color: #ffd23d; transform: translateY(-4px); position: relative; z-index: 50; }
+  .pick:hover { border-color: #ffd23d; transform: translateY(-8px) scale(1.04);
+    position: relative; z-index: 50; box-shadow: 0 14px 26px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(255, 210, 61, 0.25); }
+  .pick:active { transform: translateY(-4px) scale(1.0); }
   .foot { display: flex; align-items: center; gap: 16px; }
   .count { color: #aaa; }
   .auto { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
