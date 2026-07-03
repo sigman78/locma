@@ -40,6 +40,8 @@
 
   $: view = liveStep ? liveStep.view : pending.view
   $: legal = pending.legal
+  // the common turn-1 case: nothing summonable, pass is the only move — say so
+  $: passOnly = legal.length === 1 && legal[0].t === 'pass'
   $: meSeat = you
   $: opSeat = 1 - you
   $: interactive = !playing
@@ -375,9 +377,13 @@
   <div class="controls">
     <span class="turnno">Turn {view.turn}</span>
     <span class="hint">
-      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
+      {#if playing}AI is taking its turn…{:else if drag}Drag to a highlighted target — release to confirm, Esc to cancel.{:else if passOnly}No playable actions this turn — end your turn.{:else}Your turn — drag a unit to attack, click or drag a card to your field to summon, drag an item to its target, or end turn.{/if}
     </span>
-    <button class="endturn" on:click={() => send({ t: 'pass' })} disabled={!interactive}>End Turn ⏭</button>
+    <button
+      class="endturn"
+      class:urge={passOnly && interactive}
+      on:click={() => send({ t: 'pass' })}
+      disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
 
@@ -424,7 +430,16 @@
   .slot.legaltarget { outline-color: #5aa9ff; box-shadow: 0 0 8px rgba(90, 169, 255, 0.5); }
   .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85); }
   hr { width: 70%; border: none; border-top: 1px dashed #3a4a3c; margin: 2px 0; }
-  .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px; }
+  /* always on screen: the board can be taller than the viewport inside the
+     tabbed shell, and an invisible End Turn reads as a frozen game */
+  .controls { display: flex; gap: 16px; align-items: center; margin-top: 4px;
+    position: sticky; bottom: 0; z-index: 40; background: rgba(14, 14, 18, 0.92);
+    padding: 8px 4px; border-top: 1px solid #23232b; }
+  .endturn.urge { border-color: #3fbf66; box-shadow: 0 0 10px rgba(79, 217, 122, 0.35);
+    animation: urge-pulse 1.6s ease-in-out infinite; }
+  @keyframes urge-pulse {
+    50% { box-shadow: 0 0 16px rgba(79, 217, 122, 0.6); }
+  }
   .turnno { color: #ffd23d; font-weight: 700; font-size: 14px;
     background: rgba(255, 210, 61, 0.12); border: 1px solid #ffd23d55;
     border-radius: 10px; padding: 2px 10px; }
