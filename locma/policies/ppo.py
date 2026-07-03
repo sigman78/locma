@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 from locma.envs.encode import action_mask, encode_battle, encode_battle_tokens, index_to_action
 
 
@@ -56,3 +58,51 @@ class MaskablePPOBattlePolicy:
 
     def reset(self, seed=None) -> None:
         pass
+
+
+class RecurrentPPOBattlePolicy:
+    """Wraps a saved MaskableRecurrentPPO model as a stateful Battle Policy.
+
+    The LSTM hidden state is carried across all of one game's decisions and
+    cleared by ``reset()`` (the harness calls it once per game), so the net
+    sees the same within-episode state flow it was trained on. Lazy model
+    loading and ``deterministic=True`` mirror MaskablePPOBattlePolicy.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "model.zip",
+        name: str = "rppo",
+        deterministic: bool = True,
+        model=None,
+    ):
+        self.model_path = model_path
+        self.name = name
+        self.deterministic = deterministic
+        self._model = model
+        self._state = None
+        self._episode_start = True
+
+    def _ensure(self) -> None:
+        if self._model is None:
+            from locma.envs.rppo import MaskableRecurrentPPO  # noqa: PLC0415 — optional [ml] dep
+
+            self._model = MaskableRecurrentPPO.load(self.model_path)
+
+    def battle_action(self, view, legal, state=None):
+        self._ensure()
+        obs = _encode_for(self._model, view)
+        mask = action_mask(view, legal)
+        idx, self._state = self._model.predict(
+            obs,
+            state=self._state,
+            episode_start=np.array([self._episode_start]),
+            deterministic=self.deterministic,
+            action_masks=mask,
+        )
+        self._episode_start = False
+        return index_to_action(view, legal, int(idx))
+
+    def reset(self, seed=None) -> None:
+        self._state = None
+        self._episode_start = True

@@ -368,6 +368,9 @@ def train(
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
     ),
+    recurrent: bool = typer.Option(
+        False, help="train a MaskableRecurrentPPO (LSTM memory) instead of MaskablePPO"
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -412,6 +415,7 @@ def train(
             device=device,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            recurrent=recurrent,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -443,6 +447,9 @@ def train_zoo_cmd(
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
+    ),
+    recurrent: bool = typer.Option(
+        False, help="train a MaskableRecurrentPPO (LSTM memory) instead of MaskablePPO"
     ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
@@ -485,6 +492,7 @@ def train_zoo_cmd(
             n_envs=n_envs,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            recurrent=recurrent,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

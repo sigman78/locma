@@ -113,11 +113,18 @@ def _make_model(
     device: str = "auto",
     extractor_kwargs: dict | None = None,
     tensorboard_log: str | None = None,
+    recurrent: bool = False,
+    lstm_kwargs: dict | None = None,
 ):
     """Construct a MaskablePPO model, selecting the policy class by obs_mode.
 
     All PPO knobs are explicit so a sweep can set them; defaults match SB3's own
     defaults, so an unset knob reproduces the pre-sweep behavior byte-for-byte.
+
+    ``recurrent=True`` builds a MaskableRecurrentPPO (LSTM policy/value trunks,
+    hidden state carried across a game's decisions — see ``locma/envs/rppo.py``)
+    instead; ``lstm_kwargs`` (e.g. ``lstm_hidden_size``, ``n_lstm_layers``,
+    ``shared_lstm``, ``enable_critic_lstm``) are forwarded to the policy.
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
@@ -139,12 +146,23 @@ def _make_model(
         tensorboard_log=tensorboard_log,
     )
 
+    pk: dict = {}
     if obs_mode.startswith("token"):
         from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
 
-        pk = dict(features_extractor_class=TokenSetExtractor)
+        pk["features_extractor_class"] = TokenSetExtractor
         if extractor_kwargs:
             pk["features_extractor_kwargs"] = dict(extractor_kwargs)
+
+    if recurrent:
+        from locma.envs.rppo import MaskableRecurrentPPO  # noqa: PLC0415
+
+        if lstm_kwargs:
+            pk.update(lstm_kwargs)
+        policy_name = "MultiInputLstmPolicy" if obs_mode.startswith("token") else "MlpLstmPolicy"
+        return MaskableRecurrentPPO(policy_name, env, policy_kwargs=pk or None, **common)
+
+    if obs_mode.startswith("token"):
         return MaskablePPO("MultiInputPolicy", env, policy_kwargs=pk, **common)
 
     # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
@@ -177,6 +195,8 @@ def train_agent(
     callback=None,
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
+    recurrent: bool = False,
+    lstm_kwargs: dict | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -205,6 +225,8 @@ def train_agent(
     tensorboard_log: optional tensorboard log directory.
     draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
         diversifies the decks the agent trains on (the opponent drafts both seats).
+    recurrent: train a MaskableRecurrentPPO (LSTM) instead of MaskablePPO;
+        lstm_kwargs (lstm_hidden_size, n_lstm_layers, ...) go to the policy.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -230,6 +252,8 @@ def train_agent(
         device=device,
         extractor_kwargs=extractor_kwargs,
         tensorboard_log=tensorboard_log,
+        recurrent=recurrent,
+        lstm_kwargs=lstm_kwargs,
     )
 
     if checkpoints:
@@ -285,6 +309,8 @@ def train_zoo(
     callback=None,
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
+    recurrent: bool = False,
+    lstm_kwargs: dict | None = None,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -311,6 +337,8 @@ def train_zoo(
     tensorboard_log: optional tensorboard log directory.
     draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
         diversifies the decks the agent trains on (the opponent drafts both seats).
+    recurrent: train a MaskableRecurrentPPO (LSTM) instead of MaskablePPO;
+        lstm_kwargs (lstm_hidden_size, n_lstm_layers, ...) go to the policy.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -342,6 +370,8 @@ def train_zoo(
         device=device,
         extractor_kwargs=extractor_kwargs,
         tensorboard_log=tensorboard_log,
+        recurrent=recurrent,
+        lstm_kwargs=lstm_kwargs,
     )
     try:
         for i, opp in enumerate(opps):
