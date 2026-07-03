@@ -83,6 +83,12 @@ imported row by row.
 
 ## Play
 
-Play against any configured policy — the opponent field takes a spec, not
-just a baseline name: `vbeam:depot:b0/b0_s0.zip,8,20` plays against the
-recipe of record. Model-backed opponents need the `[ml]` extra.
+Play against any configured policy. The opponent selector defaults to the
+competitive pick (V-beam on the pinned `depot:b0`, the recipe of record) and
+offers curated groups — depot-backed models, baselines, search policies —
+plus a "Custom spec…" escape hatch for parameterized specs like
+`vbeam:depot:b0/b0_s0.zip,12,30`. An explanation panel below decodes the
+selected spec: what the policy is and what each positional parameter means
+(defaults marked). The same control (`PolicySelect`) is reused in the replay
+matchup form and single-policy experiment fields. Model-backed opponents
+need the `[ml]` extra.

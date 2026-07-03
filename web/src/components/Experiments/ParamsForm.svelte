@@ -3,6 +3,7 @@
 <script lang="ts">
   import type { SchemaField } from '../../lib/api'
   import PolicyInput from '../shared/PolicyInput.svelte'
+  import PolicySelect from '../shared/PolicySelect.svelte'
 
   export let schema: SchemaField[] = []
   export let params: Record<string, any> = {}
@@ -20,7 +21,7 @@
     <label class="field" class:wide={f.type === 'policies'}>
       <span class="name" title={f.help ?? ''}>{f.name}{#if f.help}<em> — {f.help}</em>{/if}</span>
       {#if f.type === 'policy'}
-        <PolicyInput bind:value={params[f.name]} />
+        <PolicySelect bind:value={params[f.name]} compact />
       {:else if f.type === 'policies'}
         <div class="list">
           {#each params[f.name] ?? [] as _, i}

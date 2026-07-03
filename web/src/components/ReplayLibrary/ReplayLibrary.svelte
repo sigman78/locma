@@ -3,7 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import { importReplay, listGameLogs, listReplays, runReplay } from '../../lib/api'
   import type { ReplayHeader } from '../../lib/replay'
-  import PolicyInput from '../shared/PolicyInput.svelte'
+  import PolicySelect from '../shared/PolicySelect.svelte'
 
   const dispatch = createEventDispatcher<{ open: string }>()
   let rows: ReplayHeader[] = []
@@ -50,9 +50,9 @@
   <section class="forms">
     <form on:submit|preventDefault={run}>
       <h3>Run a matchup</h3>
-      <PolicyInput bind:value={pa} />
+      <PolicySelect bind:value={pa} compact />
       vs
-      <PolicyInput bind:value={pb} />
+      <PolicySelect bind:value={pb} compact />
       seed <input type="number" bind:value={seed} style="width:60px" />
       <button disabled={busy}>Run</button>
     </form>
