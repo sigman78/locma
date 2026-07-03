@@ -129,8 +129,14 @@ def main() -> None:
     if todo:
         from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
 
-        log(f"stage1: training seeds {todo} in parallel (800k zoo, recurrent, B0 recipe)")
-        with ProcessPoolExecutor(max_workers=len(todo)) as ex:
+        # 2 concurrent runs, not 3: every SubprocVecEnv worker imports the
+        # torch CUDA stack (~2.5 GB commit each; the worker fn lives inside
+        # the sb3 package), and 3 x 17 processes exceeded this box's 142 GB
+        # Windows commit limit (WinError 1455). 2 x 17 fits with margin and
+        # still overlaps one run's CPU rollout phase with the other's GPU
+        # update phase.
+        log(f"stage1: training seeds {todo}, 2 in parallel (800k zoo, recurrent, B0 recipe)")
+        with ProcessPoolExecutor(max_workers=min(2, len(todo))) as ex:
             for s, r in ex.map(train_one, todo):
                 record(f"train_s{s}", r)
 
