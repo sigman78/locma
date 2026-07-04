@@ -1386,3 +1386,37 @@ top of contested drafts push past +0.026?); new-TRAINING-seed replication
 of the shared arm (the remaining de-risk); one-sided rndK (pure handicap
 asymmetry). Models rnd{8,12}_s* kept in runs/ (reference, regenerable --
 not depot-published; no promotion).
+
+## E7c: shared+rnd4 stacking -- no additivity; mechanism fully pinned (2026-07-04)
+
+The one configuration that could have beaten the promoted +0.026: contested
+offers (structure) + rnd4 (variance) at once. shrnd4_s{0,1,2} = B0 recipe +
+--shared-draft --draft-noise 4 (the wrappers compose with zero plumbing;
+driver scripts/stack_driver.py, results runs/stack-summary.json):
+
+| verdict (40x25, standard ruler) | delta | 95% CI |
+|---|---|---|
+| vbeam:stack vs vbeam:b0 | +0.022 | [+0.016, +0.028] |
+| **vbeam:stack vs vbeam:shared (direct)** | **-0.004** | [-0.007, +0.001] null |
+| reactive stack vs b0 | **-0.028** | [-0.035, -0.020] |
+
+Findings:
+1. **No additivity.** The stack lands inside the E7b plateau (+0.022) and
+   the direct paired comparison against shared is null-to-slightly-negative.
+   With E7b this fully pins the mechanism: the critic gain is
+   MIRROR-BREAKING, it saturates at the first sufficient dose, and shared
+   draft (which supplies it at zero deck-quality cost) was already the
+   optimum. Stacking is closed.
+2. **The reactive tax is super-additive.** shared alone +0.003, rnd4 alone
+   -0.008, stacked -0.028: under contested offers a wasted random pick also
+   hands the opponent a free contested card, so noise costs the POLICY far
+   more than in the default rules -- while the critic gain survives intact.
+   The sharpest evidence yet that the policy and value heads want different
+   training data.
+
+**vbeam:depot:shared/shared_sX.zip (0.890) stays the recipe of record.**
+The remaining open item from E7 is the new-TRAINING-seed replication of the
+shared arm (bootstrap covers eval noise only). A speculative future lever,
+given finding 2: decouple the heads -- train the critic on mirror-broken
+games and the policy on clean ones (two-phase or dual-env training).
+Models shrnd4_s* kept in runs/ (reference, regenerable; no promotion).
