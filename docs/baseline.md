@@ -80,6 +80,15 @@ under the b0 pilot) and leave the battle-policy Elo hierarchy unchanged
 (vbeam 1840 > dmcts 1801 > ppo:b0 1669; random collapses 683 → 573 — a random
 drafter suffers most when a competent opponent strips its offers).
 
+Dose-response follow-up (E7b, worklog 2026-07-04): the mechanism is
+mirror-breaking deck diversity and it saturates at ~4 noisy picks (vbeam
+deltas: rnd4 +0.018, rnd8 +0.019, rnd12 +0.023 — all below shared's +0.026);
+at 40% noise a real *reactive* tax appears (-0.012) while the critic still
+gains — the policy and value heads want different data. Shared stays the best
+point on both axes. Process rule going forward: score training-side levers
+under the planner, not reactively (the rnd4 nets' 2026-07-02 "null" was a
+consumer artifact).
+
 ## Reproduce
 
 ```bash
