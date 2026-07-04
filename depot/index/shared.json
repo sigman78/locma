@@ -1,0 +1,42 @@
+{
+  "name": "shared",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-04T02:09:25+00:00",
+      "git_commit": "b5000bd",
+      "git_dirty": true,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish shared runs/shared_s0.zip runs/shared_s1.zip runs/shared_s2.zip --kind model --parent b0@1 --note E7 shared-draft arm: B0 recipe + --shared-draft (contested-offer draft variant), 800k zoo, PR feat/shared-draft. Reactive 0.663 (null vs b0 +0.003). PLANNER RECIPE OF RECORD: vbeam:depot:shared/shared_sX.zip = 0.890 avg-hard3, +0.026 CI [+0.021,+0.031] vs vbeam:b0 0.864 on the standard ruler; fresh-seed confirm (2M+ anchors) +0.026 CI [+0.020,+0.032]. First training-side lever with a positive paired CI -- critic-data effect, visible only under the planner. Supersedes vbeam:depot:b0 (0.863). --meta {\"avg_hard3_reactive\": 0.663, \"avg_hard3_vbeam\": 0.890, \"vbeam_delta_vs_b0\": 0.026, \"confirm_delta_fresh_seeds\": 0.026, \"obs_mode\": \"token\", \"steps\": 800000, \"shared_draft\": true}",
+      "parents": [
+        "b0@1"
+      ],
+      "note": "E7 shared-draft arm: B0 recipe + --shared-draft (contested-offer draft variant), 800k zoo, PR feat/shared-draft. Reactive 0.663 (null vs b0 +0.003). PLANNER RECIPE OF RECORD: vbeam:depot:shared/shared_sX.zip = 0.890 avg-hard3, +0.026 CI [+0.021,+0.031] vs vbeam:b0 0.864 on the standard ruler; fresh-seed confirm (2M+ anchors) +0.026 CI [+0.020,+0.032]. First training-side lever with a positive paired CI -- critic-data effect, visible only under the planner. Supersedes vbeam:depot:b0 (0.863).",
+      "meta": {
+        "avg_hard3_reactive": 0.663,
+        "avg_hard3_vbeam": 0.89,
+        "vbeam_delta_vs_b0": 0.026,
+        "confirm_delta_fresh_seeds": 0.026,
+        "obs_mode": "token",
+        "steps": 800000,
+        "shared_draft": true
+      },
+      "files": {
+        "shared_s0.zip": {
+          "sha256": "53b6e2f2bb9438e2cceab0e788b2003d7b966b9f8ea27502772758142e7e48d2",
+          "size": 5770628
+        },
+        "shared_s1.zip": {
+          "sha256": "909a4c73be392c8ee800c924eca068c897a1a7961d781a788bfd2da81714ba2e",
+          "size": 5770632
+        },
+        "shared_s2.zip": {
+          "sha256": "52d5cf48e2c7d038a44ea8575ff218fe69f561975af1a1a7f0bc69040c5ab63c",
+          "size": 5770628
+        }
+      },
+      "published": "gh:depot/shared-v1"
+    }
+  ]
+}

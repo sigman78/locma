@@ -1300,3 +1300,27 @@ play-time search. Deck asymmetry is a critic-data lever, not a policy lever.
 
 Artifacts: `runs/shared_s{0,1,2}.zip`, `runs/shared-summary.json`,
 `runs/shared-overnight.log`; tooling + tests on branch feat/shared-draft.
+
+## E7 addendum: fresh-seed confirm + PROMOTION (2026-07-03)
+
+Fresh-seed confirm run (same 40x25 shape, eval anchors moved to 2_000_000+,
+disjoint from every seed range previously played): vbeam:shared 0.879 vs
+vbeam:b0 0.853, **delta +0.026, CI [+0.020, +0.032]** -- the paired delta
+replicates exactly on never-before-seen games (both absolute rates read ~1
+point lower on this seed range; the pairing absorbs it).
+
+**Promoted:** `depot:shared` v1 published (parent b0@1, pushed to
+gh:depot/shared-v1). **Planner recipe of record is now
+`vbeam:depot:shared/shared_sX.zip` (0.890)**, superseding vbeam:depot:b0
+(0.863). Reactive recipe of record unchanged (depot:b0). Promotion rationale:
++0.026 misses the pre-registered +0.03 bar but the CI excludes zero decisively
+on BOTH the original and a fully disjoint eval range; every prior
+training-side lever was null-or-negative. Residual caveat: 3 training seeds
+per arm (training-run noise not bootstrap-covered); a new-training-seed
+replication is the remaining de-risk if this direction gets leaned on.
+
+Mechanism discriminator queued: vbeam:depot:rnd4 (uniform-noise decks, never
+evaluated under the planner -- the nets predate vbeam) vs vbeam:b0 on the same
+ruler. rnd4 lifting vbeam = generic deck diversity is the driver; rnd4 null =
+the shared draft's structured asymmetry (complementary contested halves ->
+sustained advantage states for the critic) is the driver.
