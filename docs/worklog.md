@@ -1349,3 +1349,40 @@ Two consequences:
    stack -- cheap to test now that the driver + --shared-draft/--draft-noise
    plumbing compose. Results: runs/shared-summary.json
    ("discriminator_vbeam_rnd4_standard").
+
+## E7b: rndK dose-response -- mirror-breaking saturates fast; shared stays the best point (2026-07-04)
+
+Fills the draft-noise depth curve under the planner (the E7 lesson: score
+training levers under vbeam, not reactively). New arms rnd{8,12}_s{0,1,2} =
+B0 recipe + --draft-noise k, paired 40x25 verdicts vs depot:b0 on the
+standard ruler (driver scripts/rndk_driver.py, results runs/rndk-summary.json;
+k=3 (~10%) deliberately skipped -- statistically indistinguishable from the
+existing k=4 point):
+
+| arm | noise | vbeam delta | 95% CI | reactive delta | 95% CI |
+|---|---|---|---|---|---|
+| b0 | 0% | 0 | (definition) | 0 | (definition) |
+| rnd4 | 13% | +0.018 | [+0.013, +0.024] | -0.008 | [-0.016, +0.001] |
+| rnd8 | 27% | +0.019 | [+0.013, +0.025] | -0.000 | [-0.006, +0.006] |
+| rnd12 | 40% | +0.023 | [+0.018, +0.029] | -0.012 | [-0.020, -0.004] |
+| **shared** | contested | **+0.026** | [+0.021, +0.031] | +0.003 | [-0.005, +0.011] |
+
+Findings:
+1. **The critic gain saturates almost immediately**: k=4 already captures
+   ~+0.018 and doubling to k=8 adds nothing. A small amount of deck
+   asymmetry unlocks the effect; more diversity does not scale it.
+2. **No collapse even at 40% noise** -- vbeam delta holds (nominally rises
+   to +0.023; CIs overlap k4/k8, unconfirmed drift). The critic benefits
+   from advantage-variance regardless of absolute deck quality.
+3. **The reactive tax finally appears at k=12** (-0.012, CI excludes zero):
+   training on heavily degraded decks costs the policy head while still
+   helping the critic -- the two heads want different data.
+4. **Promotion stands.** Shared remains the best measured point: nominally
+   highest planner delta AND the only mirror-breaking arm with zero
+   reactive cost (its decks are competently drafted). No rndK arm beats it.
+
+Open next probes (descending value): shared+rndK stacking (does noise on
+top of contested drafts push past +0.026?); new-TRAINING-seed replication
+of the shared arm (the remaining de-risk); one-sided rndK (pure handicap
+asymmetry). Models rnd{8,12}_s* kept in runs/ (reference, regenerable --
+not depot-published; no promotion).
