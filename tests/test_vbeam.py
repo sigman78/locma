@@ -21,7 +21,7 @@ from locma.core.state import GameState, Phase
 from locma.data.cards_db import load_cards
 from locma.harness.ceiling_eval import _ppo_policy
 from locma.policies.registry import make_policy, policy_names
-from locma.policies.vbeam import VBeamBattlePolicy, plan_turn
+from locma.policies.vbeam import EnsembleValueEvaluator, VBeamBattlePolicy, plan_turn
 
 
 class _ZeroEvaluator:
@@ -289,6 +289,65 @@ def test_net_evaluator_rejects_flat_model(tmp_path):
     ev = NetValueEvaluator(path)
     with pytest.raises(ValueError, match="token"):
         ev.values([make_battle_view(_battle_state(0))])
+
+
+def test_registry_vbeam_ensemble_spec():
+    """Pipe-separated model paths select the mean-of-critics evaluator (lazy,
+    so no [ml] extra and no model files are needed to construct the policy)."""
+    pol = make_policy("vbeam:runs/a.zip|runs/b.zip|runs/c.zip,4")
+    assert isinstance(pol.battle._evaluator, EnsembleValueEvaluator)
+    assert pol.battle._evaluator.model_paths == ["runs/a.zip", "runs/b.zip", "runs/c.zip"]
+    assert pol.battle.width == 4
+    assert pol.name == "vbeam:runs/a.zip|runs/b.zip|runs/c.zip,4"
+
+
+def test_ensemble_requires_two_members():
+    with pytest.raises(ValueError, match="at least 2"):
+        EnsembleValueEvaluator(["runs/a.zip"])
+
+
+def test_ensemble_of_identical_models_matches_single(tmp_path):
+    """An ensemble of N copies of one model must reproduce the single evaluator
+    exactly — values AND the would_pass stop gate."""
+    pytest.importorskip("sb3_contrib")
+    from locma.envs.encode import action_mask  # noqa: PLC0415
+    from locma.policies.vbeam import NetValueEvaluator  # noqa: PLC0415
+
+    path = _make_token_model(tmp_path)
+    single = NetValueEvaluator(path)
+    ens = EnsembleValueEvaluator([path, path, path])
+
+    states = [_battle_state(0), _battle_state(1)]
+    views = [make_battle_view(gs) for gs in states]
+    masks = [
+        action_mask(v, list(battlemod.battle_legal(gs)))
+        for v, gs in zip(views, states, strict=True)
+    ]
+
+    sv, sp = single.evaluate(views, masks)
+    ev, ep = ens.evaluate(views, masks)
+    assert sp == ep
+    for a, b in zip(sv, ev, strict=True):
+        assert abs(a - b) < 1e-6
+
+
+def test_ensemble_values_are_mean_of_members(tmp_path):
+    pytest.importorskip("sb3_contrib")
+    from locma.policies.vbeam import NetValueEvaluator  # noqa: PLC0415
+
+    p1 = _make_token_model(tmp_path)
+    p2 = str(tmp_path / "m2.zip")
+    from locma.envs.training import _build_env, _make_model  # noqa: PLC0415
+
+    env = _build_env("random", 1, 1, obs_mode="token")
+    _make_model(env, obs_mode="token", seed=1, verbose=0, ent_coef=0.02).save(p2)
+    env.close()
+
+    views = [make_battle_view(_battle_state(0))]
+    v1 = NetValueEvaluator(p1).values(views)
+    v2 = NetValueEvaluator(p2).values(views)
+    ve = EnsembleValueEvaluator([p1, p2]).values(views)
+    assert abs(ve[0] - (v1[0] + v2[0]) / 2.0) < 1e-6
 
 
 @pytest.mark.slow

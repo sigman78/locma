@@ -257,6 +257,36 @@ class NetValueEvaluator:
         return [max(-1.0, min(1.0, float(x))) for x in raw]
 
 
+class EnsembleValueEvaluator:
+    """Mean-of-critics evaluator over several token models (zero-training trio).
+
+    ``values[i]`` is the mean of each member's *clipped* critic estimate (each
+    member contributes exactly what it would contribute alone), and
+    ``would_pass[i]`` is the argmax-is-Pass test on the mean of the members'
+    masked policy distributions — the standard probability-averaging ensemble.
+    Members load lazily like ``NetValueEvaluator``; cost is one trunk forward
+    per member per beam depth.
+    """
+
+    def __init__(self, model_paths: list[str]) -> None:
+        if len(model_paths) < 2:
+            raise ValueError("EnsembleValueEvaluator needs at least 2 model paths")
+        self.model_paths = list(model_paths)
+        self.members = [NetValueEvaluator(p) for p in model_paths]
+
+    def evaluate(self, views: list, masks: list) -> tuple[list[float], list[bool]]:
+        raws, probss = zip(*(m._forward(views, masks) for m in self.members), strict=True)
+        values_mat = np.clip(np.stack(raws), -1.0, 1.0)
+        values = [float(x) for x in values_mat.mean(axis=0)]
+        mean_probs = np.stack(probss).mean(axis=0)
+        would_pass = [int(np.argmax(p)) == 0 for p in mean_probs]
+        return values, would_pass
+
+    def values(self, views: list) -> list[float]:
+        raws = [np.clip(m._forward(views, None)[0], -1.0, 1.0) for m in self.members]
+        return [float(x) for x in np.stack(raws).mean(axis=0)]
+
+
 class VBeamBattlePolicy:
     """Battle policy that plans its whole turn with ``plan_turn`` and plays it out.
 
