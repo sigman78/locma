@@ -1225,3 +1225,78 @@ margin/ranking losses over beam siblings, Q-filtered imitation, or RL
 fine-tuning against the planner. (Both baselines reproduced on the ruler this
 run: reactive 0.660, vbeam 0.8642.) Artifacts: `runs/vdst-*` (data, models,
 summary.json, overnight.log); tooling + tests merged with this branch.
+
+## E7: shared draft variant -- first positive training-side CI, via the critic under vbeam (2026-07-03)
+
+New engine rule variant (branch feat/shared-draft): **shared draft** -- a pick
+REMOVES the card from the other seat's offer (second picker chooses from the
+remaining 2, third card burned), first picker alternates by round. Breaks the
+default rule's mirror where two seats running the same deterministic draft
+build identical decks -- the asymmetric-deck generator the draft-determinism
+hypothesis called for, without +rndK's deck-quality cost. Opt-in everywhere:
+`start_draft(shared=)`, `run_game(shared_draft=)`, draft-bench/`duel --shared`,
+`tournament --shared-draft`, `train`/`train-zoo --shared-draft`,
+`ceiling-eval --shared-draft`; default path byte-identical; self-duel 0.500
+calibration still exact. Driver: `scripts/shared_driver.py`; results
+`runs/shared-summary.json`.
+
+**A. Draft-bench, default vs shared** (field-avg; ground 600/pair, b0 net
+300/pair): contested offers COMPRESS draft skill and reward first-pick
+stat/Guard grabs over curve planning. Ground pilot flips the top:
+balanced 0.654 -> 0.604 vs max-guard 0.592 -> **0.631** (new #1). Under the
+b0 deployment pilot balanced stays #1 but its edge halves: 0.609 -> 0.579
+vs max-guard 0.563, max-attack 0.494 -> 0.536.
+
+**B. Tournament matrix/Elo** (8-policy roster, 100/pair): the battle-policy
+hierarchy is UNCHANGED -- vbeam:b0 1825 -> 1840, dmcts 1750 -> 1801,
+ppo:b0 1666 -> 1669, heuristics flat, random 683 -> 573 (a random drafter
+suffers most when a competent opponent strips its offers; search exploits
+deck asymmetry slightly better). The variant changes deck-building
+incentives, not the policy pecking order.
+
+**C+D. Training arm** -- `shared_s{0,1,2}` = B0 recipe of record +
+`--shared-draft` (token V0, lr 1e-4, target_kl 0.025, 800k zoo, 13.6
+min/seed). Paired verdicts (40x25 ruler, 19 workers, both baselines
+reproduced: reactive 0.660, vbeam 0.8642):
+
+| arm | deploy | cand | b0 | delta | 95% CI |
+|---|---|---|---|---|---|
+| reactive | standard | 0.663 | 0.660 | +0.003 | [-0.005, +0.011] null |
+| reactive | shared | 0.659 | 0.638 | +0.021 | [+0.014, +0.028] real, sub-thr |
+| **vbeam** | standard | **0.890** | 0.864 | **+0.026** | [+0.021, +0.031] real, sub-thr |
+| **vbeam** | shared | 0.892 | 0.868 | +0.025 | [+0.020, +0.029] real, sub-thr |
+
+**Reading (three findings):**
+
+1. **Reactive: same story as every data-side lever.** Standard-ruler delta
+   +0.003 -- deck diversity in training still buys the reactive net nothing
+   (consistent with the draft-noise null). The shared-deploy +0.021 is pure
+   distribution matching: B0 loses 0.022 moving to shared deployment
+   (0.660 -> 0.638), shared-trained nets lose 0.004 -- training in the
+   deployment environment recovers the shift, no new capability.
+2. **vbeam: the first training-side change in the project with a solidly
+   positive paired CI.** +0.026 [+0.021, +0.031] on the standard ruler (and
+   +0.025 under shared deploy) -- sub-threshold by the pre-registered +0.03
+   rule, but every prior training-side lever was null-or-negative with CIs
+   straddling or below zero. The gain is invisible reactively (+0.003) and
+   appears only under the planner: the shared-trained CRITIC ranks states
+   better for the beam. Mechanism fit: shared-draft training exposes the
+   value function to asymmetric deck matchups (varied material imbalances)
+   the mirror-deck default never generates, sharpening exactly the ordering
+   signal E5v2 showed the beam depends on -- a channel FVI could not improve
+   directly (the critic was already the fixed point of its own backup; this
+   changes the DATA, not the objective).
+3. **vbeam:runs/shared_sX.zip = 0.890 is the best planner number measured**
+   (vs 0.863 of record). Promotion to recipe of record is a judgment call:
+   the +0.026 CI excludes zero decisively but misses the +0.03 bar the
+   study pre-registered. If promoted, publish `depot:shared` with parent
+   b0 provenance; a confirm-run at fresh seeds would de-risk it.
+
+**Hypothesis scorecard** (the "draft determinism creates a moat" idea): the
+moat framing stays wrong for the reactive net (finding 1, third null in a
+row), but its kernel -- mirror decks starve the VALUE function of
+asymmetric-matchup data -- was right, and the payoff routes through
+play-time search. Deck asymmetry is a critic-data lever, not a policy lever.
+
+Artifacts: `runs/shared_s{0,1,2}.zip`, `runs/shared-summary.json`,
+`runs/shared-overnight.log`; tooling + tests on branch feat/shared-draft.
