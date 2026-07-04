@@ -60,6 +60,10 @@ class BattleEnv(gym.Env):
         ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars);
         ``"token-v1"`` — same tokenized dict with 5 extra symmetric-threat
         scalars (18 scalars instead of 13).
+    shared_draft:
+        Run the shared draft variant (a pick removes the card from the other
+        seat's offer; first pick alternates by round) instead of the default
+        both-pick-from-the-same-triplet rule.
     """
 
     metadata: dict = {}
@@ -71,6 +75,7 @@ class BattleEnv(gym.Env):
         agent_seat: int = 0,
         seat_random: bool = False,
         obs_mode: str = "flat",
+        shared_draft: bool = False,
     ) -> None:
         super().__init__()
         _VALID_OBS_MODES = {"flat", "token", "token-v1"}
@@ -85,6 +90,11 @@ class BattleEnv(gym.Env):
         # across both seats, so seat-0-only training is a coverage gap.
         self.seat_random = seat_random
         self._seat_rng = random.Random(seed + 777)
+        # shared_draft: the shared draft variant — a pick removes the card from the
+        # other seat's offer, first pick alternates by round. Breaks the mirror-deck
+        # symmetry of the default rule (both seats otherwise pick identically from
+        # identical triplets under a deterministic draft).
+        self.shared_draft = shared_draft
 
         if obs_mode == "flat":
             self.observation_space = spaces.Box(
@@ -159,12 +169,12 @@ class BattleEnv(gym.Env):
             self.agent_seat = self._seat_rng.randint(0, 1)
 
         self.gs = GameState.new(random.Random(eff))
-        draftmod.start_draft(self.gs, self._cards)
+        draftmod.start_draft(self.gs, self._cards, shared=self.shared_draft)
 
         # Opponent drafts for both seats in v1 (battle-only training target)
         while self.gs.phase == Phase.DRAFT:
             dv = make_draft_view(self.gs)
-            pick = self.opponent.draft_action(dv, [0, 1, 2])
+            pick = self.opponent.draft_action(dv, draftmod.draft_legal(self.gs))
             draftmod.apply_draft_pick(self.gs, pick)
 
         battlemod.start_battle(self.gs)

@@ -17,6 +17,7 @@ def _make_battle_env(
     seat_random: bool = False,
     obs_mode: str = "flat",
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -27,6 +28,8 @@ def _make_battle_env(
     ``draft_noise`` (k > 0) wraps the opponent's draft half so exactly k of each
     deck's 30 picks are uniformly random — the opponent drafts BOTH seats in the
     battle env, so this diversifies the decks the agent trains on.
+    ``shared_draft`` runs the shared draft variant (picks deplete the offer,
+    first pick alternates by round), giving the two seats asymmetric decks.
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.composer import Composer  # noqa: PLC0415
@@ -48,6 +51,7 @@ def _make_battle_env(
         agent_seat=agent_seat,
         seat_random=seat_random,
         obs_mode=obs_mode,
+        shared_draft=shared_draft,
     )
 
 
@@ -64,12 +68,14 @@ def _build_env(
     both_seat: bool = True,
     obs_mode: str = "flat",
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
     randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
     ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
-    ``draft_noise`` (k) makes k of each deck's 30 draft picks uniformly random."""
+    ``draft_noise`` (k) makes k of each deck's 30 draft picks uniformly random.
+    ``shared_draft`` runs the shared draft variant (asymmetric decks)."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
@@ -84,7 +90,14 @@ def _build_env(
     # (16 envs * 50_000 = 800k max offset).
     fns = [
         functools.partial(
-            _make_battle_env, opponent_spec, seed + i * 50_000, 0, both_seat, obs_mode, draft_noise
+            _make_battle_env,
+            opponent_spec,
+            seed + i * 50_000,
+            0,
+            both_seat,
+            obs_mode,
+            draft_noise,
+            shared_draft,
         )
         for i in range(n_envs)
     ]
@@ -177,6 +190,7 @@ def train_agent(
     callback=None,
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -205,11 +219,19 @@ def train_agent(
     tensorboard_log: optional tensorboard log directory.
     draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
         diversifies the decks the agent trains on (the opponent drafts both seats).
+    shared_draft: run the shared draft variant — picks deplete the offer, first
+        pick alternates by round, so the two seats get asymmetric decks.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
     env = _build_env(
-        opponent_spec, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, draft_noise=draft_noise
+        opponent_spec,
+        seed,
+        n_envs,
+        both_seat=both_seat,
+        obs_mode=obs_mode,
+        draft_noise=draft_noise,
+        shared_draft=shared_draft,
     )
     model = _make_model(
         env,
@@ -285,6 +307,7 @@ def train_zoo(
     callback=None,
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
+    shared_draft: bool = False,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -311,6 +334,8 @@ def train_zoo(
     tensorboard_log: optional tensorboard log directory.
     draft_noise: k of each deck's 30 draft picks made uniformly random (0 = off) —
         diversifies the decks the agent trains on (the opponent drafts both seats).
+    shared_draft: run the shared draft variant — picks deplete the offer, first
+        pick alternates by round, so the two seats get asymmetric decks.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -320,7 +345,13 @@ def train_zoo(
 
     def build(opp):
         return _build_env(
-            opp, seed, n_envs, both_seat=both_seat, obs_mode=obs_mode, draft_noise=draft_noise
+            opp,
+            seed,
+            n_envs,
+            both_seat=both_seat,
+            obs_mode=obs_mode,
+            draft_noise=draft_noise,
+            shared_draft=shared_draft,
         )
 
     model = _make_model(

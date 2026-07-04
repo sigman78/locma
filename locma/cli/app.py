@@ -132,10 +132,18 @@ def tournament(
     seed: int = 0,
     reference: str = "random",
     matrix: bool = typer.Option(False, help="print the pair-score matrix"),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="play all matches under the shared draft variant (picks deplete the "
+        "offer; first pick alternates by round)",
+    ),
 ):
     """Round-robin tournament with openskill (primary) and Elo ratings."""
     pols = [make_policy(n) for n in names]
-    res = run_tournament(pols, games=games, seed=seed, reference=reference)
+    res = run_tournament(
+        pols, games=games, seed=seed, reference=reference, shared_draft=shared_draft
+    )
 
     # openskill from the same win matrix (reconstruct per-game results from win rates)
     pairs: list[tuple[str, str, float]] = []
@@ -219,6 +227,12 @@ def draft_bench_cmd(
     workers: int = typer.Option(
         1, help="process-pool workers for the pair grid (0 = all CPUs minus one)"
     ),
+    shared: bool = typer.Option(
+        False,
+        "--shared",
+        help="shared draft variant: a pick removes the card from the other seat's "
+        "offer, first pick alternates by round (offers are contested, not identical)",
+    ),
 ):
     """Rank draft (deck-building) policies in isolation.
 
@@ -226,8 +240,9 @@ def draft_bench_cmd(
     draft, so the win-rate edge is pure deck quality (the draft deals both seats
     identical offers on a fixed seed; a self-duel is exactly 0.500). A ``+rndK``
     suffix (e.g. ``balanced+rnd4``) makes K of that draft's 30 picks uniformly
-    random. Prints a ranking by average win rate vs the field and the pair-score
-    matrix. See docs/experiments.md.
+    random. ``--shared`` switches to the shared draft variant, where picks deplete
+    the offer and the duel measures drafting under competition. Prints a ranking by
+    average win rate vs the field and the pair-score matrix. See docs/experiments.md.
     """
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
@@ -245,12 +260,20 @@ def draft_bench_cmd(
         raise typer.BadParameter(str(e)) from e
     from locma.harness.parallel import resolve_workers  # noqa: PLC0415
 
-    s = round_robin(names, battle=battle, games=games, seed=seed, workers=resolve_workers(workers))
+    s = round_robin(
+        names,
+        battle=battle,
+        games=games,
+        seed=seed,
+        workers=resolve_workers(workers),
+        shared=shared,
+    )
 
     # Resolution limit: Wilson half-width of a single cell at this n.
     lo, hi = wilson_ci(games, 2 * games)
     half = (hi - lo) / 2
-    print(f"battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}")
+    mode = "  draft=shared" if shared else ""
+    print(f"battle={battle}  n={2 * games}/pair  resolution +/-{half:.3f}{mode}")
 
     rank_rows = [
         (n, f"{s.avg_win_rate[n]:.3f}") for n in sorted(names, key=lambda k: -s.avg_win_rate[k])
@@ -368,6 +391,12 @@ def train(
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
     ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="shared draft variant: picks deplete the offer, first pick alternates "
+        "by round (asymmetric decks)",
+    ),
 ):
     """Train a MaskablePPO agent on the battle env (requires the [ml] extra)."""
     if steps < 1:
@@ -412,6 +441,7 @@ def train(
             device=device,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            shared_draft=shared_draft,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -443,6 +473,12 @@ def train_zoo_cmd(
     tensorboard_log: str | None = typer.Option(None, help="tensorboard log directory"),
     draft_noise: int = typer.Option(
         0, help="make K of each deck's 30 draft picks uniformly random (deck diversity)"
+    ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="shared draft variant: picks deplete the offer, first pick alternates "
+        "by round (asymmetric decks)",
     ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
@@ -485,6 +521,7 @@ def train_zoo_cmd(
             n_envs=n_envs,
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
+            shared_draft=shared_draft,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
@@ -759,6 +796,12 @@ def ceiling_eval_cmd(
     workers: int = typer.Option(
         1, help="process-pool workers over the (model, seed) grid (0 = all CPUs minus one)"
     ),
+    shared_draft: bool = typer.Option(
+        False,
+        "--shared-draft",
+        help="run all eval matches under the shared draft variant (picks deplete "
+        "the offer; first pick alternates by round)",
+    ),
 ):
     """Rigorous paired-difference verdict for the PPO ceiling study (requires [ml])."""
     try:
@@ -775,6 +818,7 @@ def ceiling_eval_cmd(
         games_per_seed=games_per_seed,
         threshold=threshold,
         workers=resolve_workers(workers),
+        shared_draft=shared_draft,
     )
     print(
         f"cand={out['cand_avg']:.3f}  B0={out['b0_avg']:.3f}  "

@@ -38,7 +38,7 @@ def make_draft_view(gs: GameState) -> DraftView:
         CardView(-1, c.id, int(c.type), c.cost, c.attack, c.defense, c.abilities)
         for c in gs.draft_pool[gs.draft_round]
     )
-    return DraftView(gs.draft_round, offered)
+    return DraftView(gs.draft_round, offered, gs.draft_taken)
 
 
 def make_battle_view(gs: GameState) -> BattleView:
@@ -70,8 +70,14 @@ def run_game(
     on_snapshot=None,
     on_pre_step=None,
     on_event=None,
+    shared_draft: bool = False,
 ) -> GameResult:
     """Drive a complete LOCM 1.2 game (draft then battle) between two policies.
+
+    ``shared_draft`` switches the draft to the shared variant — a pick removes
+    the card from the other seat's offer and the first picker alternates by
+    round (see ``draft.start_draft``). Default is the LOCM rule: both seats
+    pick independently from the same triplet.
 
     Determinism guarantee: the same seed + same policies always produce the
     same (winner, turns).  The game's RNG is seeded exclusively via
@@ -109,12 +115,12 @@ def run_game(
     gs = GameState.new(random.Random(seed))
 
     # --- Draft phase ---
-    draftmod.start_draft(gs, cards)
+    draftmod.start_draft(gs, cards, shared=shared_draft)
     pols = (policy0, policy1)
     while gs.phase == Phase.DRAFT:
         seat = gs.current
         view = make_draft_view(gs)
-        pick = pols[gs.current].draft_action(view, [0, 1, 2])
+        pick = pols[gs.current].draft_action(view, draftmod.draft_legal(gs))
         draftmod.apply_draft_pick(gs, pick)
         if on_step is not None:
             on_step(seat, pick, gs)

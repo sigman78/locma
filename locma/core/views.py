@@ -20,6 +20,7 @@ class CardView:
 class DraftView:
     round: int
     offered: tuple  # 3 CardView (instance_id unused, -1)
+    taken: int | None = None  # shared draft: index the first picker took this round
 
 
 @dataclass(frozen=True, slots=True)

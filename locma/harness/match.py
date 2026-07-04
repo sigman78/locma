@@ -17,16 +17,18 @@ class MatchResult:
     records: list = field(default_factory=list)
 
 
-def run_match(policy_a, policy_b, games: int, seed: int = 0, jsonl_path=None) -> MatchResult:
+def run_match(
+    policy_a, policy_b, games: int, seed: int = 0, jsonl_path=None, shared_draft: bool = False
+) -> MatchResult:
     wins_a = wins_b = 0
     records = []
     for k in range(games):
         s = seed + k
         # game 1: A is player0 — A wins iff winner == 0
-        r1 = run_game(policy_a, policy_b, seed=s)
+        r1 = run_game(policy_a, policy_b, seed=s, shared_draft=shared_draft)
         a_won_1 = r1.winner == 0
         # game 2: B is player0 (mirror) — A is player1, wins iff winner == 1
-        r2 = run_game(policy_b, policy_a, seed=s)
+        r2 = run_game(policy_b, policy_a, seed=s, shared_draft=shared_draft)
         a_won_2 = r2.winner == 1
         for won, gr, a_seat in ((a_won_1, r1, 0), (a_won_2, r2, 1)):
             if won:

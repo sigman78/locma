@@ -4,7 +4,8 @@ The canonical pair-score matrix for the five built-in baseline policies — row'
 win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
-snapshots. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+snapshots. The current **recipes of record** (strongest reactive net and
+planner) are in the 2026-07-03 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -27,6 +28,70 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-03: shared draft variant; planner promoted to vbeam:depot:shared (0.890)
+
+The current strongest policies and where they came from (E7, branch
+feat/shared-draft; full study in `docs/worklog.md` "E7"):
+
+| role | recipe | avg-hard3 |
+|---|---|---|
+| **planner (recipe of record)** | `vbeam:depot:shared/shared_sX.zip` | **0.890** |
+| prior planner record | `vbeam:depot:b0/b0_sX.zip` | 0.863 |
+| reactive (recipe of record, unchanged) | `depot:b0/b0_sX.zip` | 0.657 |
+
+**The shared draft variant** is a new opt-in engine rule: a pick REMOVES the
+card from the other seat's offer (second picker chooses from the remaining 2,
+the third card is burned), and the first picker alternates by round. It breaks
+the default rule's mirror — under the default, two seats running the same
+deterministic draft build *identical* decks; under shared, they build
+complementary asymmetric halves of the pool. Flags: `run_game(shared_draft=)`,
+`draft-bench --shared`, `tournament`/`train`/`train-zoo`/`ceiling-eval`
+`--shared-draft`. Default path is byte-identical; the draft-bench self-duel
+0.500 calibration still holds exactly.
+
+**Why it produced a new planner record.** `shared_s{0,1,2}` = the exact B0
+recipe + `--shared-draft` (token V0, lr 1e-4, target_kl 0.025, 800k zoo).
+Paired 40×25 verdicts (both baselines reproduced: reactive 0.660, vbeam
+0.8642):
+
+| arm | deploy | cand | b0 | delta | 95% CI |
+|---|---|---|---|---|---|
+| reactive | standard | 0.663 | 0.660 | +0.003 | [-0.005, +0.011] null |
+| reactive | shared | 0.659 | 0.638 | +0.021 | [+0.014, +0.028] |
+| **vbeam** | standard | **0.890** | 0.864 | **+0.026** | [+0.021, +0.031] |
+| vbeam | shared | 0.892 | 0.868 | +0.025 | [+0.020, +0.029] |
+| vbeam confirm (fresh 2M+ eval seeds) | standard | 0.879 | 0.853 | +0.026 | [+0.020, +0.032] |
+
+The gain is invisible reactively and appears only under the planner: training
+on asymmetric decks feeds the **critic** sustained advantage/deficit states the
+mirror never generates, sharpening the sibling-ordering signal the beam ranks
+with (the channel E5v2's FVI could not improve by objective — this changes the
+*data*). First training-side lever in the project with a solidly positive
+paired CI; +0.026 replicated exactly on a disjoint eval-seed range. It misses
+the pre-registered +0.03 "headroom" bar — promoted on the strength of the
+zero-excluding CI plus the fresh-seed replication.
+
+Side findings (tables in the worklog): contested offers *compress* draft skill
+(max-guard overtakes balanced under the ground pilot, balanced's edge halves
+under the b0 pilot) and leave the battle-policy Elo hierarchy unchanged
+(vbeam 1840 > dmcts 1801 > ppo:b0 1669; random collapses 683 → 573 — a random
+drafter suffers most when a competent opponent strips its offers).
+
+## Reproduce
+
+```bash
+# the full study (idempotent stages: bench, tournament, training, verdicts)
+uv run python scripts/shared_driver.py
+
+# the promotion verdict + fresh-seed confirm
+uv run locma ceiling-eval \
+  --candidates vbeam:depot:shared/shared_s0.zip,vbeam:depot:shared/shared_s1.zip,vbeam:depot:shared/shared_s2.zip \
+  --baselines vbeam:depot:b0/b0_s0.zip,vbeam:depot:b0/b0_s1.zip,vbeam:depot:b0/b0_s2.zip \
+  --seeds 40 --games-per-seed 25 --workers 0
+```
 
 ---
 

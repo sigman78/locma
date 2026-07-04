@@ -33,6 +33,8 @@ class GameState:
     players: tuple | None = None
     draft_pool: list = field(default_factory=list)
     draft_round: int = 0
+    draft_shared: bool = False  # shared draft variant: picks deplete the offer
+    draft_taken: int | None = None  # shared: index the round's first picker took
     picks: tuple | None = None
     winner: int | None = None
 

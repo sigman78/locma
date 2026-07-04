@@ -58,6 +58,20 @@ uv run locma draft-bench --battle ground --games 300
 uv run locma draft-bench balanced max-guard max-attack --battle ppo:runs/ppo-shuffled-pool.zip --games 150
 ```
 
+### The `--shared` draft variant: contested offers
+
+`--shared` (also `duel(..., shared=True)` / `run_game(..., shared_draft=True)` /
+`BattleEnv(shared_draft=True)`) switches the *rules*: a pick **removes** the card
+from the other seat's offer — the second picker chooses from the remaining 2, the
+third card is burned — and the first picker alternates each round (15 first picks
+per seat over 30 rounds). This deliberately breaks the paired-comparison premise
+above: offers are contested, so a shared-mode duel measures deck-building *under
+competition*, not from identical offers. Its main structural effect is on the
+**default rule's mirror**: two seats running the same deterministic draft build
+*identical* decks under the default rule, but *different* (asymmetric, alternating
+best/second-best) decks under `--shared`. The mirror/self-duel calibration is
+seed-and-behavior based and still holds exactly at 0.500.
+
 ## Choosing the pilot — the load-bearing decision
 
 The deck that wins **depends on who plays it**. The benchmark makes this concrete,

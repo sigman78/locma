@@ -17,6 +17,12 @@ Calibration guarantee: a *self-duel* (same draft on both seats) is **exactly
 winner-seat ``w`` in both mirrored games, so seat-0-player A wins exactly one of
 the pair — the mirror cancels seat advantage perfectly. Any deviation from 0.5 in
 a self-duel signals a benchmark bug.
+
+The ``shared`` flag switches every duel to the shared draft variant (a pick
+removes the card from the other seat's offer; first pick alternates by round).
+Offers are then contested, so the duel measures deck-building under competition
+rather than from identical offers; the mirror argument above is seed-and-behavior
+based, so the 0.500 self-duel calibration still holds exactly.
 """
 
 from __future__ import annotations
@@ -107,13 +113,23 @@ class DuelResult:
 
 
 def duel(
-    draft_a: str, draft_b: str, battle: str = "ground", games: int = 100, seed: int = 0
+    draft_a: str,
+    draft_b: str,
+    battle: str = "ground",
+    games: int = 100,
+    seed: int = 0,
+    shared: bool = False,
 ) -> DuelResult:
     """Win rate of ``draft_a`` over ``draft_b`` when both seats are piloted by the
-    same ``battle`` policy. ``games`` mirrored pairs → ``2 × games`` total."""
+    same ``battle`` policy. ``games`` mirrored pairs → ``2 × games`` total.
+
+    ``shared`` runs the shared draft variant (a pick removes the card from the
+    other seat's offer; first pick alternates by round). Contested offers make
+    the comparison interactive rather than perfectly paired, but the mirror
+    still cancels seat advantage exactly — a self-duel remains 0.500."""
     pa = _compose(battle, draft_a)
     pb = _compose(battle, draft_b)
-    res = run_match(pa, pb, games=games, seed=seed)
+    res = run_match(pa, pb, games=games, seed=seed, shared_draft=shared)
     return DuelResult(
         draft_a, draft_b, battle, res.games, res.win_rate_a, wilson_ci(res.wins_a, res.games)
     )
@@ -129,7 +145,12 @@ class SweepResult:
 
 
 def round_robin(
-    drafts: list[str], battle: str = "ground", games: int = 100, seed: int = 0, workers: int = 1
+    drafts: list[str],
+    battle: str = "ground",
+    games: int = 100,
+    seed: int = 0,
+    workers: int = 1,
+    shared: bool = False,
 ) -> SweepResult:
     """All-pairs draft duel under one battle policy.
 
@@ -159,10 +180,11 @@ def round_robin(
                     [battle] * len(pairs),
                     [games] * len(pairs),
                     [seed] * len(pairs),
+                    [shared] * len(pairs),
                 )
             )
     else:
-        duels = [duel(a, b, battle=battle, games=games, seed=seed) for a, b in pairs]
+        duels = [duel(a, b, battle=battle, games=games, seed=seed, shared=shared) for a, b in pairs]
     win_matrix: dict = {}
     for (a, b), d in zip(pairs, duels, strict=True):
         win_matrix[(a, b)] = d.win_rate_a
