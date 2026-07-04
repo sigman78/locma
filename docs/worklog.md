@@ -1324,3 +1324,28 @@ evaluated under the planner -- the nets predate vbeam) vs vbeam:b0 on the same
 ruler. rnd4 lifting vbeam = generic deck diversity is the driver; rnd4 null =
 the shared draft's structured asymmetry (complementary contested halves ->
 sustained advantage states for the critic) is the driver.
+
+## E7 addendum 2: mechanism discriminator -- mirror-breaking itself is most of the effect (2026-07-03)
+
+vbeam:runs/rnd4_sX.zip vs vbeam:depot:b0 on the standard ruler (the rnd4 nets
+predate vbeam and had only ever been evaluated reactively, where they were
+null -0.008): **0.883 vs 0.864, delta +0.018, CI [+0.013, +0.024]**.
+
+Reading: uniform-noise decks ALSO improve the critic under the planner, so
+the driver is substantially **generic mirror-breaking deck diversity**, not
+only the shared draft's structured asymmetry. Shared retains a nominal edge
+(+0.026 [+0.021,+0.031] vs +0.018 [+0.013,+0.024] -- CIs nearly disjoint, so
+"structure adds ~+0.008" is suggestive, not confirmed) AND is the better
+lever anyway: rnd4 costs deck quality (draft duel 0.575 vs balanced 0.595)
+while shared decks are competently drafted.
+
+Two consequences:
+1. **The draft-noise study's arm-C "null" gets a retroactive footnote:** the
+   rnd4 nets were better critics all along -- the 2026-07-02 study evaluated
+   the only consumer (reactive play) that cannot express the improvement.
+   Training-side levers must be scored under the planner from now on.
+2. **Dose-response is the obvious next question:** if mirror-breaking is the
+   active ingredient, shared+rndK, one-sided rndK, or stronger asymmetry may
+   stack -- cheap to test now that the driver + --shared-draft/--draft-noise
+   plumbing compose. Results: runs/shared-summary.json
+   ("discriminator_vbeam_rnd4_standard").
