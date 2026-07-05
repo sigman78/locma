@@ -17,6 +17,7 @@ from locma.policies.drafts import (
     MaxGuardDraftPolicy,
     RandomDraftPolicy,
 )
+from locma.policies.exploits import ShellBattlePolicy, ShellDraftPolicy
 
 
 def _random(params, spec):
@@ -159,6 +160,53 @@ def _ppo(params, spec):
     )
 
 
+# --- E10 exploit archetypes: scripted strategies aimed at the learned
+# policies' suspected blind spots (see locma/policies/exploits.py). ---
+
+
+def _rnddeck(params, spec):
+    """Exploit probe (a): a competent aggressive pilot on a RANDOM deck —
+    out-of-distribution decks for policies tuned on curated drafts."""
+    seed = int(params[0]) if params else 0
+    return Composer(GroundBattlePolicy(), RandomDraftPolicy(seed=seed), name=spec)
+
+
+def _guardwall(params, spec):
+    """Exploit probe (b): Guard wall shielding high-attack threats; face only."""
+    return Composer(
+        ShellBattlePolicy(use_green=False, value_trades=False),
+        ShellDraftPolicy(use_green=False),
+        name=spec,
+    )
+
+
+def _bufface(params, spec):
+    """Exploit probe (c): green buffs on the biggest attacker, then face."""
+    return Composer(
+        ShellBattlePolicy(use_green=True, value_trades=False),
+        ShellDraftPolicy(use_green=True),
+        name=spec,
+    )
+
+
+def _boardkeep(params, spec):
+    """Exploit probe (d): board preservation — winning trades only, balanced deck."""
+    return Composer(
+        ShellBattlePolicy(use_green=False, value_trades=True),
+        BalancedDraftPolicy(),
+        name=spec,
+    )
+
+
+def _shell(params, spec):
+    """The full exploit package: wall + buffs + winning trades + removal."""
+    return Composer(
+        ShellBattlePolicy(use_green=True, value_trades=True),
+        ShellDraftPolicy(use_green=True),
+        name=spec,
+    )
+
+
 # The pool of baseline opponents a `mixed` training opponent draws from.
 _MIXED_POOL = ("random", "scripted", "greedy", "max-guard", "max-attack")
 
@@ -185,6 +233,11 @@ _FACTORIES = {
     "vbeam": _vbeam,
     "ppo": _ppo,
     "mixed": _mixed,
+    "rnddeck": _rnddeck,
+    "guardwall": _guardwall,
+    "bufface": _bufface,
+    "boardkeep": _boardkeep,
+    "shell": _shell,
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
