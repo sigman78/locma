@@ -1485,3 +1485,28 @@ promote the 3-critic ensemble (0.926); (b) ranking-loss critic fine-tune on
 shared data (the untried E5v2 survivor) -- ensembling and a better single
 critic likely compose; (c) drop 2-ply/width plans (wrong axis, settled).
 Models: no new artifacts (the ensemble IS depot:shared v1's three members).
+
+## E8 addendum: fresh-anchor confirm + PROMOTION (2026-07-05)
+
+The E7 promotion protocol applied to the ensemble (driver stage
+ensemble_confirm_2M -- same arms, disjoint 2M+ eval-seed anchors, full 40x25):
+
+```
+main   (1M+ anchors): cand=0.9263  shared=0.8899  delta=+0.0364  CI [+0.0311, +0.0417]
+confirm (2M+ anchors): cand=0.9213  shared=0.8789  delta=+0.0424  CI [+0.0372, +0.0480]
+VERDICT: headroom (both) -- replicated, if anything larger on fresh anchors
+```
+
+**PROMOTED.** The planner recipe of record is now the 3-critic ensemble
+
+    vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip
+
+(width 8, avg-hard3 0.926 / 0.921 across the two anchor sets), superseding
+single-critic vbeam:depot:shared (0.890). No new artifacts: the ensemble IS
+depot:shared v1's three members consumed jointly -- promotion is spec +
+documentation (baseline.md "Recipes of record -- 2026-07-04"). Deployment
+cost: 3x evaluator compute, still ~2s/game. Caveat recorded: the three
+training seeds are now one deployment artifact, so the "3 seeds/arm"
+replication convention no longer covers training-seed noise for the recipe
+itself -- a future de-risk is retraining 3 fresh shared seeds and re-running
+the ensemble verdict (subsumes E7's open new-TRAINING-seed item).

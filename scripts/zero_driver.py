@@ -60,7 +60,9 @@ def record(key: str, value) -> None:
     log(f"{key}: {json.dumps(value)}")
 
 
-def verdict(tag: str, candidates: list[str], baselines: list[str], grid) -> dict | None:
+def verdict(
+    tag: str, candidates: list[str], baselines: list[str], grid, start: int = 1_000_000
+) -> dict | None:
     from locma.harness.ceiling_eval import (  # noqa: PLC0415 -- lazy heavy import
         _disjoint_eval_seeds,
         run_verdict,
@@ -74,7 +76,7 @@ def verdict(tag: str, candidates: list[str], baselines: list[str], grid) -> dict
     out = run_verdict(
         candidates,
         baselines,
-        seeds=_disjoint_eval_seeds(n_seeds, gps),
+        seeds=_disjoint_eval_seeds(n_seeds, gps, start=start),
         games_per_seed=gps,
         workers=WORKERS,
     )
@@ -113,6 +115,11 @@ def main() -> None:
     # Stage 3: critic ensemble (one candidate arm; ~3x game cost).
     ens = "vbeam:" + "|".join(SHARED)
     verdict("ensemble", [ens], VB_SHARED, FULL)
+
+    # Stage 3b: fresh-anchor confirm on a disjoint eval-seed range (2M+),
+    # the E7 promotion protocol -- the bootstrap only covers eval noise
+    # within one anchor set.
+    verdict("ensemble_confirm_2M", [ens], VB_SHARED, FULL, start=2_000_000)
 
     # Stage 4: promoted retro arms on the full ruler.
     for tag, cands in RETRO.items():
