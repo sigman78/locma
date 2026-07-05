@@ -1556,3 +1556,56 @@ survivor, now with a teacher that demonstrably ranks better -- fixes the
 objective); (b) unfreeze the extractor (fixes capacity, costs the
 byte-identical policy path). Artifacts: runs/vdens_s{0,1,2}.zip +
 runs/ensdist-data.npz kept for reference; no promotion.
+
+## E10: adversarial exploit benchmark -- the reactive net IS exploitable; the planner is not (2026-07-05)
+
+User hypothesis: even the best policy falls to simple hand-designed strats --
+(a) random deck, (b) high-attack minions behind Guards, (c) green buffs then
+face, (d) board preservation. Built ShellBattlePolicy (priority script:
+lethal > green buff > guard clear preferring killing survivors > winning
+trades only > Guards-first summons > face > removal) + ShellDraftPolicy
+(tanky Guards, high-attack threats, curve-aware) in
+locma/policies/exploits.py; registry archetypes rnddeck / guardwall /
+bufface / boardkeep / shell. Branch feat/exploit-bench, driver
+scripts/exploit_driver.py, results runs/exploit-summary.json.
+2,000 mirrored games per pair (Wilson 95% CI half-width ~0.02).
+
+**The matrix (exploit win rate):**
+
+| exploit | greedy | max-guard | max-attack | ppo:b0 | vbeam:shared | vbeam:ens (RoR) |
+|---|---|---|---|---|---|---|
+| rnddeck | 0.396 | 0.334 | 0.475 | 0.243 | 0.066 | 0.049 |
+| guardwall | 0.704 | 0.670 | 0.688 | 0.472 | 0.176 | 0.129 |
+| bufface | 0.672 | 0.641 | 0.654 | 0.446 | 0.176 | 0.124 |
+| **boardkeep** | 0.757 | 0.711 | 0.736 | **0.540** | 0.250 | 0.189 |
+| shell | 0.678 | 0.678 | 0.694 | 0.477 | 0.222 | 0.159 |
+
+**Findings:**
+
+1. **Hypothesis CONFIRMED at the reactive rung.** boardkeep (balanced deck +
+   winning-trades-only) beats the reactive recipe of record: 0.540
+   [0.519, 0.562]; guardwall and shell sit at near-parity (0.47). A
+   hand-written script defeats B0 -- and boardkeep's implied avg-hard3
+   (~0.735) is ABOVE B0's 0.657 on the same three baselines.
+2. **Hypothesis REFUTED at the planner rungs.** vbeam:shared holds every
+   archetype to 0.07-0.25; the ensemble to 0.05-0.19. The wall is
+   instructive: guardwall 0.47 vs reactive -> 0.18 vs planner -- the beam
+   composes exactly the multi-step wall-dismantling lines the reactive net
+   fumbles. Exploitability was a PLANNING deficit, not a knowledge deficit.
+3. **The ensemble strictly tightens every cell** vs the single critic
+   (0.066->0.049, 0.176->0.129, 0.176->0.124, 0.250->0.189, 0.222->0.159):
+   the +0.036 is robustness against out-of-distribution strategies too, not
+   just avg-hard3.
+4. **Discipline beats gimmicks.** boardkeep (no wall, no buffs, just value
+   trades on a balanced deck) dominates the full shell everywhere -- the
+   guard/green-heavy draft costs more deck quality than the wall returns.
+   The exploit power against reactive nets is trade discipline.
+5. rnddeck never threatens anyone (0.049-0.475): a random deck is a bigger
+   handicap than any distribution surprise it creates.
+
+**Read:** the deployed recipe (vbeam ensemble) is robust to this exploit
+family; the reactive net alone should not be shipped where adversaries
+adapt. Cheap follow-up lever if reactive hardening ever matters: boardkeep
+into the training zoo (it is exactly the opponent B0 never sees -- a
+disciplined non-suiciding trader). Archetypes are registered policies, so
+draft-bench / tournament / web-panel can use them directly.
