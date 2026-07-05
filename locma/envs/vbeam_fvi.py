@@ -270,6 +270,155 @@ def collect_backup_data(
     return manifest
 
 
+def _collect_ensemble_shard(
+    model_paths,
+    opponents,
+    games: int,
+    out: str,
+    seed: int,
+    width: int,
+    max_actions: int,
+) -> int:
+    """Top-level picklable unit of work: one ensemble-distill shard (E9).
+
+    Plays vbeam on the ENSEMBLE evaluator vs each opponent (both seats),
+    keeping the ranking-deciding states (root, depth-1 siblings, and every
+    stop-eligible state, as in ``_collect_backup_shard``). Each kept state is
+    labeled with the ensemble MEAN value (the distillation ``target`` — noise-
+    free, sibling-differing, computed by pure forward passes) and the
+    cross-member std (``spread`` — the per-state variance the ensemble
+    removes; the fidelity gate compares the distilled val RMSE against it).
+    Returns the example count.
+    """
+    from locma.core.engine import run_game  # noqa: PLC0415
+    from locma.depot import resolve_path  # noqa: PLC0415
+    from locma.envs.encode import encode_battle_tokens  # noqa: PLC0415
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+    from locma.policies.vbeam import EnsembleValueEvaluator, VBeamBattlePolicy  # noqa: PLC0415
+
+    sink: list = []
+    ev = EnsembleValueEvaluator([resolve_path(p) for p in model_paths])
+    vb = VBeamBattlePolicy(
+        model_path=ev.model_paths[0],
+        width=width,
+        max_actions=max_actions,
+        evaluator=ev,
+        collect=sink,
+    )
+    me = Composer(vb, BalancedDraftPolicy(), name="vbeam-ens-harvest")
+
+    kept_views: list = []
+    for opp_spec in opponents:
+        opp = make_policy(opp_spec)
+        for g in range(games):
+            for my_seat in (0, 1):
+                sink.clear()
+                p0, p1 = (me, opp) if my_seat == 0 else (opp, me)
+                run_game(p0, p1, seed + g)
+                for view, _target, depth, stop_ok in sink:
+                    if depth <= 1 or stop_ok:
+                        kept_views.append(view)
+
+    # Label with each member critic (chunked batched forwards, no games).
+    n = len(kept_views)
+    member_vals = np.empty((len(ev.members), n), dtype=np.float32)
+    chunk = 512
+    for mi, member in enumerate(ev.members):
+        for i in range(0, n, chunk):
+            member_vals[mi, i : i + chunk] = member.values(kept_views[i : i + chunk])
+
+    obs = [encode_battle_tokens(v) for v in kept_views]
+    np.savez_compressed(
+        out,
+        obs_tokens=np.asarray([o["tokens"] for o in obs], dtype=np.float32),
+        obs_card_ids=np.asarray([o["card_ids"] for o in obs], dtype=np.float32),
+        obs_token_mask=np.asarray([o["token_mask"] for o in obs], dtype=np.float32),
+        obs_scalars=np.asarray([o["scalars"] for o in obs], dtype=np.float32),
+        target=member_vals.mean(axis=0),
+        spread=member_vals.std(axis=0),
+    )
+    return n
+
+
+def collect_ensemble_data(
+    model_paths,
+    out: str,
+    opponents=DEFAULT_OPPONENTS,
+    games: int = 50,
+    seed: int = 0,
+    workers: int = 1,
+    width: int = 8,
+    max_actions: int = 20,
+) -> dict:
+    """Record ensemble-mean value targets from vbeam-on-the-ensemble's own play.
+
+    ``model_paths`` are the ensemble members (.zip paths or ``depot:`` refs).
+    Shards the per-opponent game count over a process pool like
+    ``collect_backup_data`` and merges into ``out`` (.npz with obs arrays, a
+    ``target`` column that ``train_value_head`` picks up automatically, and a
+    ``spread`` column for the fidelity gate). Returns a manifest including
+    ``mean_spread``, the average per-state cross-member std.
+    """
+    opponents = list(opponents)
+    model_paths = list(model_paths)
+    workers = max(1, min(workers, games))
+
+    base, extra = divmod(games, workers)
+    counts = [base + (1 if w < extra else 0) for w in range(workers)]
+    starts = [sum(counts[:w]) for w in range(workers)]
+    shard_paths = [f"{out}.shard{w}.npz" for w in range(workers)]
+
+    if workers == 1:
+        _collect_ensemble_shard(
+            model_paths, opponents, games, shard_paths[0], seed, width, max_actions
+        )
+    else:
+        from concurrent.futures import ProcessPoolExecutor  # noqa: PLC0415
+
+        from locma.harness.parallel import init_eval_worker  # noqa: PLC0415
+
+        with ProcessPoolExecutor(max_workers=workers, initializer=init_eval_worker) as ex:
+            list(
+                ex.map(
+                    _collect_ensemble_shard,
+                    [model_paths] * workers,
+                    [opponents] * workers,
+                    counts,
+                    shard_paths,
+                    [seed + s for s in starts],
+                    [width] * workers,
+                    [max_actions] * workers,
+                )
+            )
+
+    merged: dict[str, list] = {k: [] for k in (*_TOKEN_KEYS, "target", "spread")}
+    for path in shard_paths:
+        with np.load(path) as d:
+            for k, chunks in merged.items():
+                chunks.append(d[k])
+        os.remove(path)
+    arrays = {k: np.concatenate(v) for k, v in merged.items()}
+    np.savez_compressed(out, **arrays)
+
+    manifest = {
+        "kind": "vbeam-ensemble-distill",
+        "model_paths": model_paths,
+        "opponents": opponents,
+        "games": games,
+        "seed": seed,
+        "width": width,
+        "max_actions": max_actions,
+        "n_examples": int(len(arrays["target"])),
+        "mean_spread": float(arrays["spread"].mean()) if len(arrays["spread"]) else 0.0,
+        "shards": workers,
+    }
+    with open(_manifest_path(out), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
 def train_value_head(
     base_model: str,
     data: str,

@@ -131,6 +131,38 @@ def test_collect_backup_data_end_to_end(tmp_path):
         assert torch.equal(ref[k], new[k]), f"non-critic parameter changed: {k}"
 
 
+def test_collect_ensemble_data_end_to_end(tmp_path):
+    """Ensemble-distill collection (E9) writes target=mean and spread=std of
+    the member critics; train_value_head consumes the target column."""
+    pytest.importorskip("sb3_contrib")
+    from locma.envs.vbeam_fvi import collect_ensemble_data, train_value_head  # noqa: PLC0415
+
+    base = _make_token_model(tmp_path)
+    data = str(tmp_path / "ens.npz")
+    m = collect_ensemble_data(
+        [base, base],
+        data,
+        opponents=("random",),
+        games=2,
+        seed=0,
+        workers=1,
+        width=4,
+        max_actions=10,
+    )
+    assert m["n_examples"] > 0
+    with np.load(data) as d:
+        assert "target" in d.files and "spread" in d.files
+        assert d["target"].min() >= -1.0 and d["target"].max() <= 1.0
+        # two identical members: zero cross-member spread, target = member value
+        assert float(np.abs(d["spread"]).max()) < 1e-6
+        assert m["mean_spread"] < 1e-6
+        assert len(d["target"]) == len(d["obs_tokens"]) == m["n_examples"]
+
+    out = str(tmp_path / "ens-distilled.zip")
+    metrics = train_value_head(base, data, out, epochs=2, batch_size=64, seed=0)
+    assert np.isfinite(metrics["val_mse_after"])
+
+
 def test_trained_model_is_vbeam_drop_in(tmp_path):
     """The FVI output loads in NetValueEvaluator and yields finite values."""
     pytest.importorskip("sb3_contrib")
