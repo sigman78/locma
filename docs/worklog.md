@@ -1420,3 +1420,93 @@ shared arm (bootstrap covers eval noise only). A speculative future lever,
 given finding 2: decouple the heads -- train the critic on mirror-broken
 games and the policy on clean ones (two-phase or dual-env training).
 Models shrnd4_s* kept in runs/ (reference, regenerable; no promotion).
+
+## E8: zero-training trio -- critic ensemble clears the bar; width curve pins the bottleneck (2026-07-04)
+
+Three studies squeezing the EXISTING nets, no training (branch
+feat/vbeam-zero-training, driver scripts/zero_driver.py, results
+runs/zero-summary.json). New code: EnsembleValueEvaluator (mean-of-critics
+beam ranking, spec vbeam:p1|p2|p3,width -- clip-then-mean values, mean-probs
+argmax for the stop gate).
+
+**1. Width sweep** (paired vs vbeam:shared w=8 = 0.890, full 40x25 ruler):
+
+| width | avg-hard3 | delta | 95% CI |
+|---|---|---|---|
+| 4 | 0.8821 | -0.0078 | [-0.0104, -0.0053] |
+| 8 | 0.8899 | -- | reference |
+| 16 | 0.8921 | +0.0022 | [+0.0004, +0.0040] |
+| 32 | 0.8949 | +0.0050 | [+0.0029, +0.0070] |
+
+Log-shaped and nearly exhausted: each width doubling buys ~+0.002, 4x compute
+for +0.005. The beam already extracts nearly everything the critic's ordering
+signal contains -- **the planner is evaluator-limited, not search-limited**.
+Investing in search depth (2-ply, wider beams) is the wrong axis; critic
+quality is the binding constraint.
+
+**2. Critic ensemble** -- rank with the mean of the three shared critics
+(vbeam:shared_s0|s1|s2), paired vs the single-critic recipe of record:
+
+```
+ens 40x25: cand=0.9263  shared=0.8899  delta=+0.0364  CI [+0.0311, +0.0417]
+VERDICT: headroom
+```
+
+**First headroom verdict since E5 itself, and it costs zero training** --
+pure variance reduction on exactly the signal the width sweep just identified
+as the bottleneck. Larger than E7's entire retraining gain (+0.026). Cost:
+3x evaluator compute (~3x game time, still well under 2s/turn). Note the
+three seeds stop being replicates and become one deployment artifact; a
+promotion should confirm on fresh eval anchors (2M+) like E7 did.
+
+**3. Retro-scoring** shelved checkpoints under the planner (vs vbeam:b0 =
+0.863; pre-registered gate: 10x10 pilot, promote to full ruler iff pilot
+ci_hi > 0):
+
+| arm | pilot delta | pilot CI | full 40x25 |
+|---|---|---|---|
+| selfplay-r2 | -0.024 | [-0.052, -0.001] | not promoted |
+| az-net-0 | -0.031 | [-0.061, -0.002] | not promoted |
+| sweep-C (big net) | -0.108 | [-0.132, -0.084] | not promoted |
+| vdst-ff_s{0,1,2} | -0.026 | [-0.042, -0.009] | not promoted |
+| cand1_s{0,1,2} | +0.002 | [-0.009, +0.014] | **+0.0149** [+0.0093, +0.0204] |
+
+No hidden treasure: self-play, AZ training, the big net, and the distill
+full-FT all made the critic WORSE (az-net-0 consistent with E5v2 -- MC
+outcome targets flatten sibling ordering; sweep-C decisively so). The one
+survivor is another policy/value dissociation: cand1 was -0.040 REACTIVELY
+(shelved for it) yet its critic is +0.015 better than b0's under the planner
+-- sub-threshold, but the third independent instance (after rnd4 and shared)
+of "reactive verdicts do not measure critic quality".
+
+**Read:** the zero-training axis converges with E7: everything now points at
+the critic. Recommended next steps, in order: (a) fresh-anchor confirm +
+promote the 3-critic ensemble (0.926); (b) ranking-loss critic fine-tune on
+shared data (the untried E5v2 survivor) -- ensembling and a better single
+critic likely compose; (c) drop 2-ply/width plans (wrong axis, settled).
+Models: no new artifacts (the ensemble IS depot:shared v1's three members).
+
+## E8 addendum: fresh-anchor confirm + PROMOTION (2026-07-05)
+
+The E7 promotion protocol applied to the ensemble (driver stage
+ensemble_confirm_2M -- same arms, disjoint 2M+ eval-seed anchors, full 40x25):
+
+```
+main   (1M+ anchors): cand=0.9263  shared=0.8899  delta=+0.0364  CI [+0.0311, +0.0417]
+confirm (2M+ anchors): cand=0.9213  shared=0.8789  delta=+0.0424  CI [+0.0372, +0.0480]
+VERDICT: headroom (both) -- replicated, if anything larger on fresh anchors
+```
+
+**PROMOTED.** The planner recipe of record is now the 3-critic ensemble
+
+    vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip
+
+(width 8, avg-hard3 0.926 / 0.921 across the two anchor sets), superseding
+single-critic vbeam:depot:shared (0.890). No new artifacts: the ensemble IS
+depot:shared v1's three members consumed jointly -- promotion is spec +
+documentation (baseline.md "Recipes of record -- 2026-07-04"). Deployment
+cost: 3x evaluator compute, still ~2s/game. Caveat recorded: the three
+training seeds are now one deployment artifact, so the "3 seeds/arm"
+replication convention no longer covers training-seed noise for the recipe
+itself -- a future de-risk is retraining 3 fresh shared seeds and re-running
+the ensemble verdict (subsumes E7's open new-TRAINING-seed item).

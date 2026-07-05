@@ -5,7 +5,7 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-03 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+planner) are in the 2026-07-04 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -28,6 +28,62 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-04: 3-critic ensemble promoted to planner recipe (0.926)
+
+The E8 zero-training trio (branch feat\vbeam-zero-training, full study in
+`docs\worklog.md` "E8") promoted the planner recipe again — this time with no
+training at all:
+
+| role | recipe | avg-hard3 |
+|---|---|---|
+| **planner (recipe of record)** | `vbeam:depot:shared/shared_s0.zip\|depot:shared/shared_s1.zip\|depot:shared/shared_s2.zip` | **0.926** |
+| prior planner record | `vbeam:depot:shared/shared_sX.zip` | 0.890 |
+| reactive (recipe of record, unchanged) | `depot:b0/b0_sX.zip` | 0.657 |
+
+**What it is.** The beam ranks candidates with the MEAN of the three shared
+critics instead of one (`EnsembleValueEvaluator`; pipe-separated model paths
+in the `vbeam:` spec). Values are clipped per member then averaged; the stop
+gate takes the argmax of the mean masked policy distribution. No new
+artifacts — the ensemble is depot:shared v1's three members consumed jointly.
+Cost: 3x evaluator compute, ~2 s/game.
+
+**Verdicts** (paired vs single-critic `vbeam:depot:shared`, full 40x25 ruler):
+
+| anchors | cand | shared | delta | 95% CI |
+|---|---|---|---|---|
+| 1M+ (standard) | 0.9263 | 0.8899 | +0.0364 | [+0.0311, +0.0417] |
+| 2M+ (fresh confirm) | 0.9213 | 0.8789 | +0.0424 | [+0.0372, +0.0480] |
+
+First clean +0.03 "headroom" clear since vbeam itself (E5); replicated on a
+disjoint anchor range with a larger point estimate.
+
+**Why it works — the width sweep pinned the bottleneck.** The vbeam
+compute-scaling curve (w=4/8/16/32 → -0.008 / ref / +0.002 / +0.005) is
+log-shaped and nearly exhausted: the planner is **evaluator-limited, not
+search-limited**. Averaging three independently-seeded critics is pure
+variance reduction on the sibling-ordering signal the beam consumes — exactly
+the binding constraint. Retro-scoring shelved checkpoints under the planner
+found no better single critic (selfplay-r2, az-net-0, sweep-C, vdst-ff all
+negative; cand1 +0.015 sub-threshold despite its -0.040 reactive verdict —
+the third policy/value dissociation).
+
+**Caveat.** The three training seeds are now one deployment artifact, so
+"3 seeds/arm" no longer covers training-seed noise for the recipe itself.
+De-risk (subsumes E7's open item): retrain 3 fresh shared seeds, re-run the
+ensemble verdict.
+
+## Reproduce
+
+```bash
+locma ceiling-eval \
+  --candidates "vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip" \
+  --baselines vbeam:depot:shared/shared_s0.zip,vbeam:depot:shared/shared_s1.zip,vbeam:depot:shared/shared_s2.zip \
+  --seeds 40 --games-per-seed 25 --threshold 0.03
+# quote the candidate spec: `|` is a shell pipe
+```
 
 ---
 

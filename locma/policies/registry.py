@@ -117,19 +117,30 @@ def _vbeam(params, spec):
     Plans whole turns by beam-searching own-turn action sequences and scoring
     stopping points with the token model's value head (E5 "planning-lite").
     Model path first so the common case (``vbeam:depot:b0/b0_s0.zip``) needs
-    no commas. Paired with the ``balanced`` draft like ``ppo``/``azlite``/
-    ``netdmcts`` for apples-to-apples comparisons.
+    no commas. ``model_path`` may also be ``|``-separated paths
+    (``vbeam:a.zip|b.zip|c.zip``) — the beam then ranks with the mean of the
+    member critics (``EnsembleValueEvaluator``). Paired with the ``balanced``
+    draft like ``ppo``/``azlite``/``netdmcts`` for apples-to-apples
+    comparisons.
     """
-    from locma.policies.vbeam import VBeamBattlePolicy  # noqa: PLC0415
+    from locma.policies.vbeam import EnsembleValueEvaluator, VBeamBattlePolicy  # noqa: PLC0415
 
-    model_path = resolve_path(params[0] if len(params) > 0 and params[0] else "model.zip")
+    raw = params[0] if len(params) > 0 and params[0] else "model.zip"
     width = int(params[1]) if len(params) > 1 else 8
     max_actions = int(params[2]) if len(params) > 2 else 20
-    return Composer(
-        VBeamBattlePolicy(model_path=model_path, width=width, max_actions=max_actions),
-        BalancedDraftPolicy(),
-        name=spec,
-    )
+    if "|" in raw:
+        paths = [resolve_path(p) for p in raw.split("|")]
+        battle = VBeamBattlePolicy(
+            model_path=paths[0],
+            width=width,
+            max_actions=max_actions,
+            evaluator=EnsembleValueEvaluator(paths),
+        )
+    else:
+        battle = VBeamBattlePolicy(
+            model_path=resolve_path(raw), width=width, max_actions=max_actions
+        )
+    return Composer(battle, BalancedDraftPolicy(), name=spec)
 
 
 def _ppo(params, spec):
