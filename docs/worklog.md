@@ -1510,3 +1510,49 @@ training seeds are now one deployment artifact, so the "3 seeds/arm"
 replication convention no longer covers training-seed noise for the recipe
 itself -- a future de-risk is retraining 3 fresh shared seeds and re-running
 the ensemble verdict (subsumes E7's open new-TRAINING-seed item).
+
+## E9: distill the critic ensemble into one checkpoint -- VERDICT: null (values transfer, orderings do not) (2026-07-05)
+
+Can the promoted 3-critic ensemble (+0.036/+0.042) be compressed to a single
+checkpoint (1x evaluator compute)? Best-conditioned distillation attempt the
+project has made: targets = ensemble MEAN values (sibling-differing, unlike
+E5v2a MC labels; teacher != student fixed point, unlike E5v2b; noise-free,
+pure forward passes), sampled on exactly the beam query distribution
+(root + depth-1 siblings + stop-eligible states from vbeam-on-the-ensemble
+play; new `collect_ensemble_data` in vbeam_fvi.py). Critic-branch-only FT of
+each shared_sX (policy path byte-identical). Branch feat/ensemble-distill,
+driver scripts/ensdist_driver.py, results runs/ensdist-summary.json.
+
+**Data + fidelity gate (pre-registered: pooled val RMSE < mean cross-critic
+spread):** 34,138 states, mean spread 0.1105; val MSE 0.021->0.0069 (10 ep),
+pooled RMSE 0.0818 -> gate PASSED (residual ~55% of removed variance).
+
+**Verdicts (full 40x25 ruler):**
+
+| pairing | cand | base | delta | 95% CI |
+|---|---|---|---|---|
+| vdens vs vbeam:ensemble | 0.8924 | 0.9263 | **-0.0339** | [-0.0395, -0.0281] |
+| vdens vs vbeam:shared | 0.8924 | 0.8899 | +0.0026 | [-0.0008, +0.0062] null |
+
+The distilled critics land exactly back on the single-critic baseline:
+~7% of the ensemble gain retained, n.s.
+
+**Mechanism (the sharp lesson):** the gate passed and play did not move --
+matching the teacher's VALUES to 0.08 RMSE is not matching its ORDERINGS.
+The beam consumes sibling margins far finer than 0.08; residual regression
+error re-randomizes exactly the comparisons that decide plans. This
+generalizes E5v2a beyond label quality: even noise-free, sibling-differing,
+query-distribution targets fail under a value-MSE objective. The fidelity
+gate was calibrated to label variance when the operative scale is the
+sibling-ordering margin -- a correctly-designed gate would compare residual
+error against sibling VALUE GAPS. (Alternative co-explanation, untested:
+frozen-feature capacity -- one extractor may not span the 3-extractor mean.)
+
+**Read:** the ensemble stays the recipe of record at 3x compute; its benefit
+is not a smoother value function you can regress onto but a de-noised
+ORDERING. Two escalations preserved for a retry: (a) pairwise ranking loss
+on actual beam-sibling pairs toward the ensemble's preference (the E5v2
+survivor, now with a teacher that demonstrably ranks better -- fixes the
+objective); (b) unfreeze the extractor (fixes capacity, costs the
+byte-identical policy path). Artifacts: runs/vdens_s{0,1,2}.zip +
+runs/ensdist-data.npz kept for reference; no promotion.
