@@ -1734,3 +1734,52 @@ Findings:
 Open levers, recorded not scheduled: ens6 as a "compute-rich" alternate
 recipe if game cost ever stops mattering; fresh shared seeds retrain
 (training-seed de-risk, E8 caveat) could piggyback new ensemble members.
+
+## E13: boardkeep zoo + shared draft -- NO STACK; the diversity lever is one saturable resource (2026-07-06)
+
+Branch `feat/bks-stacking` (stacked on feat/zoo-boardkeep), driver
+`scripts/bks_driver.py`, results `runs/bks-summary.json`.
+
+Question: the two training-side critic levers reach ~the same place from
+different mechanisms -- shared draft (deck asymmetry, vbeam:shared 0.890)
+and the boardkeep zoo (opponent discipline, vbeam:b0k 0.886). E7c ruled out
+stacking two deck-asymmetry levers (shared+rnd4); cross-mechanism stacking
+was still open. bks = B0 recipe + boardkeep-extended zoo + shared_draft=True,
+3 seeds x 1M (~33 min each).
+
+**Verdicts (paired 40x25, fresh 7M+ anchors):**
+
+| arm | delta | 95% CI | means |
+|---|---|---|---|
+| vbeam:bks vs vbeam:depot:shared (PRIMARY) | +0.0023 | [-0.0024, +0.0070] | 0.882 vs 0.880 |
+| reactive bks vs depot:b0k | -0.0024 | [-0.0099, +0.0048] | 0.672 vs 0.674 |
+
+Pilot +0.0011 [-0.021, +0.020] agreed. **Gate: NO STACK** -- the conditional
+ens(bks x3) arm never ran (stage B not CI-positive), no confirms needed.
+
+Findings:
+
+1. **The levers do not compose.** Combined training lands exactly where
+   each lever lands alone (0.882 ~ 0.886 ~ 0.890, all within noise of each
+   other, all ~+0.02 over vbeam:b0's 0.863-0.868). The reactive side is
+   equally flat (-0.0024 n.s. vs b0k -- shared-draft training neither costs
+   nor buys reactive strength, replicating E7's transfer null).
+2. **Three independent measurements now triangulate one mechanism:**
+   (a) each diversity lever alone gives ~+0.02 critic gain (E7, E11);
+   (b) their critics substitute 1:1 in an ensemble with a null mixed arm
+   (E12) -- the errors overlap; (c) combining the training data gives zero
+   additional gain (E13). The "training-data diversity" critic lever is ONE
+   saturable resource, not a family of composable tricks: the first dose of
+   any diversity source de-biases the mirror-trained critic, and further
+   doses -- even from a different mechanism -- hit the same ceiling at
+   ~0.886-0.890 single-critic.
+3. E7c's "mirror-breaking saturates" lesson therefore generalizes: it is
+   not specific to deck asymmetry. Single-critic training-side improvements
+   above ~0.890 will need a different KIND of signal (e.g. the E9-recorded
+   ranking loss toward planner preferences), not more data variety.
+
+**Read:** recipes of record unchanged everywhere (reactive depot:b0k 0.683,
+planner shared-ensemble 0.926). bks artifacts stay in runs/ only. E13
+closes the training-data-diversity direction; the surviving training-side
+lever is ordering-aware critic training (ranking loss), and the surviving
+zero-training lever is ens6 (the compute-rich alternate).
