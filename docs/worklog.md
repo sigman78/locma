@@ -1845,3 +1845,69 @@ with a mechanism). Levers this map points at: play-time search (the
 existing RoR), a lethal-guard micro-wrapper for reactive deployments, and
 policy-head training signals aimed at high-branching first actions (the
 ranking-loss family, E9) rather than more input features.
+
+## E15: ranking-loss critic + AZ-v2 policy round -- BOTH STAGES RESOLVE NEGATIVE, with mechanism (2026-07-06, branch feat/e15-ranking)
+
+The "close-ish MuZero": MuZero's training-loop shape (search-produced policy
++ value targets at scale) on our perfect simulator, per
+docs/e15-ranking-az2-design.md (pre-registered before any run). New library
+code: plan_turn collect now carries the reaching action prefix (sibling
+groups reconstructable); locma/envs/vbeam_rank.py (grouped harvest,
+margin-weighted RankNet critic FT, listwise policy FT); driver
+scripts/e15_driver.py. Data: 154,158 states / 39,242 sibling groups /
+266,848 ranking pairs from vbeam-on-ensemble self-play (~3x E9, 5 min on 19
+workers). All artifacts runs/vrank_s*, runs/vpi_s*, runs/e15-summary.json.
+
+**Stage 1 (E9 escalation (a), the load-bearing question): G1 FIDELITY GATE
+FAIL -- the capacity explanation is confirmed.**
+
+| seed | pair acc before | after | fine (<0.08) before -> after | bar |
+|---|---|---|---|---|
+| s0 | 0.8044 | 0.8324 | 0.7206 -> 0.7462 | 0.9022 |
+| s1 | 0.8013 | 0.8203 | 0.7229 -> 0.7358 | 0.9007 |
+| s2 | 0.8043 | 0.8123 | 0.7311 -> 0.7358 | 0.9022 |
+| pooled | 0.8033 | 0.8217 | | **0.9017** |
+
+Ten epochs of margin-weighted ranking loss on 267k beam-sibling pairs close
+only 19% of the ordering gap (and pay for it: val MSE 0.017 -> 0.030 --
+calibration traded for ordering, still not enough). With the OBJECTIVE now
+ordering-aware and the data at the exact beam query distribution, the
+residual explanation from E9 stands alone: **one frozen shared extractor
+cannot represent the 3-extractor ensemble's sibling ordering.** The
+single-critic fine-margin number is the sharpest artifact of the study: the
+base critic orders sibling pairs with ensemble-margin < 0.08 at only
+0.72-0.73 (coarse pairs: 0.91) -- that ~0.28 fine-margin error rate IS the
+ensemble's edge, localized. G2/G3 killed per the pre-registered criterion
+(never run). Stage 3 not triggered.
+
+**Stage 2 (listwise policy round): worse than null -- imitation actively
+hurts.**
+
+| gate | pairing | delta | 95% CI | read |
+|---|---|---|---|---|
+| G4 | vpi_sX vs depot:b0k | -0.0311 | [-0.0389, -0.0233] | fails the absorption bar |
+| G4-base | vpi_sX vs shared_sX (own base) | **-0.0167** | [-0.0238, -0.0095] | the FT itself is CI-NEGATIVE |
+| G6 | vbeam:vpi vs vbeam:shared | -0.0004 | [-0.0011, +0.0004] | planner untouched (critic frozen) |
+
+In-distribution the signal landed (held-out top-1 vs teacher 0.45 -> 0.53;
+CE down ~0.13 on all seeds). Mechanism probes (400 games each, E14a
+headline metrics): item underuse 1.96x -> 1.65x -- the targeted pathology
+MOVED -- but missed-lethal rate worsened 12.5% -> 15.7% and on-policy root
+disagreement did not move (0.635 -> 0.641). **The net learned to START the
+planner's lines (more item plays) without being able to FINISH them (worse
+lethal conversion), and the net effect on play is negative.** Plan prefixes
+without plans are worse than consistent myopia -- this generalizes EXIT's
+null (#62) into a signed result.
+
+**Read: the training-side program is now closed with mechanisms, not just
+nulls.** Six attempts to move the reactive/single-critic artifacts toward
+the planner (self-play, AZ loop, EXIT, E9 value-MSE, E15 ranking loss, E15
+listwise imitation) end in: (a) the critic side is REPRESENTATION-limited --
+fixing it means unfreezing the extractor (recorded escalation; costs the
+byte-identical policy path, risks forgetting, low expected value); (b) the
+policy side is structurally unable to use search preferences without the
+search. Recipes of record unchanged everywhere (reactive depot:b0k 0.683,
+planner shared-ensemble 0.926). Play-time search remains the only
+planning-strength lever this kit has ever confirmed; its cheap upgrades
+(lethal-guard wrapper for reactive deployments, E14a; ens6 at 2x compute,
+E12) are the surviving practical items.

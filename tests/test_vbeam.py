@@ -132,18 +132,28 @@ def test_deterministic_and_does_not_mutate_state():
 
 
 def test_harvest_backed_up_targets():
-    """collect gathers (view, target, depth, stop_ok); the root's target is the
-    best completed-plan score (here the searched win, clipped to 1.0), and
-    sibling first actions get their own targets — unlike constant MC labels."""
+    """collect gathers (view, target, depth, stop_ok, prefix); the root's target
+    is the best completed-plan score (here the searched win, clipped to 1.0),
+    and sibling first actions get their own targets — unlike constant MC labels."""
     gs = _lethal_through_guard_state()
     sink: list = []
     plan = plan_turn(gs, _ZeroEvaluator(), collect=sink)
     assert len(plan) == 2  # planner behavior unchanged by harvesting
 
-    roots = [(t, d) for v, t, d, s in sink if d == 0]
+    roots = [(t, d) for v, t, d, s, p in sink if d == 0]
     assert roots == [(1.0, 0)], f"root target must be the searched win: {roots}"
-    assert all(-1.0 <= t <= 1.0 for _, t, _, _ in sink)
-    assert all(d <= 1 or s for _, t, d, s in sink) or True  # depths recorded raw
+    assert all(-1.0 <= t <= 1.0 for _, t, _, _, _ in sink)
+
+
+def test_harvest_prefix_reconstructs_sibling_groups():
+    """The 5th collect field is the reaching action prefix: () exactly at the
+    root, length == depth elsewhere — the key for E15's sibling-group ranking."""
+    gs = _lethal_through_guard_state()
+    sink: list = []
+    plan_turn(gs, _ZeroEvaluator(), collect=sink)
+    for _v, _t, depth, _s, prefix in sink:
+        assert len(prefix) == depth
+        assert (prefix == ()) == (depth == 0)
 
 
 def test_harvest_excludes_root_fallback_sentinel():
@@ -153,7 +163,7 @@ def test_harvest_excludes_root_fallback_sentinel():
     sink: list = []
     plan_turn(gs, _ZeroEvaluator(would_pass=False), collect=sink)
     assert sink, "harvest should produce samples"
-    assert all(-1.0 <= t <= 1.0 for _, t, _, _ in sink)
+    assert all(-1.0 <= t <= 1.0 for _, t, _, _, _ in sink)
 
 
 def test_max_actions_caps_plan_length():

@@ -179,7 +179,7 @@ def _collect_backup_shard(
                 sink.clear()
                 p0, p1 = (me, opp) if my_seat == 0 else (opp, me)
                 run_game(p0, p1, seed + g)
-                for view, target, depth, stop_ok in sink:
+                for view, target, depth, stop_ok, _prefix in sink:
                     if depth <= 1 or stop_ok:
                         kept_views.append(view)
                         kept_targets.append(target)
@@ -317,7 +317,7 @@ def _collect_ensemble_shard(
                 sink.clear()
                 p0, p1 = (me, opp) if my_seat == 0 else (opp, me)
                 run_game(p0, p1, seed + g)
-                for view, _target, depth, stop_ok in sink:
+                for view, _target, depth, stop_ok, _prefix in sink:
                     if depth <= 1 or stop_ok:
                         kept_views.append(view)
 
