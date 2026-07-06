@@ -1911,3 +1911,103 @@ planner shared-ensemble 0.926). Play-time search remains the only
 planning-strength lever this kit has ever confirmed; its cheap upgrades
 (lethal-guard wrapper for reactive deployments, E14a; ens6 at 2x compute,
 E12) are the surviving practical items.
+
+## 2026-07-06 — E16a: spell-representation diagnostic (observability hypothesis)
+
+**Question.** Is the reactive net's item underuse caused by the flat obs
+under-specifying spells? Static census says the gap is real: `_card_block`
+drops `player_hp`/`enemy_hp`/`card_draw` entirely (15/44 items and 29/121
+creatures have such hidden effects); four blue items (153/154/156/160) look
+like 0/0 no-ability BLANKS, and **153 Healing Potion / 154 Poison / 160 Minor
+Life Steal are an exact 3-way observation alias with near-opposite effects**
+— the net provably cannot play them differently.
+
+**Harness finding first (changes the baseline number).** `ppo:` pairs the net
+with `balanced`, whose `_ITEM_DISCOUNT=12` was tuned (2026-06-25 entry) to
+*hide* the net's spell weakness — RoR decks carry ~0–2 items/30, and a smoke
+run produced literally ZERO item candidates in 16 games. E14a's 3.3x was a
+decision-count ratio on those item-starved decks. Measured per opportunity
+(card affordable in hand at turn start), the real gap is **1.69x**
+(net 0.226 vs plan 0.381), matching E15's mechanism probe (1.65–1.96x).
+
+**Method.** `scripts/e16_spellrep.py` (E14a shadow pattern): depot:b0k s0 vs
+HARD3+boardkeep, net seat drafts RANDOM (forces item exposure; planner oracle
+= vbeam w8 on the same net, computed at each own-turn start from the identical
+state, so net-vs-plan stays matched). 2000 games, seeds 13M+, 71,586
+candidate observations. Raw: `runs/e16a-raw-*.jsonl.gz`; per-card:
+`runs/e16a-percard.json`.
+
+**Result: all four pre-registered reads NULL — the observability hypothesis
+is dead.** Underuse ratio U = plan_rate/net_rate per visibility class:
+
+| class | n | net | plan | U |
+|---|---|---|---|---|
+| creature_plain | 34,169 | 0.384 | 0.325 | 0.85 |
+| creature_rider | 10,895 | 0.387 | 0.328 | 0.85 |
+| item_visible | 16,528 | 0.239 | 0.412 | 1.73 |
+| item_mixed | 7,405 | 0.203 | 0.312 | 1.54 |
+| item_hidden_only | 2,589 | 0.205 | 0.383 | 1.87 |
+
+- **R1 alias trio:** planner spread 0.027 ≈ net spread 0.036 (plan rates
+  0.437/0.462/0.436) — even the planner, which SEES the effects via
+  simulation, plays the three aliased blues near-identically. The aliasing is
+  real but worthless: their values are close in practice.
+- **R2 hidden concentration:** U 1.87 vs 1.73 (ratio 1.08, bar 1.5) —
+  underuse is essentially UNIFORM across visibility classes.
+- **R3 rider items:** inverted (1.54 < 1.73). **R4 creature riders:** exactly
+  equal (0.847 vs 0.846) — hidden summon effects cost nothing behaviorally.
+- **Top per-card gaps are all VISIBLE premium items:** Decimate net 0.16 vs
+  plan 0.58, Tome of Thunder 0.26/0.65, Scroll of Firebolt 0.27/0.64, Vial of
+  Soul Drain 0.20/0.55 — cards fully specified by the obs the net already has.
+- Creatures show NO underuse (U 0.85 — the net plays cards *more* eagerly
+  than the plan); the deficit is item-specific and value-conditional.
+
+**Read.** The net underuses items it can see perfectly, exactly as much as
+items it cannot see at all, and the one provable information hole (the alias
+trio) turns out not to matter even to the oracle. Item value is conditional
+on target interaction — computed by search, not readable off card features.
+Gate `v2a_retrain` = **false**: the flat-v2 obs retrain (append
+php/ehp/draw, or the decomposed-channel variant) is NOT warranted as an
+underuse fix. Consistent with and sharpens the E14a/E15 closure: play-time
+search remains the lever; representation was the last cheap alternative and
+it is now excluded with data.
+
+## 2026-07-06 — E17: draft item-discount sweep under the planner
+
+**Question.** E16a left one cheap lever standing: the balanced draft's
+`_ITEM_DISCOUNT=12` was tuned to the *reactive* net's spell weakness, yet the
+registry pairs the same item-starved draft with the vbeam planner, which
+converts items ~1.7x better per opportunity. Is the pairing stale — does the
+planner want spell-richer decks?
+
+**Method.** `item_discount` is now a parameter (`BalancedDraftPolicy`,
+`vbeam:model,w,ma,disc`, `ppo:model,disc` specs; `scripts/e17_draftdisc.py`).
+Dose ladder d3/d0/d-2/d-4/d-8 (negative = item bonus) = 1.65/2.5/3.6/5.5/11.0
+items per deck vs control 0.76. Standard verdict protocol vs the 0.926
+ensemble RoR, common 14M anchors, pilots 10x10.
+
+**Result: NULL-to-NEGATIVE with a monotone dose-response — more items in the
+deck hurt even the pilot that plays items best.**
+
+| arm | items/deck | delta vs RoR | 95% CI |
+|---|---|---|---|
+| d3 | 1.65 | -0.005 | [-0.020, +0.007] |
+| d0 | 2.48 | -0.005 | [-0.028, +0.015] |
+| d-2 | 3.60 | -0.028 | [-0.053, -0.005] |
+| d-4 | 5.53 | -0.028 | [-0.065, +0.007] |
+| d-8 | 10.96 | -0.077 | [-0.120, -0.042] |
+
+No arm passed the pilot gate; full/confirm never ran. Reactive guard-rail
+(ppo:b0k, d3) -0.014 [-0.030, +0.001] — the June discount-12 tuning stands
+for the reactive net too.
+
+**Read.** Per-opportunity conversion (E16a) measured play-vs-hold value of a
+card already in hand; a draft slot is a different question — an item's
+one-shot effect competes with a creature's recurring board presence, and
+loses at essentially every dose even under a pilot that uses items ~optimally.
+The discount-12 pairing is NOT stale; it is correct for both pilots. Draft-
+side spell enrichment is closed as a lever. The `item_discount` plumbing
+stays (useful for future probes). Combined E16a+E17 read: the reactive net's
+spell underuse is real but fixing it has no deck-side or obs-side route —
+item play value is search-computed (play-time), and item deck value is
+simply low in this pool.
