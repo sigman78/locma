@@ -1609,3 +1609,128 @@ adapt. Cheap follow-up lever if reactive hardening ever matters: boardkeep
 into the training zoo (it is exactly the opponent B0 never sees -- a
 disciplined non-suiciding trader). Archetypes are registered policies, so
 draft-bench / tournament / web-panel can use them directly.
+
+## E11: boardkeep into the training zoo -- hardening is PARTIAL, but the critic likes the data (2026-07-05)
+
+Branch `feat/zoo-boardkeep` (stacked on `feat/exploit-bench`), driver
+`scripts/zoohard_driver.py`, results `runs/zoohard-summary.json`.
+
+E10 recorded the lever: reactive B0 loses outright to the scripted
+`boardkeep` archetype (0.540) it never trains against. E11 executes it:
+`ZOO_OPPONENTS` gains `boardkeep` as the fifth (final) phase and the B0
+recipe of record is retrained from scratch, 3 seeds x 1M steps (~33 min
+each on the 4080, cuda + 16 envs). The +200k budget is part of the
+treatment. Pre-registered gates: hardening = boardkeep ci_hi < 0.5 vs
+b0k_s0; strength = ruler ci_lo > -0.03; promote iff both.
+
+**Exploit re-bench (E10 protocol, same 5M+ seed range = common random
+numbers; E10-vs-B0 row in parens):**
+
+| exploit | vs b0k_s0 | (vs b0_s0, E10) |
+|---|---|---|
+| rnddeck | 0.262 | (0.243) |
+| guardwall | 0.469 | (0.472) |
+| bufface | 0.437 | (0.446) |
+| **boardkeep** | **0.514 [0.492, 0.535]** | (0.540 [0.519, 0.562]) |
+| shell | 0.470 | (0.477) |
+
+boardkeep vs the other seeds: s1 0.520 [0.498, 0.542], s2 0.503
+[0.481, 0.524]. Pooled ~0.512 over 6,000 games.
+
+**Ruler and planner arms (fresh 3M+ eval seeds):**
+
+- reactive [b0k_s0..2] vs [depot:b0 s0..2]: **+0.0084 [+0.0013, +0.0157]**
+  (0.683 vs 0.675) -- a small but significant avg-hard3 GAIN, not just
+  non-regression.
+- vbeam:b0k vs vbeam:depot:b0 (pilot +0.0167 promoted): full
+  **+0.0186 [+0.0132, +0.0238]** (0.886 vs 0.868).
+
+**Gates: hardening FAIL, strength PASS -> no promotion.**
+
+Findings:
+
+1. **Hardening is partial, not complete.** 200k steps against boardkeep
+   pulls the exploit from a significant win (0.540) back to statistical
+   parity (0.503-0.520 across all three seeds; every CI straddles 0.5),
+   but no seed clears the pre-registered ci_hi < 0.5 neutralization bar.
+   The reactive net learns to not LOSE to the disciplined trader; it does
+   not learn to beat it. Consistent with the E10 mechanism: refuting
+   boardkeep takes composed multi-step punishes, which a reactive policy
+   cannot represent -- more gradient against the same opponent buys
+   parity, and the rest is a planning deficit.
+2. **No spillover within the family.** guardwall/bufface/shell are flat
+   (0.472->0.469, 0.446->0.437, 0.477->0.470): the net hardened against
+   the specific opponent in the zoo, not the strategy family.
+3. **The strength ruler moved UP** (+0.0084 significant): the boardkeep
+   phase is free avg-hard3, no robustness/strength trade-off at this dose.
+4. **The critic is the real winner.** Under the planner, b0k beats b0 by
+   +0.0186 -- vbeam:b0k lands at 0.886, statistically at the shared
+   critic's 0.890, from DEFAULT-draft training. Second independent
+   confirmation of the E7 lesson (value heads want harder/more diverse
+   data), via a different diversity source (a disciplined opponent instead
+   of asymmetric decks).
+
+**Read:** boardkeep stays in the zoo (free strength + parity vs the
+exploit + a better critic), but b0k does NOT replace depot:b0 as the
+reactive recipe of record per the gates, and no depot publish happens.
+Open lever recorded, not scheduled: b0k critics as ensemble members or as
+a 4th member alongside shared_s0..2 (E8 showed ensembling de-noises
+orderings; b0k's diversity axis is orthogonal to shared's).
+
+## E12: b0k promoted to reactive recipe of record; mixed ensembles -- saturated at 3 critics (2026-07-05)
+
+Branch `feat/zoo-boardkeep` (PR #71), driver `scripts/mixens_driver.py`,
+results `runs/mixens-summary.json`. Two questions: (1) does b0k earn the
+reactive recipe-of-record swap E11's neutralization gate withheld, and
+(2) do the b0k critics -- whose diversity axis (disciplined opponent) is
+orthogonal to shared's (asymmetric decks) -- improve the 0.926 planner
+ensemble?
+
+**(1) Reactive promotion: YES.** Fresh-anchor confirm [b0k_s0..2] vs
+[depot:b0], 40x25 at 4M+ seeds: **+0.0227 [+0.0168, +0.0287]** (0.675 vs
+0.652) -- second independent CI-positive range (E11's 3M+ gave +0.0084).
+With the E11 exploit and critic dominance this is a clean dominance swap
+(the +0.03 headroom bar is NOT claimed). Published `depot:b0k` v1
+(gh:depot/b0k-v1, parent b0@1); baseline.md gains the 2026-07-05 section.
+The E11 hypothesis gate (neutralize boardkeep) stays failed -- the swap is
+"strictly better artifact," not "exploit closed."
+
+**(2) Ensemble arms vs the RoR (`vbeam:shared_s0|s1|s2`, all paired
+40x25 at 4M+, pilots 10x10 first):**
+
+| arm | members | compute | full delta | 95% CI |
+|---|---|---|---|---|
+| ens_b0k3 | b0k x3 | 1x | -0.0053 | [-0.0107, -0.0000] |
+| ens_mixed3 | shared_s0, shared_s1, b0k_s0 | 1x | -0.0010 | [-0.0065, +0.0043] |
+| ens6 | shared x3 + b0k x3 | 2x | **+0.0085** | [+0.0040, +0.0132] |
+
+ens6 fresh-anchor confirm (6M+): **+0.0177 [+0.0122, +0.0230]** (0.9375 vs
+0.9198) -- replicated, larger point estimate, the highest arm mean measured
+in the project so far.
+
+**Gates: ens_b0k3 and ens_mixed3 not CI-positive; ens6 confirmed real but
+below the pre-registered +0.03 bar for 2x evaluator compute -> the 3-critic
+shared ensemble stays planner recipe of record.**
+
+Findings:
+
+1. **The ensemble benefit saturates at 3 critics.** Substitution is a wash
+   (mixed3 exact null: a b0k critic is as good an ensemble member as a
+   shared one) and the b0k-only trio ensembles fine (0.886 singles ->
+   0.915) but from a lower base. The de-noising win is mostly spent by the
+   third member -- same log shape as the E8 width curve, on the member axis.
+2. **But it is not EXHAUSTED: ens6 is the first confirmed-on-both-ranges
+   gain over 0.926** (+0.0085 / +0.0177, pooled ~+0.013). Doubling members
+   from two orthogonal training-diversity families buys about a third of
+   what the first ensemble bought. If deployment compute is free, ens6 at
+   ~0.93-0.94 is the strongest known configuration; per the pre-registered
+   economics it does not displace the RoR.
+3. Cross-family diversity adds only marginally over within-family: the
+   different data regimes (shared draft vs boardkeep zoo) produce critics
+   whose ERRORS still mostly overlap -- consistent with E9 (the signal being
+   averaged is fine sibling-margin noise, and most of it is common).
+
+**Read:** reactive rung is now depot:b0k (0.683); planner rung unchanged.
+Open levers, recorded not scheduled: ens6 as a "compute-rich" alternate
+recipe if game cost ever stops mattering; fresh shared seeds retrain
+(training-seed de-risk, E8 caveat) could piggyback new ensemble members.

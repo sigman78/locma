@@ -5,7 +5,7 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-04 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+planner) are in the 2026-07-05 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -28,6 +28,44 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-05: b0k promoted to reactive recipe (0.683)
+
+E11 (branch feat/zoo-boardkeep, PR #71, worklog "E11"/"E12"): the training
+zoo gained `boardkeep` as its fifth phase (the scripted archetype that beat
+the old reactive B0 outright in E10, 0.540) and the B0 recipe was retrained
+from scratch, 3 seeds x 1M steps.
+
+| role | recipe | avg-hard3 |
+|---|---|---|
+| **planner (recipe of record, unchanged)** | `vbeam:depot:shared/shared_s0.zip\|depot:shared/shared_s1.zip\|depot:shared/shared_s2.zip` | **0.926** |
+| **reactive (recipe of record)** | `depot:b0k/b0k_sX.zip` | **0.683** |
+| prior reactive record | `depot:b0/b0_sX.zip` | 0.657–0.675 |
+
+**Why promoted.** Dominance, not headroom: b0k beats depot:b0 on every
+measured axis — paired ruler +0.0084 [+0.0013, +0.0157] (3M+ anchors, E11)
+and +0.0227 [+0.0168, +0.0287] (fresh 4M+ confirm, E12); better against all
+five E10 exploit archetypes (boardkeep 0.540 -> 0.512, back to parity —
+though NOT below 0.5, the pre-registered "neutralization" bar, which failed:
+refuting the disciplined trader is a planning capability); and a better
+critic under the planner (vbeam:b0k 0.886 [+0.0186 vs vbeam:b0], statistically
+at the shared critic's 0.890 from default-draft data). The E11 hypothesis
+gate (hardening) failed; the artifact swap is justified by dominance.
+
+**Recipe** (only the zoo changed vs b0): token V0, lr=1e-4, target_kl=0.025,
+dropout=0.1, n_envs=16, `ZOO_OPPONENTS = (greedy, scripted, max-guard,
+max-attack, boardkeep)` x 200k steps = 1M total.
+
+**Note.** b0k critics do not displace the shared trio in the planner
+ensemble (E12): ens(b0k x3) -0.0053, mixed3 exact null — the ensemble
+benefit saturates at 3 members. The 6-member ensemble (shared x3 + b0k x3,
+2x compute) IS confirmed real (+0.0085 at 4M+, +0.0177 at 6M+; arm mean
+0.9375, the highest measured) but sits below the pre-registered +0.03 bar
+for doubled evaluator compute, so the 3-critic shared ensemble stays
+planner recipe of record. ens6 is the compute-rich alternate if game cost
+ever stops mattering.
 
 ---
 

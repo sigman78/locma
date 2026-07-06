@@ -1,0 +1,46 @@
+{
+  "name": "b0k",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-05T23:49:06+00:00",
+      "git_commit": "917ed61",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish b0k runs/b0k_s0.zip runs/b0k_s1.zip runs/b0k_s2.zip --kind model --parent b0@1 --note E11 zoo-hardened B0: recipe of record + boardkeep as 5th zoo phase (1M steps). Reactive recipe of record since 2026-07-05: avg-hard3 0.683/0.675 (+0.0084 at 3M seeds, +0.0227 confirm at 4M); boardkeep exploit 0.540 -> 0.512 (parity); vbeam:b0k = 0.886 (+0.0186 vs vbeam:b0). PR #71. --meta {\"avg_hard3_reactive\": 0.683, \"avg_hard3_vbeam\": 0.886, \"obs_mode\": \"token\", \"steps\": 1000000, \"zoo\": [\"greedy\", \"scripted\", \"max-guard\", \"max-attack\", \"boardkeep\"]}",
+      "parents": [
+        "b0@1"
+      ],
+      "note": "E11 zoo-hardened B0: recipe of record + boardkeep as 5th zoo phase (1M steps). Reactive recipe of record since 2026-07-05: avg-hard3 0.683/0.675 (+0.0084 at 3M seeds, +0.0227 confirm at 4M); boardkeep exploit 0.540 -> 0.512 (parity); vbeam:b0k = 0.886 (+0.0186 vs vbeam:b0). PR #71.",
+      "meta": {
+        "avg_hard3_reactive": 0.683,
+        "avg_hard3_vbeam": 0.886,
+        "obs_mode": "token",
+        "steps": 1000000,
+        "zoo": [
+          "greedy",
+          "scripted",
+          "max-guard",
+          "max-attack",
+          "boardkeep"
+        ]
+      },
+      "files": {
+        "b0k_s0.zip": {
+          "sha256": "7a0fc4fd71ea4a75290d57b972903a35bea3f0a5cd24d0349ca594f38b11bd09",
+          "size": 5770630
+        },
+        "b0k_s1.zip": {
+          "sha256": "20fb463d0778063b1f64f385eacb1be5e763eb8ed68f54d189047bc00bbb2dfe",
+          "size": 5770634
+        },
+        "b0k_s2.zip": {
+          "sha256": "6f624dcb6d706d6dfe79c7180344ace34090e6416cfc9982333c31335a2d72f2",
+          "size": 5770630
+        }
+      },
+      "published": "gh:depot/b0k-v1"
+    }
+  ]
+}

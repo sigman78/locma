@@ -279,7 +279,10 @@ def train_agent(
 # intentionally a constant for now (no CLI list plumbing); edit it to change the
 # curriculum. Order matters — training proceeds left to right. See docs/cli.md and
 # the future-explorations roadmap in docs/ppo-review.md.
-ZOO_OPPONENTS: tuple[str, ...] = ("greedy", "scripted", "max-guard", "max-attack")
+# "boardkeep" (E11): the disciplined winning-trades-only archetype that beat the
+# 4-opponent reactive B0 outright in E10 — last so the hardest opponent gets the
+# freshest gradient.
+ZOO_OPPONENTS: tuple[str, ...] = ("greedy", "scripted", "max-guard", "max-attack", "boardkeep")
 
 
 def train_zoo(
