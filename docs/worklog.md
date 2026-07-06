@@ -1676,3 +1676,61 @@ reactive recipe of record per the gates, and no depot publish happens.
 Open lever recorded, not scheduled: b0k critics as ensemble members or as
 a 4th member alongside shared_s0..2 (E8 showed ensembling de-noises
 orderings; b0k's diversity axis is orthogonal to shared's).
+
+## E12: b0k promoted to reactive recipe of record; mixed ensembles -- saturated at 3 critics (2026-07-05)
+
+Branch `feat/zoo-boardkeep` (PR #71), driver `scripts/mixens_driver.py`,
+results `runs/mixens-summary.json`. Two questions: (1) does b0k earn the
+reactive recipe-of-record swap E11's neutralization gate withheld, and
+(2) do the b0k critics -- whose diversity axis (disciplined opponent) is
+orthogonal to shared's (asymmetric decks) -- improve the 0.926 planner
+ensemble?
+
+**(1) Reactive promotion: YES.** Fresh-anchor confirm [b0k_s0..2] vs
+[depot:b0], 40x25 at 4M+ seeds: **+0.0227 [+0.0168, +0.0287]** (0.675 vs
+0.652) -- second independent CI-positive range (E11's 3M+ gave +0.0084).
+With the E11 exploit and critic dominance this is a clean dominance swap
+(the +0.03 headroom bar is NOT claimed). Published `depot:b0k` v1
+(gh:depot/b0k-v1, parent b0@1); baseline.md gains the 2026-07-05 section.
+The E11 hypothesis gate (neutralize boardkeep) stays failed -- the swap is
+"strictly better artifact," not "exploit closed."
+
+**(2) Ensemble arms vs the RoR (`vbeam:shared_s0|s1|s2`, all paired
+40x25 at 4M+, pilots 10x10 first):**
+
+| arm | members | compute | full delta | 95% CI |
+|---|---|---|---|---|
+| ens_b0k3 | b0k x3 | 1x | -0.0053 | [-0.0107, -0.0000] |
+| ens_mixed3 | shared_s0, shared_s1, b0k_s0 | 1x | -0.0010 | [-0.0065, +0.0043] |
+| ens6 | shared x3 + b0k x3 | 2x | **+0.0085** | [+0.0040, +0.0132] |
+
+ens6 fresh-anchor confirm (6M+): **+0.0177 [+0.0122, +0.0230]** (0.9375 vs
+0.9198) -- replicated, larger point estimate, the highest arm mean measured
+in the project so far.
+
+**Gates: ens_b0k3 and ens_mixed3 not CI-positive; ens6 confirmed real but
+below the pre-registered +0.03 bar for 2x evaluator compute -> the 3-critic
+shared ensemble stays planner recipe of record.**
+
+Findings:
+
+1. **The ensemble benefit saturates at 3 critics.** Substitution is a wash
+   (mixed3 exact null: a b0k critic is as good an ensemble member as a
+   shared one) and the b0k-only trio ensembles fine (0.886 singles ->
+   0.915) but from a lower base. The de-noising win is mostly spent by the
+   third member -- same log shape as the E8 width curve, on the member axis.
+2. **But it is not EXHAUSTED: ens6 is the first confirmed-on-both-ranges
+   gain over 0.926** (+0.0085 / +0.0177, pooled ~+0.013). Doubling members
+   from two orthogonal training-diversity families buys about a third of
+   what the first ensemble bought. If deployment compute is free, ens6 at
+   ~0.93-0.94 is the strongest known configuration; per the pre-registered
+   economics it does not displace the RoR.
+3. Cross-family diversity adds only marginally over within-family: the
+   different data regimes (shared draft vs boardkeep zoo) produce critics
+   whose ERRORS still mostly overlap -- consistent with E9 (the signal being
+   averaged is fine sibling-margin noise, and most of it is common).
+
+**Read:** reactive rung is now depot:b0k (0.683); planner rung unchanged.
+Open levers, recorded not scheduled: ens6 as a "compute-rich" alternate
+recipe if game cost ever stops mattering; fresh shared seeds retrain
+(training-seed de-risk, E8 caveat) could piggyback new ensemble members.

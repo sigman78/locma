@@ -58,9 +58,14 @@ gate (hardening) failed; the artifact swap is justified by dominance.
 dropout=0.1, n_envs=16, `ZOO_OPPONENTS = (greedy, scripted, max-guard,
 max-attack, boardkeep)` x 200k steps = 1M total.
 
-**Note.** The b0k-only trio does not displace the shared trio in the planner
-ensemble: ens(b0k x3) = 0.915 vs RoR 0.921 (E12). Mixed and 6-member arms:
-see the E12 worklog entry.
+**Note.** b0k critics do not displace the shared trio in the planner
+ensemble (E12): ens(b0k x3) -0.0053, mixed3 exact null — the ensemble
+benefit saturates at 3 members. The 6-member ensemble (shared x3 + b0k x3,
+2x compute) IS confirmed real (+0.0085 at 4M+, +0.0177 at 6M+; arm mean
+0.9375, the highest measured) but sits below the pre-registered +0.03 bar
+for doubled evaluator compute, so the 3-critic shared ensemble stays
+planner recipe of record. ens6 is the compute-rich alternate if game cost
+ever stops mattering.
 
 ---
 
