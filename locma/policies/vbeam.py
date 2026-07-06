@@ -69,12 +69,16 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20, collec
         the beam normally exhausts its legal continuations first).
     collect:
         Optional list for AZ-style backed-up value targets (E5 variant 2b).
-        When given, the search appends one ``(view, target, depth, stop_ok)``
-        tuple per explored state whose subtree produced at least one completed
-        plan: ``target`` = the best completed-plan score reachable through
-        that state, clipped to [-1, 1] (so searched wins/losses ground it),
-        which DIFFERS between sibling states — unlike Monte-Carlo game labels.
-        ``None`` (default) changes nothing.
+        When given, the search appends one
+        ``(view, target, depth, stop_ok, prefix)`` tuple per explored state
+        whose subtree produced at least one completed plan: ``target`` = the
+        best completed-plan score reachable through that state, clipped to
+        [-1, 1] (so searched wins/losses ground it), which DIFFERS between
+        sibling states — unlike Monte-Carlo game labels. ``prefix`` is the
+        action tuple that reached the state (``()`` at the root), so
+        consumers can reconstruct the sibling groups the beam actually
+        ranked against each other (E15 ranking loss). ``None`` (default)
+        changes nothing.
 
     Returns
     -------
@@ -186,7 +190,7 @@ def _harvest_backups(collect: list, explored: list, completed: list) -> None:
     for view, prefix, depth, stop_ok in explored:
         t = root_target if prefix == () else best_ext.get(prefix)
         if t is not None:
-            collect.append((view, t, depth, stop_ok))
+            collect.append((view, t, depth, stop_ok, prefix))
 
 
 class NetValueEvaluator:
