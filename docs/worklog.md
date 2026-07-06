@@ -1783,3 +1783,65 @@ planner shared-ensemble 0.926). bks artifacts stay in runs/ only. E13
 closes the training-data-diversity direction; the surviving training-side
 lever is ordering-aware critic training (ranking loss), and the surviving
 zero-training lever is ens6 (the compute-rich alternate).
+
+## E14a: within-turn failure diagnostic -- the obstacle is branching, not memory (2026-07-06, branch feat/e14-diagnostic)
+
+User hypothesis behind the study: the reactive PPO net, invoked several
+times per turn, lacks intra-turn context ("which minions already attacked")
+and should degrade as the turn progresses -- if true, a token-v2 obs variant
+with turn-event features is the lever. Instrument: `scripts/e14_diag.py`
+shadow study -- depot:b0k s0 plays 2000 games (250 seeds x 2 seats x HARD3 +
+boardkeep, seeds 9M+), and at every contested decision the vbeam planner
+(width 8, SAME net) is queried from the identical state. 60,968 decisions,
+18,184 turns; raw per-decision records in `runs/e14a-raw-*.jsonl.gz`,
+aggregates + pre-registered H1-H5 verdicts in `runs/e14a-summary.json`.
+Same-net design means every systematic disagreement is pure search benefit;
+regret is scored by the net's own critic, independently anchored by the
+known +0.20 ruler gap (vbeam:b0k 0.886 vs reactive 0.683).
+
+Pre-registered verdicts:
+
+| H | hypothesis | verdict | evidence |
+|---|---|---|---|
+| H1 | intra-turn context (-> token-v2 obs) | **NOT SUPPORTED** | disagreement FALLS with within-turn index (0.64 -> 0.58 -> 0.53 -> 0.50 -> 0.42); first-deviation hazard falls too (0.64 -> 0.42 -> 0.27); attacked-minions gradient 1.12x, below the 1.3x bar |
+| H2 | premature pass | not supported | 0.09% of turns; overextension 0 -- pass timing is a solved sub-skill |
+| H3 | missed lethal (-> search deficit) | **SUPPORTED** | planner finds a forced win in 1425 turns; the net fails to convert **18.3%** of them (engine-verified, no critic involved) |
+| H4 | critic degrades mid-turn | not supported | (v-z)^2 flat-to-falling with index in early/mid buckets; only the tiny late bucket (n=136) worsens |
+| H5 | choice complexity (-> capacity/search) | **SUPPORTED** | disagreement 0.32 at 2-4 legal actions -> 0.74 at 5-8 -> 0.85 at 9-14 (2.6x bottom-to-top) |
+
+Findings:
+
+1. **The user's premise inverts: the hardest decision is the FIRST action
+   of the turn**, when mana is unspent and the option space is maximal
+   (mana-spent=0 bucket has the highest disagreement, 0.68). As the turn
+   progresses and options collapse, the net aligns with the planner. The
+   obs already carries what matters (the ready bit encodes
+   attacked-this-turn); nothing to fix observation-side. Stage B (token-v2)
+   is **not justified** -- killed before spending training compute.
+2. **The per-turn cost of reactivity is large and mid-game-concentrated:**
+   mean regret (planner end-state value minus actual, same critic) = 0.113
+   overall; 0.19 in mid-game turns vs 0.07 early. The planner genuinely
+   restructures 48% of turns (end state differs); 17% of first-action
+   disagreements are harmless order permutations (P10: their regret is
+   exactly 0.000, validating the probe).
+3. **Two specific pathologies:** (a) 18.3% of available forced wins are
+   left on the table by the reactive net -- a cheap play-time lethal-solver
+   guard would close these for reactive deployments; (b) the net UNDERUSES
+   items ~3.3x: at contested decisions the planner wants Use 1161 times,
+   the net plays it 356 times (confusion matrix: AU 363 + SU 610 dominate).
+   Attack-vs-summon ordering is the bulk of remaining disagreement
+   (AS 4322 / SA 4208).
+4. Critic side-notes: reliability curve is monotone but compressed at the
+   low end (v in 0.2-0.3 -> 45% actual win rate), ECE 0.131; and 29-42% of
+   the net's own actions DROP its own critic's value (P5) -- head
+   incoherence that search papers over.
+
+**Read: E10's "exploitability is a planning deficit" is now measured at
+turn granularity -- the reactive net fails at turn-level combinatorial
+choice (branching), not at within-turn state tracking.** The observation
+space is not the limiting factor; obs-space levers for the reactive net are
+a dead direction on this evidence (consistent with R5's token-v1 null, now
+with a mechanism). Levers this map points at: play-time search (the
+existing RoR), a lethal-guard micro-wrapper for reactive deployments, and
+policy-head training signals aimed at high-branching first actions (the
+ranking-loss family, E9) rather than more input features.
