@@ -68,6 +68,9 @@ export interface PlayStep {
   action: ActionDict | null
   events: EventDict[]
   view: PlayView
+  // the hand card a summon/use played, captured server-side before it left the
+  // hand — lets the client reveal WHICH card the AI just played
+  played?: CardState | null
 }
 
 export interface SubmitResponse extends GameSnapshot {

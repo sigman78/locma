@@ -1,9 +1,10 @@
 <!-- web/src/components/ReplayViewer/Board.svelte -->
 <script lang="ts">
   import { onDestroy } from 'svelte'
+  import { flip } from 'svelte/animate'
   import type { CardState, Snapshot } from '../../lib/replay'
   import type { Fx } from '../../lib/fx'
-  import { deathFx } from '../../lib/motion'
+  import { animate as fxWindow, deathFx, spring } from '../../lib/motion'
   import { mergeDisplayBoard } from '../../lib/stepfx'
   import MinionView from '../Play/MinionView.svelte'
   import Hand from './Hand.svelte'
@@ -90,8 +91,10 @@
     drawnIids={drawn1} {fxToken} />
   <div class="battlefield">
     <div class="field top" class:active={snapshot.current === 1}>
+      <!-- in:spring = summon spawn-drop; flip = survivors glide to make room /
+           close a gap. Both gated by the forward-step window so seeks stay instant. -->
       {#each display1 as c (c.iid)}
-        <div out:deathFx>
+        <div in:spring out:deathFx animate:flip={{ duration: $fxWindow ? 220 : 0 }}>
           <MinionView card={c} slideY={slideFor(1, c.iid)} damage={dmg(1, c.iid)}
             hit={hitFlash(1, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="down" {fxToken} />
@@ -101,7 +104,7 @@
     <hr />
     <div class="field bottom" class:active={snapshot.current === 0}>
       {#each display0 as c (c.iid)}
-        <div out:deathFx>
+        <div in:spring out:deathFx animate:flip={{ duration: $fxWindow ? 220 : 0 }}>
           <MinionView card={c} slideY={slideFor(0, c.iid)} damage={dmg(0, c.iid)}
             hit={hitFlash(0, c.iid)} dying={dyingSet.has(c.iid)} dmgDelay
             dim={c.can_attack === false} facing="up" {fxToken} />

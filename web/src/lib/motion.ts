@@ -41,13 +41,25 @@ export function deathFx(_node: HTMLElement) {
   }
 }
 
-/** Summon: overshoot spring into the slot — only inside the forward window. */
+/** Summon: the minion materializes raised & enlarged above its slot, then is
+ *  lowered in and settles with a backOut overshoot (dips slightly past its rest
+ *  position) — only inside the forward window. */
 export function spring(_node: HTMLElement) {
   if (!get(animate)) return { duration: 0 }
   return {
-    duration: 320,
+    duration: 380,
     easing: backOut,
-    css: (t: number) => `opacity:${Math.min(1, t * 1.4)}; transform:scale(${0.6 + 0.4 * t}) translateY(${(1 - t) * 16}px);`,
+    css: (t: number) => {
+      // backOut overshoots past t=1; a negative drop-shadow blur is invalid CSS
+      // and would void the whole filter keyframe, so clamp the shadow terms
+      const u = Math.max(0, 1 - t)
+      return (
+        `opacity:${Math.min(1, t * 2)};` +
+        `transform:scale(${1.25 - 0.25 * t}) translateY(${(1 - t) * -34}px);` +
+        `filter:brightness(${1 + u * 0.8}) drop-shadow(0 ${u * 14}px ${u * 12}px rgba(0,0,0,0.55));` +
+        `z-index:35;`
+      )
+    },
   }
 }
 

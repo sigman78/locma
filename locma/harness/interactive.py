@@ -5,7 +5,7 @@ import random
 
 from locma.core import battle as battlemod
 from locma.core import draft as draftmod
-from locma.core.actions import action_from_dict, action_to_dict
+from locma.core.actions import Summon, Use, action_from_dict, action_to_dict
 from locma.core.engine import make_battle_view, make_draft_view
 from locma.core.state import GameState, Phase
 from locma.harness.replay_stream import (
@@ -55,14 +55,25 @@ class InteractiveGame:
         self.rec.on_event(ev)
         self._slice.append(ev)
 
+    # -- the hand card a summon/use action plays, captured BEFORE apply (it leaves
+    #    the hand on apply); public info the moment it is played, so safe to reveal --
+    def _played_card(self, seat: int, action) -> dict | None:
+        match action:
+            case Summon(card_instance_id=iid) | Use(item_instance_id=iid):
+                for c in self.gs.players[seat].hand:
+                    if c.instance_id == iid:
+                        return _card_dict(c)
+        return None
+
     # -- capture one animated step: the events since `mark` plus the resulting view --
-    def _mark_step(self, seat: int, action, mark: int) -> None:
+    def _mark_step(self, seat: int, action, mark: int, played: dict | None = None) -> None:
         self._steps.append(
             {
                 "seat": seat,
                 "action": action_to_dict(action) if action is not None else None,
                 "events": list(self._slice[mark:]),
                 "view": self._play_view(),
+                "played": played,
             }
         )
 
@@ -108,10 +119,11 @@ class InteractiveGame:
                 legal = battlemod.battle_legal(gs)
                 action = self.ai.battle_action(make_battle_view(gs), legal, gs)
                 mark = len(self._slice)
+                played = self._played_card(seat, action)
                 self.rec.on_pre_step(seat, action, gs)
                 battlemod.apply_battle(gs, action, emit=self._emit)
                 self.rec.on_step(seat, action, gs)
-                self._mark_step(seat, action, mark)
+                self._mark_step(seat, action, mark, played)
                 per_turn += 1
                 if per_turn > 100:
                     end_mark = len(self._slice)
@@ -134,10 +146,11 @@ class InteractiveGame:
         self._steps = []
         seat = gs.current
         mark = len(self._slice)
+        played = self._played_card(seat, action)
         self.rec.on_pre_step(seat, action, gs)
         battlemod.apply_battle(gs, action, emit=self._emit)
         self.rec.on_step(seat, action, gs)
-        self._mark_step(seat, action, mark)
+        self._mark_step(seat, action, mark, played)
         # non-Pass keeps the same turn (gs.current still human → loop returns at once);
         # Pass flips to the AI, which is then auto-resolved into further steps.
         self._battle_loop_until_human_or_end()
