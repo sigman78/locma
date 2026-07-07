@@ -372,7 +372,13 @@ def aggregate() -> None:
     record(
         "top_item_gaps",
         [
-            {"cid": cid, "class": v["class"], "n": v["n"], "net": v["net_rate"], "plan": v["plan_rate"]}
+            {
+                "cid": cid,
+                "class": v["class"],
+                "n": v["n"],
+                "net": v["net_rate"],
+                "plan": v["plan_rate"],
+            }
             for _, cid, v in gaps[:12]
         ],
     )

@@ -123,7 +123,7 @@ def test_draft_env_deterministic_and_seed_diverse():
     a = _run_episode(_env(seed=9), seed=9)
     b = _run_episode(_env(seed=9), seed=9)
     assert a[1] == b[1]
-    assert all(np.array_equal(x, y) for x, y in zip(a[2], b[2]))
+    assert all(np.array_equal(x, y) for x, y in zip(a[2], b[2], strict=True))
     # Different seeds shuffle the draft pool differently.
     c = _run_episode(_env(seed=9), seed=10)
     assert not np.array_equal(a[2][0], c[2][0])
@@ -152,8 +152,8 @@ def test_draft_env_rollouts_mean_reward():
 
 
 def test_registry_learned_draft_specs():
-    from locma.policies.ppo import MaskablePPODraftPolicy
-    from locma.policies.registry import make_policy
+    from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
 
     p = make_policy("ppo:model.zip,runs/draft_s0.zip")  # lazy: nothing is loaded
     assert isinstance(p.draft, MaskablePPODraftPolicy)
@@ -166,7 +166,7 @@ def test_registry_learned_draft_specs():
 
 
 def test_draft_policy_note_pick_and_reset():
-    from locma.policies.ppo import MaskablePPODraftPolicy
+    from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
 
     p = MaskablePPODraftPolicy("draft.zip")
     view = _dv()
@@ -179,10 +179,10 @@ def test_draft_policy_note_pick_and_reset():
 @pytest.mark.slow
 def test_train_draft_end_to_end(tmp_path):
     """Tiny train_draft run -> saved model loads via the registry and drafts."""
-    from locma.core.engine import run_game
-    from locma.envs.training import train_draft
-    from locma.policies.composer import Composer
-    from locma.policies.registry import make_policy
+    from locma.core.engine import run_game  # noqa: PLC0415
+    from locma.envs.training import train_draft  # noqa: PLC0415
+    from locma.policies.composer import Composer  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
 
     out = str(tmp_path / "draft_tiny.zip")
     train_draft("greedy", steps=90, out=out, seed=0, n_steps=30, batch_size=30, verbose=0)

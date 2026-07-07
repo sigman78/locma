@@ -203,10 +203,17 @@ def main() -> None:
         )
 
     # Gates summary.
-    g: dict = {"arms_after_census": [f"{d:g}" for d in arms], "g1_survivors": [f"{d:g}" for d in survivors]}
+    g: dict = {
+        "arms_after_census": [f"{d:g}" for d in arms],
+        "g1_survivors": [f"{d:g}" for d in survivors],
+    }
     for d in survivors:
         f = summary[f"full_d{d:g}"]
-        g[f"full_d{d:g}"] = {"delta": f["mean_delta"], "ci": [f["ci_lo"], f["ci_hi"]], "verdict": f["verdict"]}
+        g[f"full_d{d:g}"] = {
+            "delta": f["mean_delta"],
+            "ci": [f["ci_lo"], f["ci_hi"]],
+            "verdict": f["verdict"],
+        }
     if best is not None:
         c = summary[f"confirm_d{best:g}_15M"]
         g["confirm"] = {

@@ -178,7 +178,9 @@ def _ppo(params, spec):
     # no retraining. Optional second param overrides the draft: a float sets the
     # balanced item discount (``ppo:path,3`` — E17 guard-rail arms), a model path
     # loads a learned draft (``ppo:path,draft.zip`` — E18b). See ``_draft_param``.
-    return Composer(MaskablePPOBattlePolicy(model_path=model_path), _draft_param(params, 1), name=spec)
+    return Composer(
+        MaskablePPOBattlePolicy(model_path=model_path), _draft_param(params, 1), name=spec
+    )
 
 
 # --- E10 exploit archetypes: scripted strategies aimed at the learned
