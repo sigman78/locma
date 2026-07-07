@@ -10,6 +10,32 @@ from __future__ import annotations
 import functools
 
 
+def _draft_override_policy(spec: str):
+    """Build the both-seats draft for a training-env draft override (E19).
+
+    ``spec`` is either a named heuristic draft (``"balanced"``, ``"random"``,
+    ...) or a learned-draft model path / ``depot:`` ref (E18b nets). Returns a
+    BothSeatsDraftPolicy with an independent child per seat, so stateful
+    drafts track each deck separately (BattleEnv's opponent drafts BOTH seats).
+    """
+    from locma.policies.drafts import BothSeatsDraftPolicy  # noqa: PLC0415
+
+    def one():
+        try:
+            return _draft_half(spec)
+        except ValueError:
+            if not (spec.startswith("depot:") or spec.endswith(".zip")):
+                raise ValueError(
+                    f"draft_override '{spec}' is neither a named draft nor a model path"
+                ) from None
+            from locma.depot import resolve_path  # noqa: PLC0415
+            from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
+
+            return MaskablePPODraftPolicy(model_path=resolve_path(spec))
+
+    return BothSeatsDraftPolicy(one(), one(), name=f"override:{spec}")
+
+
 def _make_battle_env(
     opponent_spec: str,
     seed: int,
@@ -18,6 +44,7 @@ def _make_battle_env(
     obs_mode: str = "flat",
     draft_noise: int = 0,
     shared_draft: bool = False,
+    draft_override: str | None = None,
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -30,6 +57,11 @@ def _make_battle_env(
     battle env, so this diversifies the decks the agent trains on.
     ``shared_draft`` runs the shared draft variant (picks deplete the offer,
     first pick alternates by round), giving the two seats asymmetric decks.
+    ``draft_override`` replaces the opponent's draft half for BOTH seats with a
+    named draft or a learned-draft model path (E19: train battle nets on
+    ldraft decks). Applied before ``draft_noise`` (noise then wraps the
+    override); incompatible with ``shared_draft`` (the both-seats router
+    needs the default pick order).
     """
     from locma.envs.battle_env import BattleEnv  # noqa: PLC0415 — optional [ml] dep
     from locma.policies.composer import Composer  # noqa: PLC0415
@@ -37,6 +69,14 @@ def _make_battle_env(
     from locma.policies.registry import make_policy  # noqa: PLC0415
 
     opponent = make_policy(opponent_spec)
+    if draft_override:
+        if shared_draft:
+            raise ValueError("draft_override is incompatible with shared_draft")
+        opponent = Composer(
+            opponent.battle,
+            _draft_override_policy(draft_override),
+            name=f"{opponent_spec}+draft:{draft_override}",
+        )
     if draft_noise:
         if getattr(opponent, "draft", None) is None:
             raise ValueError(f"draft_noise needs an opponent with a draft half: '{opponent_spec}'")
@@ -69,13 +109,16 @@ def _build_env(
     obs_mode: str = "flat",
     draft_noise: int = 0,
     shared_draft: bool = False,
+    draft_override: str | None = None,
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
     randomizes the agent's seat per episode (the +0.06-and-2x-efficiency fix).
     ``obs_mode`` selects the observation encoding: "flat" (default) or "token".
     ``draft_noise`` (k) makes k of each deck's 30 draft picks uniformly random.
-    ``shared_draft`` runs the shared draft variant (asymmetric decks)."""
+    ``shared_draft`` runs the shared draft variant (asymmetric decks).
+    ``draft_override`` drafts BOTH seats' decks with a named draft or a
+    learned-draft model path instead of the opponent's own draft half."""
     from stable_baselines3.common.vec_env import (  # noqa: PLC0415
         DummyVecEnv,
         SubprocVecEnv,
@@ -98,6 +141,7 @@ def _build_env(
             obs_mode,
             draft_noise,
             shared_draft,
+            draft_override,
         )
         for i in range(n_envs)
     ]
@@ -191,6 +235,7 @@ def train_agent(
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
     shared_draft: bool = False,
+    draft_override: str | None = None,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -221,6 +266,8 @@ def train_agent(
         diversifies the decks the agent trains on (the opponent drafts both seats).
     shared_draft: run the shared draft variant — picks deplete the offer, first
         pick alternates by round, so the two seats get asymmetric decks.
+    draft_override: draft BOTH seats' decks with a named draft or a learned-draft
+        model path (E19) instead of the opponent's own draft half.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -232,6 +279,7 @@ def train_agent(
         obs_mode=obs_mode,
         draft_noise=draft_noise,
         shared_draft=shared_draft,
+        draft_override=draft_override,
     )
     model = _make_model(
         env,
@@ -457,6 +505,7 @@ def train_zoo(
     tensorboard_log: str | None = None,
     draft_noise: int = 0,
     shared_draft: bool = False,
+    draft_override: str | None = None,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -485,6 +534,9 @@ def train_zoo(
         diversifies the decks the agent trains on (the opponent drafts both seats).
     shared_draft: run the shared draft variant — picks deplete the offer, first
         pick alternates by round, so the two seats get asymmetric decks.
+    draft_override: draft BOTH seats' decks with a named draft or a learned-draft
+        model path (E19) instead of each phase opponent's own draft half — every
+        zoo phase then trains on the SAME deck distribution.
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -501,6 +553,7 @@ def train_zoo(
             obs_mode=obs_mode,
             draft_noise=draft_noise,
             shared_draft=shared_draft,
+            draft_override=draft_override,
         )
 
     model = _make_model(
