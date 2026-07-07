@@ -275,6 +275,152 @@ def train_agent(
     return out
 
 
+# ---------------------------------------------------------------------------
+# E18b learned draft: train a draft policy against a frozen battle pilot
+# ---------------------------------------------------------------------------
+
+
+def _battle_half(spec: str):
+    """Resolve a battle policy from a registry spec ('greedy', 'ppo:path') or a
+    bare model path / depot ref ('runs/x.zip', 'depot:b0k/b0k_s0.zip')."""
+    from locma.policies.registry import is_policy_spec, make_policy  # noqa: PLC0415
+
+    if is_policy_spec(spec):
+        return make_policy(spec).battle
+    from locma.depot import resolve_path  # noqa: PLC0415
+    from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+
+    return MaskablePPOBattlePolicy(model_path=resolve_path(spec))
+
+
+def _draft_half(name: str):
+    """Named opponent draft policies a learned draft can train against."""
+    from locma.policies import drafts  # noqa: PLC0415
+
+    factories = {
+        "balanced": drafts.BalancedDraftPolicy,
+        "weighted": drafts.WeightedDraftPolicy,
+        "greedy": drafts.GreedyDraftPolicy,
+        "random": lambda: drafts.RandomDraftPolicy(seed=0),
+    }
+    if name not in factories:
+        raise ValueError(f"unknown opponent draft '{name}' (have {sorted(factories)})")
+    return factories[name]()
+
+
+def _make_draft_env(
+    battle_spec: str,
+    opponent_draft: str,
+    seed: int,
+    seat_random: bool = True,
+    rollouts: int = 1,
+):
+    """Top-level draft-env factory (picklable for SubprocVecEnv spawn on Windows).
+
+    Rebuilds the frozen battle pilot and the opponent draft from strings inside
+    each subprocess. Pins BLAS/torch threads first (the pilot net runs inference
+    in every env worker; N workers x default-thread-count oversubscribes the
+    box — same rationale as harness init_eval_worker)."""
+    import os  # noqa: PLC0415
+
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ.setdefault(var, "1")
+    from locma.envs.draft_env import DraftEnv  # noqa: PLC0415
+
+    return DraftEnv(
+        battle_pilot=_battle_half(battle_spec),
+        opponent_draft=_draft_half(opponent_draft),
+        seed=seed,
+        seat_random=seat_random,
+        rollouts=rollouts,
+    )
+
+
+def train_draft(
+    battle_spec: str,
+    steps: int = 50_000,
+    out: str = "draft.zip",
+    seed: int = 0,
+    opponent_draft: str = "balanced",
+    rollouts: int = 1,
+    verbose: int = 1,
+    n_envs: int = 1,
+    ent_coef: float = 0.02,
+    seat_random: bool = True,
+    learning_rate: float = 3e-4,
+    target_kl: float | None = None,
+    n_steps: int = 2048,
+    batch_size: int = 64,
+    n_epochs: int = 10,
+    gamma: float = 1.0,
+    gae_lambda: float = 0.95,
+    clip_range: float = 0.2,
+    vf_coef: float = 0.5,
+    max_grad_norm: float = 0.5,
+    device: str = "auto",
+    callback=None,
+    tensorboard_log: str | None = None,
+):
+    """Train a MaskablePPO DRAFT policy against a frozen battle pilot (E18b).
+
+    The learned net picks one of the 3 offered cards for 30 rounds; the battle
+    is then played out by ``battle_spec`` on BOTH seats (mirror pilot — the
+    reward isolates deck quality) against a deck drafted by ``opponent_draft``.
+    ``steps`` counts draft picks (30 per episode). The saved model loads back
+    via ``MaskablePPODraftPolicy`` / the registry's learned-draft spec param.
+
+    gamma defaults to 1.0 (not SB3's 0.99): the episode reward is purely
+    terminal, and 30 picks of discounting would scale the first pick's signal
+    by 0.99^29 ~ 0.75 for no reason (the ByteRL gamma lesson, E18a).
+
+    Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
+    """
+    from stable_baselines3.common.vec_env import (  # noqa: PLC0415
+        DummyVecEnv,
+        SubprocVecEnv,
+        VecMonitor,
+    )
+
+    # Same per-env seed stride rationale as _build_env: episodes advance the
+    # seed by 1, so spacing workers 50k apart keeps their episode streams
+    # disjoint and below the 1M+ held-out eval-seed range.
+    fns = [
+        functools.partial(
+            _make_draft_env,
+            battle_spec,
+            opponent_draft,
+            seed + i * 50_000,
+            seat_random,
+            rollouts,
+        )
+        for i in range(n_envs)
+    ]
+    env = VecMonitor(DummyVecEnv(fns) if n_envs == 1 else SubprocVecEnv(fns))
+    model = _make_model(
+        env,
+        obs_mode="flat",  # draft obs is a flat Box -> MlpPolicy
+        seed=seed,
+        verbose=verbose,
+        ent_coef=ent_coef,
+        learning_rate=learning_rate,
+        target_kl=target_kl,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
+        device=device,
+        tensorboard_log=tensorboard_log,
+    )
+    model.learn(total_timesteps=steps, callback=callback)
+    model.save(out)
+    env.close()
+    return out
+
+
 # A small, code-declared "zoo" of opponents to train against back-to-back. This is
 # intentionally a constant for now (no CLI list plumbing); edit it to change the
 # curriculum. Order matters — training proceeds left to right. See docs/cli.md and

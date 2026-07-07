@@ -5,7 +5,7 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-05 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+planner) are in the 2026-07-07 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -28,6 +28,47 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-07: learned draft promoted on BOTH rungs (reactive 0.791, planner 0.978)
+
+E18b (branch feat/e18-learndraft, PR #76, worklog "E18b"): the first learned
+DRAFT policy — a MaskablePPO net trained in `DraftEnv` (30-pick episodes,
+frozen b0k battle pilot on both seats, terminal win reward, gamma=1.0,
+300k picks, rollouts=3) against a balanced-drafting opponent. Published as
+`depot:ldraft` v1 (gh:depot/ldraft-v1, parent b0k@1); the battle halves are
+unchanged — both promotions swap only the draft half of the Composer.
+
+| role | recipe | avg-hard3 |
+|---|---|---|
+| **planner (recipe of record)** | `vbeam:depot:shared/shared_s0.zip\|depot:shared/shared_s1.zip\|depot:shared/shared_s2.zip,8,20,depot:ldraft/ldraft_sX.zip` | **0.978** |
+| **reactive (recipe of record)** | `ppo:depot:b0k/b0k_sX.zip,depot:ldraft/ldraft_sX.zip` | **0.791** |
+| prior planner record | `vbeam:depot:shared ens x3` (balanced draft) | 0.926 |
+| prior reactive record | `depot:b0k/b0k_sX.zip` (balanced draft) | 0.683 |
+
+**Why promoted.** Headroom on both rungs, primary AND fresh-anchor confirm
+(the full pre-registered E18b gate ladder): reactive pair +0.1166
+[+0.104, +0.129] @ 18M anchors, confirm +0.1028 [+0.093, +0.113] @ 19M;
+planner pair +0.0541 [+0.047, +0.061], confirm +0.0473 [+0.042, +0.053].
+The learned decks carry 3.9–5.2 items/30 at mean cost ~3.3 with a rebuilt
+cheap curve (balanced: 0.76 items, cost 4.82) — the deck point E17's
+scripted-scorer sweep could not express (its dose ladder forced items into
+an otherwise-unchanged deck and lost monotonically). Generalizes across
+opponents (trained vs balanced, beats the HARD3 baselines' own drafts) and
+across pilots (trained for reactive b0k, lifts the shared-critic planner).
+
+**Recipe.** `train_draft` (locma/envs/training.py): DraftEnv flat obs
+(DRAFT_OBS_SIZE=67: round + own-deck curve/type/keyword summary + 3 offered
+card blocks), MlpPolicy, gamma=1.0, lr=3e-4 (SB3 defaults otherwise),
+n_envs=16, 300k picks (~10k episodes), reward = mean win of 3 reshuffled
+playouts by the frozen matching b0k seed. Each ldraft_sX pairs with
+b0k_sX/RL seed X. ~75 min/seed on the RTX 4080 box.
+
+**Note.** The balanced draft stays the pairing for `azlite`/`netdmcts` and
+as the training-env opponent default; specs without a draft param are
+unchanged (`ppo:model` = balanced) — the RoR is opt-in via the draft
+parameter, so all historical numbers remain reproducible.
 
 ---
 

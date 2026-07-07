@@ -1,0 +1,45 @@
+{
+  "name": "ldraft",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-07T09:08:56+00:00",
+      "git_commit": "35e1234",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish ldraft runs/ldraft_s0.zip runs/ldraft_s1.zip runs/ldraft_s2.zip --kind model --parent b0k@1 --note E18b learned draft net (DraftEnv RL vs frozen b0k pilots, 300k picks, rollouts=3, gamma=1.0, opponent balanced). Beats the balanced draft with headroom, both arms + fresh-anchor confirms: reactive pair ppo:b0k_sX,ldraft_sX avg-hard3 0.791 (+0.1166 [0.104, 0.129] @18M, confirm +0.1028 @19M); planner vbeam:shared-ens,8,20,ldraft_sX 0.978 (+0.0541 [0.047, 0.061], confirm +0.0473). Both recipes of record since 2026-07-07. PR #76. --meta {\"avg_hard3_reactive_pair\": 0.791, \"avg_hard3_planner_pair\": 0.978, \"g1_reactive_delta\": 0.1166, \"g2_planner_delta\": 0.0541, \"steps\": 300000, \"rollouts\": 3, \"pilot\": \"depot:b0k@1\", \"opponent_draft\": \"balanced\", \"items_per_deck\": \"3.9-5.2\", \"mean_deck_cost\": 3.3}",
+      "parents": [
+        "b0k@1"
+      ],
+      "note": "E18b learned draft net (DraftEnv RL vs frozen b0k pilots, 300k picks, rollouts=3, gamma=1.0, opponent balanced). Beats the balanced draft with headroom, both arms + fresh-anchor confirms: reactive pair ppo:b0k_sX,ldraft_sX avg-hard3 0.791 (+0.1166 [0.104, 0.129] @18M, confirm +0.1028 @19M); planner vbeam:shared-ens,8,20,ldraft_sX 0.978 (+0.0541 [0.047, 0.061], confirm +0.0473). Both recipes of record since 2026-07-07. PR #76.",
+      "meta": {
+        "avg_hard3_reactive_pair": 0.791,
+        "avg_hard3_planner_pair": 0.978,
+        "g1_reactive_delta": 0.1166,
+        "g2_planner_delta": 0.0541,
+        "steps": 300000,
+        "rollouts": 3,
+        "pilot": "depot:b0k@1",
+        "opponent_draft": "balanced",
+        "items_per_deck": "3.9-5.2",
+        "mean_deck_cost": 3.3
+      },
+      "files": {
+        "ldraft_s0.zip": {
+          "sha256": "13f613e89ca061f610b1b34cbc8274d6a525c6d1d79055ace1b36e974cc4c252",
+          "size": 248810
+        },
+        "ldraft_s1.zip": {
+          "sha256": "a687cf9603f71f6582dbcfc54e6aab99c9de0138762227cd6f30fd9e06c8e577",
+          "size": 248814
+        },
+        "ldraft_s2.zip": {
+          "sha256": "f984e74ce92d87fab6d7635d69048714a0646d0e22e1156919f98dca9334cf74",
+          "size": 248810
+        }
+      },
+      "published": "gh:depot/ldraft-v1"
+    }
+  ]
+}
