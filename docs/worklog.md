@@ -2011,3 +2011,75 @@ stays (useful for future probes). Combined E16a+E17 read: the reactive net's
 spell underuse is real but fixing it has no deck-side or obs-side route —
 item play value is search-computed (play-time), and item deck value is
 simply low in this pool.
+
+## 2026-07-06 — E18a: gamma=1.0 retrain (ByteRL ablation transfer test)
+
+**Question.** ByteRL (arXiv 2303.04096, COG 2022 LOCM winner, no search)
+reports +7% from gamma=1.0 — and our reward is purely terminal, so 0.99
+scales the win signal by ~0.55–0.74 by the time it reaches early decisions.
+Does the cheapest transferable ByteRL ingredient move the b0k recipe?
+
+**Method.** `scripts/e18a_gamma.py`: the b0k recipe of record (token V0,
+lr=1e-4, target_kl=0.025, 5-phase zoo, 1M steps, cuda) with the single-factor
+change gamma 0.99 -> 1.0, seeds 0–2. Standard ruler vs depot:b0k, 40x25 @
+fresh 16M anchors; planner/critic pilot; confirm @ 17M gated on CI-positive.
+
+**Result: CI-NEGATIVE.** Reactive -0.0223 [-0.0312, -0.0139] (0.6585 vs
+0.6808); planner pilot -0.0139 [-0.0289, +0.0006], full skipped. No
+promotion; `runs/e18a_g1_s*.zip` kept.
+
+**Read.** The gamma ablation does not transfer out of ByteRL's regime (24
+V100 / ~5900-core off-policy V-trace actor-learner, weeks of training). In
+on-policy PPO at 1M steps the undiscounted value target is noisier early
+and the budget cannot amortize it — gamma=0.99 is doing variance-control
+work here, not eating signal.
+
+## 2026-07-07 — E18b: learned draft beats the balanced draft — BOTH arms confirmed with headroom
+
+**Question.** ByteRL's one distinctive untried ingredient: learned deck-
+building. Every deployed recipe uses the hand-written BalancedDraftPolicy;
+E17 only established that the best member of that scripted-scorer FAMILY is
+the incumbent. Can a draft net trained by RL against a frozen battle pilot
+beat the scripted scorer?
+
+**Method.** New plumbing (`locma/envs/draft_env.py`, `train_draft`,
+`MaskablePPODraftPolicy`, registry draft-override param): DraftEnv = 30-pick
+episode, frozen battle pilot plays BOTH seats (mirror isolates deck signal),
+terminal reward = mean win over 3 reshuffled playouts, gamma=1.0, 300k picks
+(~10k episodes, ~75 min/seed). draft_s{0,1,2} each trained vs its matching
+pilot depot:b0k/b0k_s{s} against a balanced-drafting opponent — exactly the
+G1 matchup. `scripts/e18b_learndraft.py`; anchors 18M primary / 19M confirm.
+
+**Result: draft_seam_open = true. Both gates pass full AND fresh-anchor
+confirm, both with the +0.03 headroom verdict.**
+
+| arm | delta | 95% CI | confirm (19M) | avg-hard3 |
+|---|---|---|---|---|
+| G1 reactive: ppo:b0k_sX,draft_sX vs ppo:b0k_sX | **+0.1166** | [+0.104, +0.129] | +0.1028 [+0.093, +0.113] | 0.675 -> **0.791** |
+| G2 planner: vbeam:shared,8,20,draft_sX vs 0.926 RoR | **+0.0541** | [+0.047, +0.061] | +0.0473 [+0.042, +0.053] | 0.924 -> **0.978** |
+
+Census (200 seeded drafts): learned decks carry 3.9–5.2 items/30 at mean
+cost ~3.3 (balanced: 0.76 items, cost 4.82), with a sharply cheaper curve —
+2-cost bucket 7.4 vs 4.2, 7+-cost 2.2 vs 6.5 — and full card diversity
+(158–160 unique cards; no degeneracy).
+
+**Read.** The scripted-scorer axis (E17) and the deck-value question were
+answered for the wrong family: E17's dose ladder forced items into an
+otherwise-unchanged balanced deck and lost monotonically; the learned draft
+takes ~5 items AND wins big — because it simultaneously rebuilds the curve
+around cheap cards. "More items" was never the lever; *which cards at which
+curve* is, and that point of draft space is not expressible inside
+BalancedDraftPolicy's scorer. Two more notable facts: (1) the deck
+generalizes — trained vs balanced-draft opponents, it beats the HARD3
+baselines' own drafts; (2) it transfers across pilots — tuned for the
+reactive b0k, it lifts the shared-critic planner ensemble to 0.978, the
+largest planner move since E5. Training-side RL is NOT dead (E15 closed
+absorb-the-planner distillation, not RL on new decision surfaces); the
+ByteRL end-to-end lesson survives contact, its gamma lesson (E18a) does not.
+
+Open follow-ups recorded, not scheduled: promotion protocol for both
+recipes of record (depot publish + baseline.md); retrain battle nets ON
+learned-draft decks (they currently train on balanced decks — E7's
+policy/value data split suggests gains); exploit-bench re-read (cheap-curve
+decks vs archetypes); joint draft+battle fine-tune (the full ByteRL E2E),
+now justified by G1/G2.

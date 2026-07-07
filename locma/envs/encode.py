@@ -168,6 +168,56 @@ def index_to_action(view, legal, idx):
 
 
 # ---------------------------------------------------------------------------
+# Draft observation encoder (E18b learned draft — additive)
+# ---------------------------------------------------------------------------
+
+# Scalars: round (1) + deck curve buckets (8) + deck type counts (4)
+# + deck keyword counts (6) + shared-draft taken one-hot (3) = 22.
+N_DRAFT_SCALARS = 22
+N_DRAFT_ACTIONS = 3
+DRAFT_OBS_SIZE: int = N_DRAFT_SCALARS + N_DRAFT_ACTIONS * CARD_FEATS  # 67
+
+
+def encode_draft(view, picks) -> np.ndarray:
+    """Encode a DraftView + the drafting seat's picks-so-far into a flat vector.
+
+    ``picks`` is any sequence of card-like objects exposing ``cost``, ``type``
+    and ``abilities`` (core ``Card`` in the env, ``CardView`` on the policy
+    side). The deck summary gives the net what BalancedDraftPolicy tracks by
+    hand — curve buckets and type counts — so curve-aware strategies are
+    representable; keyword counts cover synergy pressure (e.g. enough Guards).
+    """
+    vec: list[float] = [float(view.round)]
+    curve = [0.0] * 8
+    types = [0.0] * 4
+    kw = [0.0] * N_ABILITY
+    for c in picks:
+        curve[min(c.cost, 7)] += 1.0
+        types[int(c.type)] += 1.0
+        for i in range(N_ABILITY):
+            if c.abilities[i] != "-":
+                kw[i] += 1.0
+    vec += curve + types + kw
+    taken = [0.0] * N_DRAFT_ACTIONS  # shared draft: which index the first picker took
+    if view.taken is not None:
+        taken[view.taken] = 1.0
+    vec += taken
+    for cv in view.offered:
+        vec += _card_block(cv, on_board=False)
+    arr = np.asarray(vec, dtype=np.float32)
+    assert len(arr) == DRAFT_OBS_SIZE, f"encode_draft length {len(arr)} != {DRAFT_OBS_SIZE}"
+    return arr
+
+
+def draft_action_mask(legal) -> np.ndarray:
+    """Boolean mask of length N_DRAFT_ACTIONS; True exactly at legal pick indices."""
+    mask = np.zeros(N_DRAFT_ACTIONS, dtype=bool)
+    for i in legal:
+        mask[i] = True
+    return mask
+
+
+# ---------------------------------------------------------------------------
 # Tokenized observation encoder (PPO2 — additive; flat path unchanged above)
 # ---------------------------------------------------------------------------
 

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from locma.envs.encode import action_mask, encode_battle, encode_battle_tokens, index_to_action
+from locma.envs.encode import (
+    action_mask,
+    draft_action_mask,
+    encode_battle,
+    encode_battle_tokens,
+    encode_draft,
+    index_to_action,
+)
 
 
 def _encode_for(model, view):
@@ -56,3 +63,48 @@ class MaskablePPOBattlePolicy:
 
     def reset(self, seed=None) -> None:
         pass
+
+
+class MaskablePPODraftPolicy:
+    """Wraps a saved MaskablePPO DRAFT model (train_draft, E18b) as a draft policy.
+
+    Stateful like BalancedDraftPolicy: tracks its own picks (the deck-so-far
+    summary is part of the draft observation), cleared on reset. Lazy model
+    load, deterministic by default — same conventions as the battle wrapper.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "draft.zip",
+        name: str = "ppo-draft",
+        deterministic: bool = True,
+        model=None,
+    ):
+        self.model_path = model_path
+        self.name = name
+        self.deterministic = deterministic
+        self._model = model
+        self._picks: list = []
+
+    def _ensure(self) -> None:
+        if self._model is None:
+            from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+            self._model = MaskablePPO.load(self.model_path)
+
+    def note_pick(self, view, idx) -> None:
+        """Record a pick made on this policy's behalf (PartialRandomDraftPolicy
+        hook), keeping the deck-so-far observation accurate."""
+        self._picks.append(view.offered[idx])
+
+    def draft_action(self, view, legal):
+        self._ensure()
+        obs = encode_draft(view, self._picks)
+        mask = draft_action_mask(legal)
+        idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
+        idx = int(idx)
+        self.note_pick(view, idx)
+        return idx
+
+    def reset(self, seed=None) -> None:
+        self._picks = []
