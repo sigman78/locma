@@ -10,6 +10,7 @@ Entries live in `docs/worklog/`, split by month.
 
 ## 2026-07
 
+- 2026-07-07 — [E18b addendum: PROMOTION — depot:ldraft](worklog/2026-07.md) — both recipes of record swap their draft half; planner 0.978, reactive 0.791
 - 2026-07-07 — [E18b: learned draft beats the balanced draft — BOTH arms confirmed with headroom](worklog/2026-07.md) — headroom on both rungs; learned draft beats the scripted balanced draft
 - 2026-07-06 — [E18a: gamma=1.0 retrain (ByteRL ablation transfer test)](worklog/2026-07.md) — CI-negative; ByteRL's gamma=1.0 ablation does not transfer to on-policy PPO
 - 2026-07-06 — [E17: draft item-discount sweep under the planner](worklog/2026-07.md) — null-to-negative, monotone dose; draft-side spell enrichment closed
