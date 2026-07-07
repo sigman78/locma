@@ -5,8 +5,10 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from locma.envs.draft_env import DraftEnv
-from locma.envs.encode import (
+pytest.importorskip("gymnasium")  # ML-only (the draft env); see test_draft_noise_training.py
+
+from locma.envs.draft_env import DraftEnv  # noqa: E402
+from locma.envs.encode import (  # noqa: E402
     CARD_FEATS,
     DRAFT_OBS_SIZE,
     N_DRAFT_ACTIONS,
@@ -14,8 +16,8 @@ from locma.envs.encode import (
     draft_action_mask,
     encode_draft,
 )
-from locma.policies.battles import GreedyBattlePolicy
-from locma.policies.drafts import BalancedDraftPolicy
+from locma.policies.battles import GreedyBattlePolicy  # noqa: E402
+from locma.policies.drafts import BalancedDraftPolicy  # noqa: E402
 
 
 @dataclass
