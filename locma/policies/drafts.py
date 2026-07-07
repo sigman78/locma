@@ -211,6 +211,56 @@ class BalancedDraftPolicy:
         return idx
 
 
+class BothSeatsDraftPolicy:
+    """Route BattleEnv's both-seats drafting to two independent child policies.
+
+    In BattleEnv the OPPONENT policy drafts for both seats, alternating within
+    each round (seat 0 picks first under the default rule). A stateful draft
+    (``balanced``, learned ``ppo-draft``) tracking its own picks would mix the
+    two decks into one 60-card history; this wrapper keeps a child per seat:
+    the first pick of each round goes to ``first``, the second to ``second``.
+
+    Default draft variant only -- the shared variant alternates WHICH seat
+    picks first by round, so call order no longer identifies the seat (raises
+    if a shared-draft view is detected). For run_game-style single-seat use,
+    pass the underlying policy directly; this wrapper is a training-env aid.
+    """
+
+    def __init__(self, first, second, name: str | None = None):
+        self.first = first
+        self.second = second
+        self.name = name if name is not None else f"{first.name}-x2"
+        self._round = -1
+        self._i = 0
+
+    def reset(self, seed=None):
+        self._round = -1
+        self._i = 0
+        self.first.reset(seed)
+        self.second.reset(seed)
+
+    def _child(self, view):
+        if view.taken is not None:  # shared draft: first picker alternates
+            raise ValueError("BothSeatsDraftPolicy supports the default draft variant only")
+        if view.round != self._round:
+            self._round = view.round
+            self._i = 0
+        else:
+            self._i += 1
+        return self.first if self._i % 2 == 0 else self.second
+
+    def note_pick(self, view, idx):
+        """Advance the routing and forward to the child's own tracking (the
+        PartialRandomDraftPolicy override hook)."""
+        child = self._child(view)
+        note = getattr(child, "note_pick", None)
+        if note is not None:
+            note(view, idx)
+
+    def draft_action(self, view, legal):
+        return self._child(view).draft_action(view, legal)
+
+
 class PartialRandomDraftPolicy:
     """Wrap a base draft policy, overriding exactly ``k`` of the 30 draft rounds
     with a uniformly random pick; every other round delegates to ``base``.
