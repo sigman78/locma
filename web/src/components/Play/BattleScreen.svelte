@@ -1,6 +1,7 @@
 <!-- web/src/components/Play/BattleScreen.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
+  import { flip } from 'svelte/animate'
   import type { ActionDict, CardState, EventDict, PlayerState } from '../../lib/replay'
   import {
     attackTargets,
@@ -61,7 +62,7 @@
   // --- anchor registry: board slots + both faces register their DOM node.
   // 'face' = the opponent (top) face (also the drag target); 'face-me' = the
   // human's own (bottom) face, needed so an AI→human-face attack can slide down. ---
-  type AnchorKey = number | 'face' | 'face-me' | 'myfield'
+  type AnchorKey = number | 'face' | 'face-me' | 'myfield' | 'opphand'
   const anchors = new Map<AnchorKey, HTMLElement>()
   function anchor(node: HTMLElement, id: AnchorKey) {
     anchors.set(id, node)
@@ -98,6 +99,12 @@
     key: number
   }
   let btFly: BtFly | null = null
+
+  // Opponent played-card reveal: the card rises out of the hand of backs, flips
+  // face-up, hangs a beat, then swings off-screen. One per step, keyed by fxToken.
+  // 820ms total — must finish inside HOLD_MS so it never overlaps the next step.
+  const REVEAL_MS = 820
+  let oppReveal: { card: CardState; x: number; y: number; key: number } | null = null
 
   function syncDisplay() {
     const ret = (seat: number) =>
@@ -159,6 +166,21 @@
         setTimeout(() => { btFly = { amount: bht.amount, src, dst, key: flyKey } }, 80)
         // clear AFTER the fade fully completes (80ms delay + 390ms animation-delay + 140ms fade ≈ 610ms)
         setTimeout(() => { if (btFly?.key === flyKey) btFly = null }, 640)
+      }
+    }
+    // Opponent card play reveal: which card did the AI just play from its hand?
+    // `played` comes from the server step; a summon can also recover it from the
+    // post-action board (the fresh minion carries the card_id).
+    const a = currentAction
+    if (actSeat === opSeat && a && (a.t === 'summon' || a.t === 'use')) {
+      const played =
+        liveStep?.played ??
+        (a.t === 'summon' ? (view.op.board.find((c) => c.iid === a.id) ?? null) : null)
+      const src = rectOfKey('opphand')
+      if (played && src) {
+        const key = fxToken
+        oppReveal = { card: played, x: src.cx, y: src.cy, key }
+        setTimeout(() => { if (oppReveal?.key === key) oppReveal = null }, REVEAL_MS)
       }
     }
   }
@@ -436,14 +458,14 @@
     <Player player={opPlayer} name="AI" seat={opSeat as 0 | 1} active={false} {fx} {fxToken} />
   </div>
 
-  <div class="hand backs">
+  <div class="hand backs" use:anchor={'opphand'}>
     {#each oppBacks as _b, i (i)}<CardView card={back} faceUp={false} />{/each}
   </div>
 
   <div class="field top">
     {#each displayOp as c (c.iid)}
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
-        use:anchor={c.iid} in:spring out:deathFx>
+        use:anchor={c.iid} in:spring out:deathFx animate:flip={{ duration: 220 }}>
         <MinionView card={c} facing="down"
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
           flash={flashSet.has(c.iid)} hit={tookDamage(opSeat, c.iid)}
@@ -463,7 +485,7 @@
       <button class="slot" class:legaltarget={legalKeys.has(c.iid)} class:snapped={snapId === c.iid}
         class:armed={drag?.src === c.iid} class:jiggling={jiggleIid === c.iid}
         class:ready={interactive && !drag && attackTargets(legal, c.iid).length > 0}
-        use:anchor={c.iid} in:spring out:deathFx
+        use:anchor={c.iid} in:spring out:deathFx animate:flip={{ duration: 220 }}
         on:mousedown={(e) => startAttack(e, c)}>
         <MinionView card={c} facing="up" dim={c.can_attack === false}
           slideX={slideX(c.iid)} slideY={slideY(c.iid)}
@@ -486,7 +508,8 @@
             `rotate(${handDrag.docked ? 0 : Math.max(-7, Math.min(7, handDrag.dx * 0.06))}deg)` +
             (handDrag.kind !== 'tether' && !handDrag.returning ? ' scale(1.06)' : '') + ';'
           : ''}
-        in:dealIn on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
+        in:dealIn animate:flip={{ duration: 220 }}
+        on:mousedown={(e) => downHand(e, c)} on:click={() => clickHand(c)}>
         <CardView card={c} />
       </button>
     {/each}
@@ -509,6 +532,17 @@
       disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
+
+{#if oppReveal}
+  <!-- The card the AI just played: rises from the hand of backs, flips face-up,
+       hangs a beat, then swings off to the side. position:fixed viewport coords
+       (from the opphand anchor), so the fly-out can't widen the page. -->
+  {#key oppReveal.key}
+    <div class="opp-reveal" style="left:{oppReveal.x}px; top:{oppReveal.y}px;">
+      <div class="opp-reveal-flip"><CardView card={oppReveal.card} /></div>
+    </div>
+  {/key}
+{/if}
 
 {#if btFly}
   <!-- Breakthrough red blob flies from struck blocker → defender face (position:fixed, viewport coords).
@@ -628,6 +662,42 @@
     box-shadow: 0 0 16px rgba(255, 93, 93, 0.55); }
   /* cast flash on the face — reuse the existing brightness/scale pulse */
   .faceplate.flashing { animation: locma-cast 250ms ease-out; }
+
+  /* ---- Opponent played-card reveal ---- */
+  /* Outer wrapper travels: flung out of the hand toward the board (down, toward
+     the opponent), a short hover beat, then a smooth sideways glide-out. The
+     inner wrapper does a rotateY edge-flip so the card reads as turning from its
+     back to its face. 820ms total = fits inside the 850ms per-step hold. */
+  .opp-reveal {
+    --card-w: 100px; --card-h: 140px; /* match .battle card size (fixed, outside it) */
+    position: fixed;
+    z-index: 950;
+    pointer-events: none;
+    perspective: 700px;
+    animation: opp-reveal-move 800ms both;
+    will-change: transform, opacity;
+  }
+  .opp-reveal-flip {
+    border-radius: 6px;
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.6);
+    animation: opp-reveal-flip 800ms ease-out both;
+  }
+  /* per-segment easing lives on the FROM keyframe: snappy fling, gentle glide */
+  @keyframes opp-reveal-move {
+    0% { transform: translate(-50%, -50%) scale(0.72); opacity: 0;
+      animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1); }
+    20% { transform: translate(-50%, 42%) scale(1.18); opacity: 1;
+      animation-timing-function: ease-in-out; }
+    58% { transform: translate(-50%, 50%) scale(1.18); opacity: 1;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1); }
+    100% { transform: translate(calc(-50% + 300px), 58%) scale(1.1); opacity: 0; }
+  }
+  @keyframes opp-reveal-flip {
+    0%   { transform: rotateY(90deg); }
+    12%  { transform: rotateY(90deg); }
+    34%  { transform: rotateY(0deg); }
+    100% { transform: rotateY(0deg); }
+  }
 
   /* ---- Breakthrough flying-blob cue ---- */
   /* Pure red blob flies from struck blocker to defender face with back-overshoot spring.

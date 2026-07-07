@@ -9,12 +9,15 @@ describe('spring / dealIn enter transitions', () => {
     expect(spring(node).duration).toBe(0)
     expect(dealIn(node).duration).toBe(0)
   })
-  it('spring scales up to full size and is springy', () => {
+  it('spring lowers the enlarged minion into its slot and settles at full size', () => {
     animate.set(true)
     const r = spring(node)
     expect(r.duration).toBeGreaterThan(0)
-    expect(r.css!(0)).toContain('scale')
-    expect(r.css!(1)).toContain('scale(1')
+    expect(r.css!(0)).toContain('scale(1.25')
+    expect(r.css!(0)).toContain('translateY(-34px)')
+    expect(r.css!(1)).toContain('scale(1)')
+    // backOut overshoot (t > 1) must never emit a negative drop-shadow blur
+    expect(r.css!(1.1)).not.toMatch(/drop-shadow\(0 -?\d[\d.]*px -/)
     animate.set(false)
   })
   it('dealIn slides+flips in from the right', () => {

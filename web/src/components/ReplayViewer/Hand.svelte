@@ -1,6 +1,8 @@
 <!-- web/src/components/ReplayViewer/Hand.svelte -->
 <script lang="ts">
+  import { flip } from 'svelte/animate'
   import type { CardState } from '../../lib/replay'
+  import { animate as fxWindow } from '../../lib/motion'
   import CardView from './CardView.svelte'
   export let cards: CardState[] = []
   export let faceUp = true
@@ -11,7 +13,13 @@
 </script>
 
 <div class="hand" class:active>
-  {#each cards as c (c.iid)}<CardView card={c} {faceUp} {tipDir} drawn={drawnIids.has(c.iid)} {fxToken} />{/each}
+  <!-- flip: neighbours glide to close the gap of a played card / make room for a
+       draw — gated by the forward-step window so timeline seeks stay instant -->
+  {#each cards as c (c.iid)}
+    <div animate:flip={{ duration: $fxWindow ? 220 : 0 }}>
+      <CardView card={c} {faceUp} {tipDir} drawn={drawnIids.has(c.iid)} {fxToken} />
+    </div>
+  {/each}
 </div>
 
 <style>
@@ -23,6 +31,7 @@
     width: calc(var(--hand-cols, 8) * var(--card-w, 108px)
       + (var(--hand-cols, 8) - 1) * var(--gap, 8px) + 16px);
     min-height: calc(var(--card-h, 150px) + 16px); transition: background 0.2s, border-color 0.2s; }
+  .hand > div { flex: 0 0 auto; }
   /* faintly warm the active player's hand */
   .hand.active { background: #2a2a24; border-color: #4a4636; }
 </style>
