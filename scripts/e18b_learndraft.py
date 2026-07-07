@@ -250,8 +250,12 @@ def main() -> None:
     # Stage E: G3 fresh-anchor confirms for CI-positive full arms.
     confirms: dict = {}
     for arm, full, cands, bases in (
-        ("reactive", full_reactive, [f"ppo:{B0K[s]},{draft_path(s)}" for s in SEEDS],
-         [f"ppo:{B0K[s]}" for s in SEEDS]),
+        (
+            "reactive",
+            full_reactive,
+            [f"ppo:{B0K[s]},{draft_path(s)}" for s in SEEDS],
+            [f"ppo:{B0K[s]}" for s in SEEDS],
+        ),
         ("planner", full_planner, [ens_spec(s) for s in SEEDS], [ENS_ROR]),
     ):
         if full is not None and full["ci_lo"] > 0:

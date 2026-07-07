@@ -300,8 +300,7 @@ def aggregate() -> None:
     for c in cands:
         by_card.setdefault(c["cid"], []).append(c)
     percard = {
-        str(cid): {"class": classes[cid], **_rates(rows)}
-        for cid, rows in sorted(by_card.items())
+        str(cid): {"class": classes[cid], **_rates(rows)} for cid, rows in sorted(by_card.items())
     }
     with open(PERCARD_PATH, "w", encoding="utf-8") as f:
         json.dump(percard, f, indent=1)
