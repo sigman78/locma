@@ -162,9 +162,17 @@ class BalancedDraftPolicy:
     # (1.5→6→12 gave 0.47→0.52→0.56 avg vs the hard baselines) showed a strong
     # creature bias is best, so the deck stays creature-heavy and only takes
     # genuinely premium removal (e.g. Decimate). See docs/baseline.md.
+    # That tuning was against the REACTIVE pilot; the vbeam planner converts items
+    # ~1.7x better per opportunity (E16a), so ``item_discount`` is a constructor
+    # parameter -- E17 sweeps it under the planner. Default preserves the historic
+    # reactive-tuned behavior.
     _ITEM_DISCOUNT = 12.0
 
-    def __init__(self, name: str = "balanced-draft"):
+    def __init__(self, name: str | None = None, item_discount: float = _ITEM_DISCOUNT):
+        self.item_discount = item_discount
+        if name is None:
+            suffix = "" if item_discount == self._ITEM_DISCOUNT else f"-d{item_discount:g}"
+            name = f"balanced-draft{suffix}"
         self.name = name
         self._picks: list = []
 
@@ -189,7 +197,7 @@ class BalancedDraftPolicy:
             if n_creatures < self._CREATURE_TARGET:
                 score += self._CREATURE_BONUS
         else:
-            score -= self._ITEM_DISCOUNT
+            score -= self.item_discount
         return score
 
     def note_pick(self, view, idx):

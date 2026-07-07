@@ -101,6 +101,29 @@ def test_balanced_prefers_creature_and_is_stateful():
     assert p._picks == []
 
 
+def test_balanced_item_discount_parameter():
+    # Premium removal vs a modest creature: the default discount (12) rejects
+    # the item, discount 0 takes it. Name encodes non-default discounts.
+    offered = (_CV(2, 5, 0, -99, "BCDGLW"), _CV(0, 5, 4, 4, "------"))  # Decimate-like vs 4/4
+    assert BalancedDraftPolicy().draft_action(_DV(offered), [0, 1]) == 1
+    assert BalancedDraftPolicy(item_discount=0).draft_action(_DV(offered), [0, 1]) == 0
+    assert BalancedDraftPolicy().name == "balanced-draft"
+    assert BalancedDraftPolicy(item_discount=3).name == "balanced-draft-d3"
+
+
+def test_registry_item_discount_specs():
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+
+    # ppo: optional 2nd param sets the balanced item discount (model not loaded).
+    p = make_policy("ppo:model.zip,3")
+    assert p.draft.item_discount == 3.0
+    assert make_policy("ppo:model.zip").draft.item_discount == 12.0
+    # vbeam: optional 4th param, ensemble path syntax preserved.
+    v = make_policy("vbeam:a.zip|b.zip,8,20,1.5")
+    assert v.draft.item_discount == 1.5
+    assert make_policy("vbeam:a.zip").draft.item_discount == 12.0
+
+
 # ---------------------------------------------------------------------------
 # PartialRandomDraftPolicy — k uniformly random picks on top of a base draft
 # ---------------------------------------------------------------------------

@@ -113,7 +113,7 @@ def _netdmcts(params, spec):
 
 
 def _vbeam(params, spec):
-    """V-greedy own-turn beam planner — spec ``vbeam:model_path,width,max_actions``.
+    """V-greedy own-turn beam planner — spec ``vbeam:model_path,width,max_actions,item_discount``.
 
     Plans whole turns by beam-searching own-turn action sequences and scoring
     stopping points with the token model's value head (E5 "planning-lite").
@@ -122,13 +122,16 @@ def _vbeam(params, spec):
     (``vbeam:a.zip|b.zip|c.zip``) — the beam then ranks with the mean of the
     member critics (``EnsembleValueEvaluator``). Paired with the ``balanced``
     draft like ``ppo``/``azlite``/``netdmcts`` for apples-to-apples
-    comparisons.
+    comparisons. ``item_discount`` overrides the balanced draft's item
+    discount (default 12, tuned for the REACTIVE pilot; the planner converts
+    items far better — E16a/E17).
     """
     from locma.policies.vbeam import EnsembleValueEvaluator, VBeamBattlePolicy  # noqa: PLC0415
 
     raw = params[0] if len(params) > 0 and params[0] else "model.zip"
     width = int(params[1]) if len(params) > 1 else 8
     max_actions = int(params[2]) if len(params) > 2 else 20
+    item_discount = float(params[3]) if len(params) > 3 else None
     if "|" in raw:
         paths = [resolve_path(p) for p in raw.split("|")]
         battle = VBeamBattlePolicy(
@@ -141,7 +144,8 @@ def _vbeam(params, spec):
         battle = VBeamBattlePolicy(
             model_path=resolve_path(raw), width=width, max_actions=max_actions
         )
-    return Composer(battle, BalancedDraftPolicy(), name=spec)
+    draft = BalancedDraftPolicy() if item_discount is None else BalancedDraftPolicy(item_discount=item_discount)
+    return Composer(battle, draft, name=spec)
 
 
 def _ppo(params, spec):
@@ -154,10 +158,11 @@ def _ppo(params, spec):
     # sweep (docs/baseline.md "PPO × draft sweep") found the greedy draft is the
     # WORST partner (0.39 avg vs the ground baselines) while `balanced` (0.54) makes
     # the same battle net BEAT them. The battle policy is deck-robust, so this needs
-    # no retraining.
-    return Composer(
-        MaskablePPOBattlePolicy(model_path=model_path), BalancedDraftPolicy(), name=spec
-    )
+    # no retraining. Optional second param overrides the balanced item discount
+    # (``ppo:path,3``) — E17 guard-rail arms.
+    item_discount = float(params[1]) if len(params) > 1 else None
+    draft = BalancedDraftPolicy() if item_discount is None else BalancedDraftPolicy(item_discount=item_discount)
+    return Composer(MaskablePPOBattlePolicy(model_path=model_path), draft, name=spec)
 
 
 # --- E10 exploit archetypes: scripted strategies aimed at the learned
