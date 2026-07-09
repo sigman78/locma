@@ -12,6 +12,7 @@ from locma.policies.battles import (
 from locma.policies.composer import Composer
 from locma.policies.drafts import (
     BalancedDraftPolicy,
+    DistilledDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
     MaxGuardDraftPolicy,
@@ -24,18 +25,49 @@ def _draft_param(params, i):
     """Resolve the optional draft-override parameter of ``ppo:``/``vbeam:`` specs.
 
     Absent/empty -> the default balanced draft. A float -> balanced with that
-    item discount (E17, e.g. ``ppo:model.zip,3``). Anything else -> a learned
-    draft model path (E18b, e.g. ``ppo:model.zip,runs/draft_s0.zip`` or a
-    ``depot:`` ref), loaded lazily as MaskablePPODraftPolicy.
+    item discount (E17, e.g. ``ppo:model.zip,3``). A ``.json`` path with a
+    "values" key -> a per-card priority table, loaded as DistilledDraftPolicy
+    -- either fit by regression against a net's revealed picks, or elicited
+    directly from the net via neutral-context comparisons and spliced onto a
+    curve_target (E20; the JSON may carry its own curve_target/w_need/
+    w_creature, else BalancedDraftPolicy's defaults apply). A ``.json`` path
+    WITHOUT "values" -> a hand-specified curve/discount override (E20
+    census-derived heuristic, ``{"curve_target": ..., "item_discount":
+    ...}``, loaded as BalancedDraftPolicy with those constants). Anything else
+    -> a learned draft model path (E18b, e.g. ``ppo:model.zip,runs/draft_s0.
+    zip`` or a ``depot:`` ref), loaded lazily as MaskablePPODraftPolicy.
     """
     if len(params) <= i or not params[i]:
         return BalancedDraftPolicy()
     try:
         return BalancedDraftPolicy(item_discount=float(params[i]))
     except ValueError:
+        path = resolve_path(params[i])
+        if path.endswith(".json"):
+            import json  # noqa: PLC0415
+
+            with open(path, encoding="utf-8") as f:
+                spec = json.load(f)
+            if "values" in spec:
+                return DistilledDraftPolicy.load(path)
+            return BalancedDraftPolicy(
+                item_discount=spec["item_discount"],
+                curve_target={int(k): v for k, v in spec["curve_target"].items()},
+            )
+
         from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
 
-        return MaskablePPODraftPolicy(model_path=resolve_path(params[i]))
+        return MaskablePPODraftPolicy(model_path=path)
+
+
+def _greedy_draft_param(params, i):
+    """Like ``_draft_param``, but defaults to ``GreedyDraftPolicy`` (mcts/dmcts's
+    historic, hardcoded default) instead of balanced when the param is absent —
+    so old bare ``mcts:100``/``dmcts:15,30`` specs stay byte-identical, while a
+    5th param opts into a draft override (E22: same-draft head-to-head vs vbeam)."""
+    if len(params) <= i or not params[i]:
+        return GreedyDraftPolicy()
+    return _draft_param(params, i)
 
 
 def _random(params, spec):
@@ -59,6 +91,14 @@ def _max_attack(params, spec):
 
 
 def _mcts(params, spec):
+    """Cheating perfect-information MCTS — spec ``mcts:iterations,c,seed,turns,draft``.
+
+    Defaults to the ``greedy`` draft (historic default, kept for reproducibility
+    of old ``mcts:100``-style specs). The optional 5th param overrides the draft
+    the same way ``ppo:``/``vbeam:`` do (see ``_draft_param``) — e.g.
+    ``mcts:1000,,,,depot:ldraft/ldraft_s0.zip`` for a same-draft comparison
+    against a learned-draft opponent (E22).
+    """
     from locma.policies.mcts import (  # noqa: PLC0415
         MCTSBattlePolicy,
     )
@@ -69,7 +109,7 @@ def _mcts(params, spec):
     rollout_turns = int(params[3]) if len(params) > 3 else 3  # heuristic rollout (0 = legacy)
     return Composer(
         MCTSBattlePolicy(iterations=iters, c=c, seed=seed, rollout_turns=rollout_turns),
-        GreedyDraftPolicy(),
+        _greedy_draft_param(params, 4),
         name=spec,
     )
 
@@ -95,7 +135,10 @@ def _azlite(params, spec):
 
 
 def _dmcts(params, spec):
-    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns``."""
+    """Determinized (non-cheating) MCTS — spec ``dmcts:K,I,seed,turns,draft``.
+
+    Defaults to the ``greedy`` draft (historic default). The optional 5th
+    param overrides the draft like ``mcts:`` (see ``_greedy_draft_param``)."""
     from locma.policies.mcts import DMCTSBattlePolicy  # noqa: PLC0415
 
     k = int(params[0]) if len(params) > 0 else 15  # determinizations (worlds)
@@ -104,7 +147,7 @@ def _dmcts(params, spec):
     rollout_turns = int(params[3]) if len(params) > 3 else 3
     return Composer(
         DMCTSBattlePolicy(determinizations=k, iterations=i, seed=seed, rollout_turns=rollout_turns),
-        GreedyDraftPolicy(),
+        _greedy_draft_param(params, 4),
         name=spec,
     )
 
