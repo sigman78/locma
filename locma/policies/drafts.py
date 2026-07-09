@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 
 _CREATURE = 0  # CardView.type for creatures
@@ -168,10 +169,17 @@ class BalancedDraftPolicy:
     # reactive-tuned behavior.
     _ITEM_DISCOUNT = 12.0
 
-    def __init__(self, name: str | None = None, item_discount: float = _ITEM_DISCOUNT):
+    def __init__(
+        self,
+        name: str | None = None,
+        item_discount: float = _ITEM_DISCOUNT,
+        curve_target: dict[int, int] | None = None,
+    ):
         self.item_discount = item_discount
+        self.curve_target = curve_target if curve_target is not None else self._CURVE_TARGET
         if name is None:
             suffix = "" if item_discount == self._ITEM_DISCOUNT else f"-d{item_discount:g}"
+            suffix += "" if curve_target is None else "-curve"
             name = f"balanced-draft{suffix}"
         self.name = name
         self._picks: list = []
@@ -191,13 +199,84 @@ class BalancedDraftPolicy:
                 n_creatures += 1
         base = _card_value(cv)  # spell-aware: removal/damage items valued by effect
         bucket = self._bucket(cv.cost)
-        need = max(0, self._CURVE_TARGET.get(bucket, 0) - counts.get(bucket, 0))
+        need = max(0, self.curve_target.get(bucket, 0) - counts.get(bucket, 0))
         score = base + 3.0 * need
         if cv.type == _CREATURE:
             if n_creatures < self._CREATURE_TARGET:
                 score += self._CREATURE_BONUS
         else:
             score -= self.item_discount
+        return score
+
+    def note_pick(self, view, idx):
+        """Record a pick made on this policy's behalf (e.g. an overridden pick by
+        PartialRandomDraftPolicy), keeping the curve/creature tracking accurate."""
+        self._picks.append(view.offered[idx])
+
+    def draft_action(self, view, legal):
+        idx = max(legal, key=lambda i: self._score(view.offered[i]))
+        self.note_pick(view, idx)
+        return idx
+
+
+class DistilledDraftPolicy:
+    """Card-priority-table draft (E20): a per-card static value plus
+    ``BalancedDraftPolicy``'s curve-need / creature-deficit context terms, no
+    neural net at draft time. The value table (and optionally the curve target
+    and the two context weights) come from ``scripts/e20_draftdistill.py``,
+    either fit by multinomial logistic regression against a learned draft
+    net's (E18b) revealed picks, or ELICITED directly from the net via random
+    neutral-context comparisons (round 0, empty deck) and spliced onto the
+    census-recalibrated curve/creature terms -- see the script for both
+    methods. Stateful like ``BalancedDraftPolicy``, whose curve-tracking logic
+    it reuses."""
+
+    _CURVE_TARGET = BalancedDraftPolicy._CURVE_TARGET
+    _CREATURE_TARGET = BalancedDraftPolicy._CREATURE_TARGET
+
+    def __init__(
+        self,
+        values: dict[int, float],
+        w_need: float,
+        w_creature: float,
+        curve_target: dict[int, int] | None = None,
+        name: str = "distilled-draft",
+    ):
+        self.values = values
+        self.w_need = w_need
+        self.w_creature = w_creature
+        self.curve_target = curve_target if curve_target is not None else self._CURVE_TARGET
+        self.name = name
+        self._picks: list = []
+
+    @classmethod
+    def load(cls, path: str) -> DistilledDraftPolicy:
+        with open(path, encoding="utf-8") as f:
+            fit = json.load(f)
+        values = {int(k): v for k, v in fit["values"].items()}
+        curve_target = fit.get("curve_target")
+        if curve_target is not None:
+            curve_target = {int(k): v for k, v in curve_target.items()}
+        return cls(values, fit["w_need"], fit["w_creature"], curve_target=curve_target)
+
+    def reset(self, seed=None):
+        self._picks = []
+
+    def _bucket(self, cost: int) -> int:
+        return min(cost, 7)
+
+    def _score(self, cv) -> float:
+        counts: dict[int, int] = {}
+        n_creatures = 0
+        for c in self._picks:
+            counts[self._bucket(c.cost)] = counts.get(self._bucket(c.cost), 0) + 1
+            if c.type == _CREATURE:
+                n_creatures += 1
+        bucket = self._bucket(cv.cost)
+        need = max(0, self.curve_target.get(bucket, 0) - counts.get(bucket, 0))
+        score = self.values.get(cv.card_id, 0.0) + self.w_need * need
+        if cv.type == _CREATURE and n_creatures < self._CREATURE_TARGET:
+            score += self.w_creature
         return score
 
     def note_pick(self, view, idx):

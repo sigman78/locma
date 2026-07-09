@@ -1,0 +1,29 @@
+{
+  "name": "edraft",
+  "kind": "other",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-07T23:37:06+00:00",
+      "git_commit": "99939e6",
+      "git_dirty": true,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish edraft runs/e20-elicit-fit.json --kind other --note E20: card-priority table elicited from draft_s{0,1,2} via neutral-context (round0, empty deck) 3-way comparisons, spliced onto census-derived curve_target [2,4,7,4,5,3,3,2] and BalancedDraftPolicy's original context weights (w_need=3.0, w_creature=2.0). Zero-inference draft policy. Pilot (10x10): reactive +0.107 [0.057,0.158] vs ppo:b0k_s0 (67% of E18b net's +0.16); planner +0.06 [0.037,0.085] vs vbeam ens (matches E18b's confirmed 0.978). Not gated/confirmed at full scale -- usable draft option, not a recipe of record. --parent ldraft@1 --meta {\"held_out_acc\": 0.7212, \"pilot_reactive_delta\": 0.1067, \"pilot_planner_delta\": 0.06}",
+      "parents": [
+        "ldraft@1"
+      ],
+      "note": "E20: card-priority table elicited from draft_s{0,1,2} via neutral-context (round0, empty deck) 3-way comparisons, spliced onto census-derived curve_target [2,4,7,4,5,3,3,2] and BalancedDraftPolicy's original context weights (w_need=3.0, w_creature=2.0). Zero-inference draft policy. Pilot (10x10): reactive +0.107 [0.057,0.158] vs ppo:b0k_s0 (67% of E18b net's +0.16); planner +0.06 [0.037,0.085] vs vbeam ens (matches E18b's confirmed 0.978). Not gated/confirmed at full scale -- usable draft option, not a recipe of record.",
+      "meta": {
+        "held_out_acc": 0.7212,
+        "pilot_reactive_delta": 0.1067,
+        "pilot_planner_delta": 0.06
+      },
+      "files": {
+        "e20-elicit-fit.json": {
+          "sha256": "60fc3e560d21e087dc719b74cbf6c501d99205aa153aee040d4bc1119d82f18e",
+          "size": 3357
+        }
+      }
+    }
+  ]
+}
