@@ -5,13 +5,14 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-07 section immediately below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+planner) are in the 2026-07-07 section below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
 of magnitude as the ADR-0003 RNG split — and the **ordering is unchanged**. The
 prior uniform-pool matrix is frozen in the 2026-06-26 snapshot below. The search
 (`mcts`) and learned (`ppo`) policies live in the dated sections further down.
+The planner's standing vs real tree search is in the 2026-07-09 section below.
 
 |            | random | scripted | greedy | max-guard | max-attack |
 |------------|--------|----------|--------|-----------|------------|
@@ -28,6 +29,148 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Baselines — 2026-07-09: planner RoR vs search depth (cheating MCTS / fair dMCTS)
+
+_Date: 2026-07-09_
+
+E22 (worklog "E22", `scripts/e22_mcts_depth.py`): the planner recipe of
+record (`vbeam:<3-critic shared ensemble>,8,20,ldraft`, 0.978 avg-hard3,
+confirmed) head-to-head against real tree search at the SAME draft —
+`depot:ldraft/ldraft_s0.zip` on both sides, isolating search quality as the
+only variable. Required plumbing: `mcts:`/`dmcts:` specs previously
+hardcoded `GreedyDraftPolicy` with no override; both now take an optional
+5th `draft` param (`locma/policies/registry.py`, `_greedy_draft_param`),
+backward-compatible — bare `mcts:100`/`dmcts:15,30` specs are unchanged.
+
+Direct head-to-head (`run_match`, mirrored, Wilson 95% CI, 200 games/cell
+after mirroring), NOT the avg-hard3-vs-HARD3-pool ruler used elsewhere in
+this doc — the question is who wins when they actually play each other.
+
+## Win rate of the planner vs cheating MCTS / fair dMCTS, by search budget
+
+| search | budget | planner win rate | 95% CI |
+|---|---|---|---|
+| cheating `mcts` | 100 iters | 0.545 | [0.476, 0.613] (toss-up) |
+| cheating `mcts` | 1,000 iters | 0.260 | [0.204, 0.325] (MCTS ahead) |
+| cheating `mcts` | 5,000 iters | 0.220 | [0.168, 0.282] |
+| cheating `mcts` | 20,000 iters | 0.170 | [0.124, 0.228] |
+| fair `dmcts` | K=15, I=30 (450 sims) | 0.580 | [0.511, 0.646] (planner barely ahead) |
+| fair `dmcts` | K=15, I=100 (1,500 sims) | 0.385 | [0.320, 0.454] (dMCTS ahead) |
+| fair `dmcts` | K=15, I=500 (7,500 sims) | 0.315 | [0.255, 0.382] |
+| fair `dmcts` | K=15, I=2000 (30,000 sims) | 0.295 | [0.236, 0.362] |
+
+Both searchers cross over and beat the planner at a budget far shallower
+than "in theory MCTS needs deep search" would suggest — cheating MCTS
+between 100 and 1,000 iterations, fair dMCTS between 450 and 1,500 total
+simulations. Both plateau past ~5,000-30,000 sims at a 17-30% residual win
+rate for the planner (not zero — presumably favorable draws).
+
+## Why
+
+Cheating MCTS and fair dMCTS crossing over at almost the same budget means
+the hidden-information cheat barely matters here — the driver is search
+DEPTH, not information. `vbeam` only beam-searches action sequences WITHIN
+the current turn and scores stopping points with the value net; it never
+simulates the opponent's reply or later turns. MCTS/dMCTS do real multi-turn
+lookahead, and any genuine multi-ply search beats a single-ply search+critic
+at a surprisingly cheap budget. This reframes the planner's ceiling: its
+"planning" is shallower than it looks (one-turn beam, not a tree) — see
+worklog "E22" for the full read and the natural next lever (`netdmcts`,
+net-guided determinized PUCT — real multi-turn tree search with the trained
+value net instead of random rollout at the leaves, built but not yet
+benchmarked against the current recipes).
+
+## How many turns deep is "N iterations", really?
+
+Measured (not assumed) by instrumenting `MCTSBattlePolicy`'s own
+tree-building loop and sampling real decision states from actual games
+(greedy/scripted/max-guard/max-attack/boardkeep). Real branching factor is
+**~5.1** legal actions/decision (an older doc note's "~21" was stale, from a
+different action-space era); real actions/turn is **~2.95**. Tree nodes ≈
+iterations (vanilla UCT: one new node per simulation); the principal-
+variation depth (the most-visited-child line — the move actually taken)
+grows **logarithmically** in N:
+
+| iterations | tree nodes | PV depth (actions) | PV depth (turns) | + fixed 3-turn rollout tail |
+|---|---|---|---|---|
+| 30 | 31 | 3.5 | 1.2 | 4.2 |
+| 100 | 99 | 4.4 | 1.5 | 4.5 |
+| 500 | 482 | 5.9 | 2.0 | 5.0 |
+| 1,000 | 951 | 6.5 | 2.2 | 5.2 |
+| 2,000 | 1,880 | 7.9 | 2.7 | 5.7 |
+| 5,000 | 4,625 | 9.5 | 3.2 | 6.2 |
+| 20,000 | 18,090 | 11.3 | 3.8 | 6.8 |
+
+`rollout_turns=3` is a fixed cap (random/heuristic play past the tree
+frontier, then a static leaf evaluation) that does not grow with N, so at
+low budgets most of the total lookahead horizon is that crude tail, not real
+search. This lands directly on the crossover table above: cheating MCTS's
+toss-up-to-decisive transition (100→1,000 iters) and fair dMCTS's same
+transition (I=30→100) both sit at only **~1.2-2.2 turns of real simulated
+depth** — the planner isn't losing to deep search, it's losing to barely
+more than one real turn of genuine forward simulation, because it does zero.
+
+## Reproduce
+
+```bash
+uv run locma play "vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip,8,20,depot:ldraft/ldraft_s0.zip" \
+  "mcts:1000,1.4142135623730951,0,3,depot:ldraft/ldraft_s0.zip" --games 100 --seed 26000000
+uv run locma play "vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip,8,20,depot:ldraft/ldraft_s0.zip" \
+  "dmcts:15,100,0,3,depot:ldraft/ldraft_s0.zip" --games 100 --seed 26000000
+```
+
+---
+
+# Usable draft policy — 2026-07-07: `depot:edraft`, a zero-inference net-elicited heuristic
+
+E20 (worklog "E20", scripts/e20_draftdistill.py): a `BalancedDraftPolicy`-shaped
+heuristic (curve-need + creature-deficit context, no neural net at draft time)
+whose per-card value table is ELICITED directly from the E18b draft nets
+(`draft_s{0,1,2}`) rather than hand-tuned or fit against noisy in-episode
+picks. Published `depot:edraft` v1 (parent `ldraft@1`), loadable via the
+registry's draft-override param: `ppo:depot:b0k/b0k_sX.zip,depot:edraft/
+e20-elicit-fit.json` or `vbeam:<ens>,8,20,depot:edraft/e20-elicit-fit.json`.
+
+**Not a recipe of record** — pilot-scale only (10x10), not full/confirm
+gated. Listed here as an available, tested draft option alongside `balanced`/
+`greedy`/E17's item-discount knob, for use as a candidate or baseline in
+future experiments.
+
+| pairing | delta vs balanced-draft baseline | 95% CI | recovers of E18b net's gain |
+|---|---|---|---|
+| reactive (`ppo:b0k_s0`) | +0.107 | [0.057, 0.158] | 67% (of +0.160) |
+| planner (3-critic ensemble) | +0.060 | [0.037, 0.085] | matches E18b's confirmed 0.978 |
+
+**How it's built.** Query `draft_s{0,1,2}` directly with synthetic 3-card
+offers at a FIXED neutral context (round 0, empty deck) — 8000 random triples
+per net, 24000 pooled — and fit a per-card strength via Plackett-Luce
+multinomial logit (no context features, since context never varies in this
+elicitation). Held-out choice accuracy 72.1% — far above the 50.0% from
+fitting the same shape of model against real in-episode picks (E20's Stage B,
+which conflated card value with a confounded, wrong-signed curve-need
+weight and recovered none of the net's win-rate gain). The elicited card
+value replaces `BalancedDraftPolicy`'s hand-tuned attack+defense+keyword
+scorer; curve_target is recalibrated to the E18b census's own average learned
+curve `[2,4,7,4,5,3,3,2]` (vs balanced's `[1,3,5,5,5,4,3,4]`), and the two
+context weights (`w_need=3.0`, `w_creature=2.0`) are `BalancedDraftPolicy`'s
+original, un-refit constants — Stage D already showed those two numbers, paired
+with the recalibrated curve, work.
+
+**Read.** The net's draft edge splits into two legible pieces: an aggregate
+deck-shape shift (curve young + item allowance, ~40% of the gain, hand-
+specifiable from the census alone) and a per-card ranking (recovers another
+~27%, but only when elicited in isolation — fitting it jointly with realistic
+in-episode context fails outright). The remaining ~33% (reactive) is presumably
+offer-relative/synergy reasoning not expressible in this additive form. Under
+the planner, the heuristic's pilot number (0.978) lands on E18b's own
+confirmed planner result — the planner's known item-conversion advantage
+(E16a) means deck shape alone captures most of the value there.
+
+**Reproduce.** `E20_SMOKE=1 python scripts/e20_draftdistill.py` (smoke), then
+drop the env var for the real run (idempotent via `runs/e20-summary.json`).
 
 ---
 
