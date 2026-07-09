@@ -12,7 +12,8 @@ uniform-with-replacement sampling. Cells shifted by 1–3 points — the same or
 of magnitude as the ADR-0003 RNG split — and the **ordering is unchanged**. The
 prior uniform-pool matrix is frozen in the 2026-06-26 snapshot below. The search
 (`mcts`) and learned (`ppo`) policies live in the dated sections further down.
-The planner's standing vs real tree search is in the 2026-07-09 section below.
+The planner's standing vs real tree search, and turns/sec throughput for every
+policy in the registry, are in the 2026-07-09 sections below.
 
 |            | random | scripted | greedy | max-guard | max-attack |
 |------------|--------|----------|--------|-----------|------------|
@@ -120,6 +121,87 @@ uv run locma play "vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|d
   "mcts:1000,1.4142135623730951,0,3,depot:ldraft/ldraft_s0.zip" --games 100 --seed 26000000
 uv run locma play "vbeam:depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/shared_s2.zip,8,20,depot:ldraft/ldraft_s0.zip" \
   "dmcts:15,100,0,3,depot:ldraft/ldraft_s0.zip" --games 100 --seed 26000000
+```
+
+---
+
+# Throughput — 2026-07-09: turns/sec for every battle policy in the registry
+
+_Date: 2026-07-09_
+
+`scripts/bench_policies.py`: how fast (turns/sec, sec/game) is each battle
+policy actually able to play? Each policy under test plays both seats against
+a fixed cheap opponent (`greedy`, near-instant) so wall-clock is dominated by
+the policy under test, not the matchup; game counts are sized down for the
+expensive cells (as few as 2-3 games) so this is a throughput reading, not a
+win-rate result — see the games column. Box: RTX 4080, net-backed policies
+(`ppo`/`vbeam`/`netdmcts`) run on GPU (`torch` auto device); the searchers
+(`mcts`/`dmcts`/`azlite`) are pure CPU heuristic rollout, no net. Parameterized
+policies are dose-dependent, not one number — several config points are
+included for each (this is what prompted the benchmark: worklog "E22"'s
+throughput guess for `mcts:20000`/`dmcts:15,2000` was wrong by a large factor).
+
+## Scripted baselines (near-instant)
+
+| policy | turns/sec | sec/game | games |
+|---|---|---|---|
+| `random` | 11,428 | 0.002 | 200 |
+| `scripted` | 10,682 | 0.002 | 200 |
+| `greedy` | 13,402 | 0.002 | 200 |
+| `max-guard` | 11,083 | 0.002 | 200 |
+| `max-attack` | 11,576 | 0.002 | 200 |
+| `boardkeep` | 9,435 | 0.002 | 200 |
+| `shell` | 10,098 | 0.002 | 200 |
+| `guardwall` | 5,721 | 0.004 | 200 |
+| `bufface` | 5,419 | 0.004 | 200 |
+| `rnddeck` | 6,062 | 0.003 | 200 |
+
+## Search policies (CPU, dose-dependent on iterations/determinizations)
+
+| policy | turns/sec | sec/game | games |
+|---|---|---|---|
+| `azlite:100` | 48.4 | 0.49 | 20 |
+| `azlite:1000` | 5.1 | 3.49 | 5 |
+| `mcts:100` | 84.3 | 0.24 | 20 |
+| `mcts:1000` | 9.2 | 2.03 | 10 |
+| `mcts:5000` | 1.75 | 12.83 | 5 |
+| `mcts:20000` | 0.46 | 42.39 | 3 |
+| `dmcts:15,30` | 19.6 | 1.04 | 10 |
+| `dmcts:15,100` | 5.9 | 4.16 | 5 |
+| `dmcts:15,500` | 1.34 | 13.93 | 3 |
+| `dmcts:15,2000` | 0.33 | 56.15 | 2 |
+
+Cost scales with total simulations (iterations for `mcts`, K×I for `dmcts`),
+roughly linearly per-game — e.g. `mcts` iters 100→20,000 (200x) costs
+0.24s→42.39s/game (~180x), consistent with vanilla UCT's one-node-per-
+simulation cost. This is the direct throughput counterpart to the depth
+numbers in the 2026-07-09 section above: a `dmcts:15,2000` cell (30,000 total
+sims/decision) costs **56s/game**, which is why that pilot's slowest cells
+took close to two hours for 100 games.
+
+## Net-backed policies (GPU)
+
+| policy | turns/sec | sec/game | games |
+|---|---|---|---|
+| `ppo:depot:b0k/b0k_s0.zip` (reactive RoR) | 145.5 | 0.15 | 50 |
+| `vbeam:depot:b0k/b0k_s0.zip,8,20` (single critic) | 92.9 | 0.22 | 20 |
+| `vbeam:<3-critic shared ensemble>,8,20,ldraft` (planner RoR) | 23.7 | 0.70 | 10 |
+| `netdmcts:8,40,1.5,depot:b0k/b0k_s0.zip` | 0.68 | 32.91 | 10 |
+| `netdmcts:8,160,1.5,depot:b0k/b0k_s0.zip` | 0.18 | 89.10 | 3 |
+
+The reactive net (`ppo`) is ~600x faster than the planner ensemble
+(`vbeam`, one beam per turn across 3 critics), which is itself ~35-130x
+faster than `netdmcts` — net-guided determinized PUCT pays for K
+determinizations × I net-evaluated PUCT iterations *per decision*, not
+per-turn, so it is the slowest policy in the kit even before considering
+search depth. Any `netdmcts` benchmark (the natural next lever flagged in the
+2026-07-09 search-depth section above) should budget from this table, not
+guess — at 8×160 it's already ~90s/game, comparable to `dmcts:15,500`.
+
+## Reproduce
+
+```bash
+F:/WorkDir/locma/.venv/Scripts/python.exe scripts/bench_policies.py
 ```
 
 ---
