@@ -154,7 +154,10 @@ fresh games) — a bigger margin than the deep tree's 0.575 — and beat the dee
 `netdmcts` tree itself **0.548** (confirmed over 500 games, once we ran enough
 to resolve a genuine coin-flip-looking result) at **~2.6× less compute**. One
 real reply, it turns out, captures most of what many turns of tree search were
-buying — and it became the new play-time-search recipe of record.
+buying — and it became the new play-time-search recipe of record. And it does not
+pay for the head-to-head win elsewhere: on the old fixed-panel ruler it scores
+**0.983**, statistically level with the planner's 0.978, so it is now the
+strongest config on both measuring sticks at once.
 
 ## Conclusion
 
@@ -165,7 +168,7 @@ buying — and it became the new play-time-search recipe of record.
 | + RL-learned draft | 0.791 | 0.978 |
 | + free lookup-table draft (no net at draft time) | ~0.75 (partial) | ~0.978 (matched, pilot-scale) |
 | + deep single-tree netdmcts (play-time search) | — | beats planner 0.575 head-to-head |
-| + rbeam, one opponent-reply ply | — | beats planner 0.640 / beats netdmcts 0.548, ~2.6x cheaper |
+| + rbeam, one opponent-reply ply | — | 0.983 avg-hard3; beats planner 0.640 / netdmcts 0.548 h2h, ~2.6x cheaper |
 
 Three lessons carried the whole project. **Planning beats training** — every
 attempt to train the search advantage into a reactive net failed, while

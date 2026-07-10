@@ -84,9 +84,26 @@ head-to-head, at **~2.6x lower cost** than netdmcts:1,320 (~6.5 vs ~17 s/game) �
 stronger on every axis. `3x3` is the ~1.5x-cheaper value alternate (0.595 vs the
 planner, confirmed, at 4.2 s/game).
 
-**Caveats.** Promotion is on the head-to-head ruler; the avg-hard3 pool number is
-unmeasured (deliberately, as in E23) — the planner's 0.978 stays the avg-hard3
-record. The win over netdmcts is narrow (CI lo 0.504). No new artifact: the recipe
+## avg-hard3 pool ruler (does it hold up off the head-to-head ruler?)
+
+Measured directly (200 mirrored games/opponent, fresh seed 31M, rbeam paired with
+`ldraft_s0` both via the recipe) — the same HARD3 pool the planner's 0.978 record
+sits on (`scripted`/`max-guard`/`max-attack`, `locma/envs/azloop.py:avg_hard3`):
+
+| opponent | rbeam win rate | 95% CI | record |
+|---|---:|---|---:|
+| `scripted` | 0.975 | [0.943, 0.989] | 195/200 |
+| `max-guard` | 0.980 | [0.950, 0.992] | 196/200 |
+| `max-attack` | 0.995 | [0.972, 0.999] | 199/200 |
+| **avg-hard3** | **0.983** | — | — |
+
+So `rbeam` does NOT regress on the pool ruler: **0.983** is statistically at the
+planner's 0.978 (the pool saturates near 1.0 for both), while `rbeam` wins the
+head-to-head. It is now the strongest config on BOTH rulers. (Lighter measurement
+than the planner's ceiling-eval 1000-game/opp number — 200 direct-play games/opp
+here — but decisive at this saturation level.)
+
+**Caveats.** The win over netdmcts is narrow (CI lo 0.504). No new artifact: the recipe
 is a spec over existing depot blobs (`depot:shared` + `depot:ldraft`), like the
 `vbeam`/`netdmcts` recipes. Cost is per-turn ~6.5 s/game on the RTX 4080 box;
 the dominant cost is the n_plans*n_worlds opponent-reply beams (currently looped —
