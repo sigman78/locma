@@ -120,7 +120,16 @@ def parse_confirm_cell(raw: str) -> Cell:
     return Cell(p, w)
 
 
-def planner_spec() -> str:
+def planner_spec(baseline: str | None = None) -> str:
+    """The opponent rbeam is scored against.
+
+    Defaults to the vbeam recipe of record. ``--baseline`` overrides it with any
+    registry spec (e.g. E23's promoted ``netdmcts:1,320,...`` search recipe) for a
+    direct search-vs-search head-to-head; the summary records the exact spec, and
+    the compatibility check refuses to mix results from different baselines.
+    """
+    if baseline:
+        return baseline
     return "vbeam:" + "|".join(SHARED_REFS) + f",{BEAM_WIDTH},{BEAM_MAX_ACTIONS},{LDRAFT0}"
 
 
@@ -245,7 +254,7 @@ class Driver:
                     f"{self.summary_path} has design version {data.get('design_version')}, "
                     f"expected {DESIGN_VERSION}"
                 )
-            expected = {"planner": planner_spec(), "draft": LDRAFT0}
+            expected = {"planner": planner_spec(self.args.baseline), "draft": LDRAFT0}
             mismatches = {k: (data.get(k), v) for k, v in expected.items() if data.get(k) != v}
             if mismatches:
                 raise ValueError(f"{self.summary_path} is incompatible with this run: {mismatches}")
@@ -255,7 +264,7 @@ class Driver:
             "design_version": DESIGN_VERSION,
             "created": utc_now(),
             "hypothesis": "One opponent-reply ply lets rbeam beat the one-turn vbeam planner.",
-            "planner": planner_spec(),
+            "planner": planner_spec(self.args.baseline),
             "draft": LDRAFT0,
             "cost_gate_seconds": self.args.cost_gate,
             "pilot": {"cells": {}},
@@ -344,7 +353,7 @@ class Driver:
         from locma.stats.intervals import binomial_test, wilson_ci  # noqa: PLC0415
 
         candidate = candidate_spec(cell)
-        planner = planner_spec()
+        planner = planner_spec(self.args.baseline)
         blocks = build_blocks(seed0, pairs, block_pairs)
         missing: list[tuple[int, int, int, Path]] = []
         cached = 0
@@ -495,6 +504,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PxW",
         help="explicit confirmation cell; repeatable and overrides --confirm-top",
     )
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        metavar="SPEC",
+        help="opponent spec rbeam plays (default: the vbeam recipe of record); "
+        "e.g. netdmcts:1,320,1.5,depot:shared/shared_s0.zip,depot:ldraft/ldraft_s0.zip",
+    )
     parser.add_argument("--output-prefix", default="e24", help="runs/ artifact prefix")
     parser.add_argument("--smoke", action="store_true", help="two tiny cells, 1 pair each")
     parser.add_argument(
@@ -534,7 +550,7 @@ def planned_pilot_cells(args: argparse.Namespace) -> list[Cell]:
 
 def print_plan(args: argparse.Namespace) -> None:
     pilot = planned_pilot_cells(args)
-    print(f"{EXPERIMENT} planner: {planner_spec()}")
+    print(f"{EXPERIMENT} baseline: {planner_spec(args.baseline)}")
     print(f"pilot: {len(pilot)} cells, {2 * args.pilot_pairs} actual games/cell")
     for cell in pilot:
         print(f"  {cell.key}: {candidate_spec(cell)}")
@@ -570,7 +586,7 @@ def preflight(args: argparse.Namespace) -> dict:
         if not Path(path).is_file():
             raise FileNotFoundError(path)
 
-    make_policy(planner_spec())
+    make_policy(planner_spec(args.baseline))
     for cell in planned_pilot_cells(args):
         make_policy(candidate_spec(cell))
     for raw in args.confirm_cell:
