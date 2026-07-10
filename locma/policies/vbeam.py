@@ -48,7 +48,47 @@ _FALLBACK_STOP_SCORE = -1.5
 
 
 def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20, collect=None) -> list:
-    """Beam-search own-turn action sequences; return the best complete plan.
+    """Beam-search own-turn action sequences; return the single best complete plan.
+
+    Thin argmax over ``_beam_search`` (see it for the scoring rules, params and
+    the ``collect`` contract). The returned list is the action sequence to play,
+    ending with ``Pass()`` unless the plan wins the game outright. Never empty.
+    """
+    completed = _beam_search(
+        state, evaluator, width=width, max_actions=max_actions, collect=collect
+    )
+    return max(completed, key=lambda t: (t[0], -t[1]))[2]
+
+
+def plan_turn_candidates(
+    state, evaluator, *, width: int = 8, max_actions: int = 20, k: int = 4
+) -> list[tuple[float, list]]:
+    """Top-``k`` distinct complete own-turn plans, best score first (for ``rbeam``).
+
+    The reply-aware planner searches the opponent's reply against several
+    candidate root plans, not just the single argmax ``plan_turn`` returns.
+    Returns ``(score, plan)`` pairs, deduplicated by action sequence. The
+    net-disapproved root fallback sorts last, so it only appears when there are
+    fewer than ``k`` genuinely completed plans.
+    """
+    completed = _beam_search(state, evaluator, width=width, max_actions=max_actions)
+    out: list[tuple[float, list]] = []
+    seen: set[tuple] = set()
+    for score, _order, plan in sorted(completed, key=lambda t: (-t[0], t[1])):
+        key = tuple(plan)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((float(score), plan))
+        if len(out) >= k:
+            break
+    return out
+
+
+def _beam_search(state, evaluator, *, width: int = 8, max_actions: int = 20, collect=None) -> list:
+    """Own-turn beam core; return the raw ``completed`` list of ``(score, order, plan)``.
+
+    Shared by ``plan_turn`` (argmax) and ``plan_turn_candidates`` (top-k).
 
     Parameters
     ----------
@@ -83,11 +123,9 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20, collec
     Returns
     -------
     list
-        The action sequence to play, ending with ``Pass()`` unless the plan
-        wins the game outright (the engine ends the episode, so no Pass is
-        needed or possible). Never empty: the root "stop now" plan is always
-        present, as a first-class candidate when the net itself would pass at
-        the root, else as the ranked-last fallback.
+        ``completed`` — one ``(score, insertion_order, plan)`` per completed
+        plan (every plan ends with ``Pass()`` unless it wins mid-turn). Always
+        contains the root "stop now" plan. Callers pick the winner.
     """
     seat = state.current
     root = _clone_battle(state)
@@ -161,8 +199,7 @@ def plan_turn(state, evaluator, *, width: int = 8, max_actions: int = 20, collec
 
     if collect is not None:
         _harvest_backups(collect, explored, completed)
-    best = max(completed, key=lambda t: (t[0], -t[1]))
-    return best[2]
+    return completed
 
 
 def _harvest_backups(collect: list, explored: list, completed: list) -> None:

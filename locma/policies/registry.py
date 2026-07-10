@@ -210,6 +210,36 @@ def _vbeam(params, spec):
     return Composer(battle, _draft_param(params, 3), name=spec)
 
 
+def _rbeam(params, spec):
+    """Reply-aware turn beam — spec ``rbeam:model,width,max_actions,n_plans,n_worlds,draft``.
+
+    ``vbeam`` plus one genuine opponent-reply ply: turn-level expectiminimax over
+    the beam's top ``n_plans`` own-turn plans, averaged across ``n_worlds`` fair
+    determinizations (E22/E23 — depth beats hidden-info; see locma/policies/
+    rbeam.py). ``model`` may be ``|``-separated for the shared-critic ensemble,
+    exactly like ``vbeam``; the same ensemble also models the opponent's reply.
+    The 6th param overrides the draft (``_draft_param``) so search can be scored
+    at a fixed deck distribution against the planner.
+    """
+    from locma.policies.rbeam import RBeamBattlePolicy  # noqa: PLC0415
+    from locma.policies.vbeam import EnsembleValueEvaluator  # noqa: PLC0415
+
+    raw = params[0] if len(params) > 0 and params[0] else "model.zip"
+    width = int(params[1]) if len(params) > 1 and params[1] else 8
+    max_actions = int(params[2]) if len(params) > 2 and params[2] else 20
+    n_plans = int(params[3]) if len(params) > 3 and params[3] else 4
+    n_worlds = int(params[4]) if len(params) > 4 and params[4] else 4
+    kw = {"width": width, "max_actions": max_actions, "n_plans": n_plans, "n_worlds": n_worlds}
+    if "|" in raw:
+        paths = [resolve_path(p) for p in raw.split("|")]
+        battle = RBeamBattlePolicy(
+            model_path=paths[0], evaluator=EnsembleValueEvaluator(paths), **kw
+        )
+    else:
+        battle = RBeamBattlePolicy(model_path=resolve_path(raw), **kw)
+    return Composer(battle, _draft_param(params, 5), name=spec)
+
+
 def _ppo(params, spec):
     from locma.policies.ppo import (  # noqa: PLC0415
         MaskablePPOBattlePolicy,
@@ -299,6 +329,7 @@ _FACTORIES = {
     "dmcts": _dmcts,
     "netdmcts": _netdmcts,
     "vbeam": _vbeam,
+    "rbeam": _rbeam,
     "ppo": _ppo,
     "mixed": _mixed,
     "rnddeck": _rnddeck,
@@ -309,10 +340,11 @@ _FACTORIES = {
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo`, `netdmcts` and `vbeam` need a model artifact + the [ml] extra (use
-# `ppo:path`, `netdmcts:K,I,c,path` or `vbeam:path,width,max_actions`);
-# `mixed` is a non-stationary training opponent, not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts", "vbeam"}
+# `ppo`, `netdmcts`, `vbeam` and `rbeam` need a model artifact + the [ml] extra
+# (use `ppo:path`, `netdmcts:K,I,c,path`, `vbeam:path,width,max_actions` or
+# `rbeam:path,width,max_actions,n_plans,n_worlds`); `mixed` is a non-stationary
+# training opponent, not a baseline to rank.
+_HIDDEN = {"ppo", "mixed", "netdmcts", "vbeam", "rbeam"}
 
 
 def policy_names() -> list[str]:

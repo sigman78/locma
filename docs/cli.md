@@ -27,6 +27,12 @@ Model-backed specs (**require the `[ml]` extra** and a checkpoint):
   `vbeam:depot:b0/b0_s0.zip` (avg-hard3 0.863).
 - `netdmcts:K,I,c_puct,PATH[,DRAFT]` — net-guided determinized PUCT;
   optional draft override (model path, depot ref, or heuristic JSON).
+- `rbeam:PATH,width,max_actions,n_plans,n_worlds[,DRAFT]` — reply-aware turn
+  beam: `vbeam` plus one opponent-reply ply (turn-level expectiminimax over the
+  top `n_plans` own-turn plans, averaged across `n_worlds` fair determinizations;
+  defaults 8/20/4/4). `PATH` may be `|`-separated for the shared-critic ensemble
+  (the same critic also models the opponent's reply), like `vbeam`. Targets the
+  multi-turn depth E22/E23 found decisive; ~6 s/game with the 3-critic ensemble.
 
 `PATH` is a plain file **or a `depot:` ref** (`depot:<name>[@N|@latest]/<file>`,
 see [docs/depot.md](depot.md)) — depot refs are the canonical way to name
@@ -35,8 +41,9 @@ published checkpoints: `ppo:depot:b0/b0_s0.zip`, `vbeam:depot:b0/b0_s2.zip`.
 `max-guard` and `max-attack` share a "ground" battle: develop the board and
 swing at the enemy face, falling back to clearing Guards when the face is not a
 legal target. `mcts`/`dmcts` pair their search battle with a greedy draft;
-`ppo`/`vbeam`/`netdmcts` pair with the `balanced` draft by default. Each accepts
-an optional learned or heuristic draft override for same-draft experiments.
+`ppo`/`vbeam`/`netdmcts`/`rbeam` pair with the `balanced` draft by default. Each
+accepts an optional learned or heuristic draft override for same-draft
+experiments.
 
 ## play
 `locma play A B [--games N] [--seed S] [--render] [--log FILE]`
