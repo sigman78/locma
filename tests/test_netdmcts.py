@@ -165,6 +165,22 @@ def test_netdmcts_in_registry():
     assert p.battle.model_path == "runs/x.zip"
 
 
+def test_netdmcts_registry_learned_draft_override():
+    """The optional fifth parameter loads the same learned draft used by PPO/vbeam."""
+    pytest.importorskip("sb3_contrib")
+    from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
+    from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
+    from locma.policies.registry import make_policy  # noqa: PLC0415
+
+    p = make_policy("netdmcts:2,160,1.5,runs/oracle.zip,runs/draft.zip")
+    assert isinstance(p.battle, NetGuidedDMCTSBattlePolicy)
+    assert isinstance(p.draft, MaskablePPODraftPolicy)
+    assert p.battle.K == 2
+    assert p.battle.iterations == 160
+    assert p.battle.model_path == "runs/oracle.zip"
+    assert p.draft.model_path == "runs/draft.zip"
+
+
 def test_netdmcts_registry_defaults():
     """make_policy('netdmcts') uses sensible defaults."""
     from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415

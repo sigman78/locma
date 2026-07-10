@@ -153,10 +153,12 @@ def _dmcts(params, spec):
 
 
 def _netdmcts(params, spec):
-    """Net-guided determinized PUCT — spec ``netdmcts:K,I,c_puct,model_path``.
+    """Net-guided determinized PUCT — spec ``netdmcts:K,I,c_puct,model_path,draft``.
 
-    Paired with the ``balanced`` draft (same as ``ppo``/``azlite`` for
-    apples-to-apples comparisons against the scripted baselines).
+    Defaults to the ``balanced`` draft (same as ``ppo``/``azlite`` for
+    reproducibility of historical specs). The optional 5th param overrides
+    the draft like ``ppo``/``vbeam`` so search depth can be compared on the
+    same deck distribution (E23).
     """
     from locma.policies.net_oracle import NetGuidedDMCTSBattlePolicy  # noqa: PLC0415
 
@@ -168,7 +170,7 @@ def _netdmcts(params, spec):
         NetGuidedDMCTSBattlePolicy(
             determinizations=k, iterations=i, c_puct=c_puct, model_path=model_path
         ),
-        BalancedDraftPolicy(),
+        _draft_param(params, 4),
         name=spec,
     )
 

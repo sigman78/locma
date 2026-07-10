@@ -25,7 +25,8 @@ Model-backed specs (**require the `[ml]` extra** and a checkpoint):
 - `vbeam:PATH,width,max_actions` — own-turn beam planner scored by the token
   model's value head (defaults 8/20). The current strongest policy:
   `vbeam:depot:b0/b0_s0.zip` (avg-hard3 0.863).
-- `netdmcts:K,I,c_puct,PATH` — net-guided determinized PUCT.
+- `netdmcts:K,I,c_puct,PATH[,DRAFT]` — net-guided determinized PUCT;
+  optional draft override (model path, depot ref, or heuristic JSON).
 
 `PATH` is a plain file **or a `depot:` ref** (`depot:<name>[@N|@latest]/<file>`,
 see [docs/depot.md](depot.md)) — depot refs are the canonical way to name
@@ -34,7 +35,8 @@ published checkpoints: `ppo:depot:b0/b0_s0.zip`, `vbeam:depot:b0/b0_s2.zip`.
 `max-guard` and `max-attack` share a "ground" battle: develop the board and
 swing at the enemy face, falling back to clearing Guards when the face is not a
 legal target. `mcts`/`dmcts` pair their search battle with a greedy draft;
-`ppo`/`vbeam`/`netdmcts` pair with the `balanced` draft.
+`ppo`/`vbeam`/`netdmcts` pair with the `balanced` draft by default. Each accepts
+an optional learned or heuristic draft override for same-draft experiments.
 
 ## play
 `locma play A B [--games N] [--seed S] [--render] [--log FILE]`
