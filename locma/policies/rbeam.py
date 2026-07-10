@@ -63,35 +63,55 @@ def _apply_plan(state, plan, seat) -> None:
         battlemod.apply_battle(state, a)
 
 
-def score_plan_in_world(det, plan, seat, evaluator, opp_evaluator, *, width, max_actions) -> float:
-    """One expectiminimax leaf: our ``plan`` -> opponent's best reply -> critic.
+def _simulate_to_leaf(det, plan, seat, opp_evaluator, *, width, max_actions):
+    """Play our ``plan`` then the opponent's best reply in ``det`` (mutated).
 
-    ``det`` is a determinized world (fresh clone) that this function mutates.
-    Returns a value in the critic's [-1, 1] range from ``seat``'s perspective,
-    or the out-of-range win/loss sentinels when the line ends the game.
+    Returns ``(terminal_score, view, sign)``:
+
+    - a line that ends the game -> ``(WIN/LOSS sentinel, None, 0)``;
+    - a non-terminal line -> ``(None, back_to_us_view, +1|-1)``, where the caller
+      scores the view with the critic and multiplies by ``sign``. ``make_battle_view``
+      yields the current player's view and the critic value is from that owner's
+      perspective; ``sign`` is ``-1`` in the (defensive, should-not-happen) case
+      that control is not back on our seat, else ``+1``.
+
+    Separating "reach the leaf" from "score the leaf" lets the caller batch every
+    non-terminal leaf across all plans/worlds into ONE critic forward.
     """
     _apply_plan(det, plan, seat)
     if det.phase == Phase.ENDED:
-        return _WIN_SCORE if det.winner == seat else _LOSS_SCORE
+        return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
     # If the plan broke before its terminal Pass, end our turn explicitly so the
     # opponent gets to reply (Pass triggers their hidden draw — now world-fair).
     if det.current == seat:
         battlemod.apply_battle(det, Pass())
         if det.phase == Phase.ENDED:
-            return _WIN_SCORE if det.winner == seat else _LOSS_SCORE
+            return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
 
     # Opponent's strongest complete reply in this world (its own own-turn beam).
     opp_plan = plan_turn(det, opp_evaluator, width=width, max_actions=max_actions)
     _apply_plan(det, opp_plan, 1 - seat)
     if det.phase == Phase.ENDED:
-        return _WIN_SCORE if det.winner == seat else _LOSS_SCORE
+        return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
 
-    # Back to our turn start. make_battle_view yields the current player's view;
-    # the critic value is from that owner's perspective, so negate if (defensively)
-    # it is somehow not our seat.
-    view = make_battle_view(det)
-    v = float(evaluator.values([view])[0])
-    return v if det.current == seat else -v
+    return None, make_battle_view(det), (1 if det.current == seat else -1)
+
+
+def score_plan_in_world(det, plan, seat, evaluator, opp_evaluator, *, width, max_actions) -> float:
+    """One expectiminimax leaf: our ``plan`` -> opponent's best reply -> critic.
+
+    ``det`` is a determinized world (fresh clone) that this function mutates.
+    Returns a value in the critic's [-1, 1] range from ``seat``'s perspective, or
+    the out-of-range win/loss sentinels when the line ends the game. The batched
+    ``plan_turn_reply_aware`` scores its leaves directly; this wrapper is the
+    single-leaf equivalent (used by tests and callers that want one world).
+    """
+    score, view, sign = _simulate_to_leaf(
+        det, plan, seat, opp_evaluator, width=width, max_actions=max_actions
+    )
+    if view is None:
+        return score
+    return sign * float(evaluator.values([view])[0])
 
 
 def plan_turn_reply_aware(
@@ -121,19 +141,37 @@ def plan_turn_reply_aware(
     if len(candidates) == 1:
         return candidates[0][1]
 
+    # Simulate every (plan, world) leaf, accumulating terminal sentinels directly
+    # and collecting the non-terminal leaves for ONE batched critic forward across
+    # all plans/worlds (the same trunk-batching trick that keeps vbeam cheap). A
+    # found lethal wins in every world, so it short-circuits without simulation.
+    lethal = {i for i, (own_score, _p) in enumerate(candidates) if own_score >= _WIN_SCORE}
+    plan_scores: list[list[float]] = [[] for _ in candidates]
+    pending_views: list = []
+    pending_ref: list[tuple[int, int]] = []  # (plan_index, sign)
+    for pi, (_own_score, plan) in enumerate(candidates):
+        if pi in lethal:
+            continue
+        for _ in range(n_worlds):
+            det = determinize(state, rng, cards)
+            score, view, sign = _simulate_to_leaf(
+                det, plan, seat, opp_evaluator, width=width, max_actions=max_actions
+            )
+            if view is None:
+                plan_scores[pi].append(score)
+            else:
+                pending_views.append(view)
+                pending_ref.append((pi, sign))
+
+    if pending_views:
+        values = evaluator.values(pending_views)
+        for (pi, sign), v in zip(pending_ref, values, strict=True):
+            plan_scores[pi].append(sign * float(v))
+
     best_plan = None
     best_mean = -np.inf
-    for own_score, plan in candidates:
-        if own_score >= _WIN_SCORE:
-            mean = _WIN_SCORE  # a found lethal wins in every world; can't be beaten
-        else:
-            total = 0.0
-            for _ in range(n_worlds):
-                det = determinize(state, rng, cards)
-                total += score_plan_in_world(
-                    det, plan, seat, evaluator, opp_evaluator, width=width, max_actions=max_actions
-                )
-            mean = total / n_worlds
+    for pi, (_own_score, plan) in enumerate(candidates):
+        mean = _WIN_SCORE if pi in lethal else sum(plan_scores[pi]) / len(plan_scores[pi])
         if mean > best_mean:
             best_mean, best_plan = mean, plan
     return best_plan
