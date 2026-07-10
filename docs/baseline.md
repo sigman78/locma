@@ -5,7 +5,9 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-07 section below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+planner) are in the 2026-07-07 section below; the strongest **play-time
+search** config — deep single-tree `netdmcts`, confirmed to beat the planner
+head-to-head — is in the 2026-07-09 E23 section below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -30,6 +32,65 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-09: deep single-tree netdmcts promoted (beats planner 0.575 head-to-head)
+
+E23 (worklog "E23", `scripts/e23_netdmcts_alloc.py`): at a fixed neural budget
+of `K*I=320` evaluations, does concentrating them into fewer, deeper
+determinized trees beat fragmenting them across many shallow ones? Same
+learned draft (`depot:ldraft/ldraft_s0.zip`) on BOTH sides, direct head-to-head
+against the planner recipe of record — isolating battle search as the only
+variable. This is the same head-to-head ruler as the E22 section below, NOT the
+avg-hard3-vs-HARD3-pool ruler used for the other recipes of record (the planner
+is already 0.978 there and the pool is non-transitive; see the E23 handoff and
+worklog rationale).
+
+Plumbing: `netdmcts` gained an optional 5th `draft` param
+(`locma/policies/registry.py`), backward-compatible — bare four-param
+`netdmcts:8,40,1.5,model` specs are byte-identical and still use the balanced
+draft.
+
+## The K/I allocation curve (pilot, 50 games/cell vs planner, both oracle families)
+
+| K det. | I/tree | evals | `b0k` WR | `shared` WR |
+|---:|---:|---:|---:|---:|
+| **1** | **320** | 320 | 0.56 | **0.62** |
+| 2 | 160 | 320 | 0.46 | 0.52 |
+| 4 | 80 | 320 | 0.44 | 0.44 |
+| 8 | 40 | 320 | 0.34 (planner ahead) | 0.34 (planner ahead) |
+| 16 | 20 | 320 | 0.28 (planner ahead) | 0.32 (planner ahead) |
+
+Monotone in both families: concentrate the budget. The historical
+`netdmcts:8,40` default sits near the BOTTOM of the curve — fragmenting cost
+~20-30 WR points versus one deep tree. `shared` (planner-trained critics) edges
+`b0k` (reactive prior) at every matched K/I = the marginally better search
+substrate.
+
+## Promoted search recipe of record
+
+| role | recipe | result |
+|---|---|---|
+| **play-time search (recipe of record)** | `netdmcts:1,320,1.5,depot:shared/shared_s0.zip,depot:ldraft/ldraft_sX.zip` | **0.575 vs planner** [0.5057, 0.6415], p=0.040 |
+| planner (avg-hard3 record, unchanged) | `vbeam:depot:shared ens x3,8,20,depot:ldraft/ldraft_sX.zip` | 0.978 avg-hard3 |
+
+**Why promoted.** Fresh-seed confirmation (200 games, seeds 28,000,000, mirrored)
+of the auto-selected pilot winner `shared:1x320`: **0.575** win rate vs the
+planner, Wilson 95% CI **[0.5057, 0.6415]** entirely above 0.5, p=0.040, record
+115-85. First FAIR (non-cheating, matched-draft) config confirmed to beat the
+one-turn `vbeam` planner head-to-head — the direct realization of E22's
+depth-over-information finding (real multi-turn tree depth is the lever; the
+planner only searches one turn deep). Strong seat effect (seat0 0.69 /
+seat1 0.46), absorbed by the mirrored design.
+
+**Caveats.** The edge is modest — the CI clears 0.5 only narrowly (lo 0.506).
+The avg-hard3 pool number for this config is deliberately unmeasured (E23 is a
+same-draft head-to-head, not a pool ranking), so this promotion is on the
+head-to-head ruler only; the planner's 0.978 stays the avg-hard3 record. No new
+artifact — the recipe is a spec over existing depot blobs (`depot:shared` +
+`depot:ldraft`), analogous to the `vbeam` recipes. Runtime ~17-19
+worker-sec/game on the RTX 4080 box.
 
 ---
 

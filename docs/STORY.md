@@ -115,6 +115,27 @@ gain and matched its planner result — with **no neural net running at draft
 time**. Published as a usable, free draft option, not (yet) a full recipe
 of record.
 
+## Chapter 10 — Deeper beats wider: the planner's one-turn horizon gives out
+
+The planner searches exactly one turn before committing. Real tree search
+(MCTS) plans many turns ahead — and when we let the two play each other
+directly, MCTS started *beating* the planner once it had enough thinking
+budget, even the fair version that only samples plausible hidden hands. So the
+planner's ceiling wasn't information, it was **horizon**. We tested this on a
+net-guided determinized search (`netdmcts`), which spends a fixed pool of
+neural evaluations across `K` sampled hidden-world "determinizations", each
+searched for `I` iterations. Historically we'd set `K=8` — eight shallow trees.
+Holding the total budget fixed (`K*I=320`) and sweeping the split, the answer
+was clean and monotone: **one deep tree beats eight shallow ones**, in both
+critic families, by 20-30 win-rate points. The old `K=8` default was near the
+*bottom* of the curve. Concentrated into a single 320-iteration tree
+(`netdmcts:1,320` on the shared critics, same learned draft both sides), fair
+net-guided search beat the planner head-to-head **0.575** (confirmed on 200
+fresh games, CI [0.506, 0.642]) — the first fair, matched-draft config to clear
+the planner, and the new play-time-search recipe of record. The margin is
+modest, but the direction is unambiguous: after training-side absorption
+(Chapter 7) closed, deeper search is where the next planning gains live.
+
 ## Conclusion
 
 | stage | reactive win rate | planner win rate |
@@ -123,11 +144,14 @@ of record.
 | + opponent-hardened training, ensemble critics | 0.683 | 0.926 |
 | + RL-learned draft | 0.791 | 0.978 |
 | + free lookup-table draft (no net at draft time) | ~0.75 (partial) | ~0.978 (matched, pilot-scale) |
+| + deep single-tree netdmcts (play-time search) | — | beats planner 0.575 head-to-head |
 
 Three lessons carried the whole project. **Planning beats training** — every
 attempt to train the search advantage into a reactive net failed, while
 bolting search onto training-time gains at play time worked every time we
-tried it (+0.206 alone). **The deck is not a side quest** — it turned out to
+tried it (+0.206 alone) — and Chapter 10 sharpened it further: *deeper* search
+beats *wider* search, so the planner's one-turn horizon, not its information,
+is the live frontier. **The deck is not a side quest** — it turned out to
 be the second-biggest lever in the whole project, on par with several
 training-side improvements combined, and the place a late, big win still
 came from. And **knowing when to stop is progress** — recognizing a real
