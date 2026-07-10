@@ -136,6 +136,26 @@ the planner, and the new play-time-search recipe of record. The margin is
 modest, but the direction is unambiguous: after training-side absorption
 (Chapter 7) closed, deeper search is where the next planning gains live.
 
+## Chapter 11 — Buying the depth cheaply: one opponent reply is enough
+
+Chapter 10 said depth is the frontier, but its winning tool — a 320-iteration
+determinized tree — was expensive (~17 seconds a game). If the *reason* depth
+works is that the planner never sees the opponent's reply, maybe we don't need a
+deep tree at all: maybe we just need **one** genuine reply. So we built `rbeam`
+("reply-aware turn beam"): take the planner's few best whole-turn plans, and for
+each, sample a handful of plausible hidden worlds, end the turn, let the
+opponent play its *own* strongest reply in that world, and only then score the
+resulting position. Pick the plan that looks best after the opponent gets to
+answer. It stays fair — we commit to one plan and average over what the opponent
+might hold. Sweeping how many plans and how many worlds to consider, a clean
+rule emerged: **grow both together** (a balanced 4×4 beat lopsided splits of the
+same cost). At 4×4 it beat the planner head-to-head **0.640** (confirmed, 200
+fresh games) — a bigger margin than the deep tree's 0.575 — and beat the deep
+`netdmcts` tree itself **0.548** (confirmed over 500 games, once we ran enough
+to resolve a genuine coin-flip-looking result) at **~2.6× less compute**. One
+real reply, it turns out, captures most of what many turns of tree search were
+buying — and it became the new play-time-search recipe of record.
+
 ## Conclusion
 
 | stage | reactive win rate | planner win rate |
@@ -145,13 +165,16 @@ modest, but the direction is unambiguous: after training-side absorption
 | + RL-learned draft | 0.791 | 0.978 |
 | + free lookup-table draft (no net at draft time) | ~0.75 (partial) | ~0.978 (matched, pilot-scale) |
 | + deep single-tree netdmcts (play-time search) | — | beats planner 0.575 head-to-head |
+| + rbeam, one opponent-reply ply | — | beats planner 0.640 / beats netdmcts 0.548, ~2.6x cheaper |
 
 Three lessons carried the whole project. **Planning beats training** — every
 attempt to train the search advantage into a reactive net failed, while
 bolting search onto training-time gains at play time worked every time we
-tried it (+0.206 alone) — and Chapter 10 sharpened it further: *deeper* search
-beats *wider* search, so the planner's one-turn horizon, not its information,
-is the live frontier. **The deck is not a side quest** — it turned out to
+tried it (+0.206 alone) — and Chapters 10-11 sharpened it further: *deeper*
+search beats *wider* search, so the planner's one-turn horizon, not its
+information, is the live frontier — and most of that depth turned out to be
+buyable cheaply, with a single genuine opponent reply rather than a deep tree.
+**The deck is not a side quest** — it turned out to
 be the second-biggest lever in the whole project, on par with several
 training-side improvements combined, and the place a late, big win still
 came from. And **knowing when to stop is progress** — recognizing a real
