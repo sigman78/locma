@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
   import { card as cardMeta } from '../../lib/cards'
+  import { digitIndex, isTypingTarget } from '../../lib/keys'
   import type { CardState } from '../../lib/replay'
   import type { DraftPending } from '../../lib/play'
   import CardView from '../ReplayViewer/CardView.svelte'
@@ -12,6 +13,8 @@
   // replaced by a Play button and the deck shows the full drafted list (doneCardIds).
   export let done = false
   export let doneCardIds: number[] = []
+  // keyboard only fires while the Play tab is visible (tabs stay mounted hidden)
+  export let active = true
   const dispatch = createEventDispatcher<{ pick: number; auto: void; play: void }>()
 
   function toCard(cardId: number, i: number): CardState {
@@ -27,7 +30,21 @@
 
   $: cards = pending.triplet.map(toCard)
   $: deckIds = done ? doneCardIds : pending.my_cards
+
+  // Keyboard: 1/2/3 pick a card, A auto-picks the rest; once drafted Enter plays.
+  function onKey(e: KeyboardEvent) {
+    if (!active || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
+    if (done) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dispatch('play') }
+      return
+    }
+    const idx = digitIndex(e.key, cards.length)
+    if (idx !== null) { e.preventDefault(); dispatch('pick', idx) }
+    else if (e.key.toLowerCase() === 'a') { e.preventDefault(); dispatch('auto') }
+  }
 </script>
+
+<svelte:window on:keydown={onKey} />
 
 <div class="draft">
   {#if done}
@@ -39,7 +56,8 @@
   {#if !done}
     <div class="row">
       {#each cards as c, i (i)}
-        <button class="pick" on:click={() => dispatch('pick', i)}>
+        <button class="pick" title={`Pick (press ${i + 1})`} on:click={() => dispatch('pick', i)}>
+          <span class="keyhint">{i + 1}</span>
           <CardView card={c} tipDir="below" />
         </button>
       {/each}
@@ -54,11 +72,15 @@
   {/if}
 
   {#if done}
-    <button class="play-btn" on:click={() => dispatch('play')}>Play ▶</button>
+    <button class="play-btn" title="Play (press Enter)" on:click={() => dispatch('play')}>
+      Play ▶ <span class="keycap">Enter</span>
+    </button>
   {:else}
     <div class="foot">
       <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>
-      <button class="auto" on:click={() => dispatch('auto')}>Pick rest for me</button>
+      <button class="auto" title="Auto-pick the rest (press A)" on:click={() => dispatch('auto')}>
+        Pick rest for me <span class="keycap">A</span>
+      </button>
     </div>
   {/if}
 </div>
@@ -68,9 +90,15 @@
     display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 24px; }
   h2 { margin: 0; }
   .row { display: flex; gap: 20px; padding: 16px 0; justify-content: center; }
-  .pick { background: none; border: 2px solid transparent; border-radius: 8px;
+  .pick { position: relative; background: none; border: 2px solid transparent; border-radius: 8px;
     padding: 4px; cursor: pointer;
     transition: border-color 0.14s, transform 0.14s ease, box-shadow 0.14s ease; }
+  .keyhint { position: absolute; top: 8px; left: 8px; z-index: 2;
+    width: 22px; height: 22px; display: grid; place-items: center;
+    background: rgba(14, 14, 20, 0.85); border: 1px solid #ffd23d88; color: #ffd23d;
+    border-radius: 6px; font-size: 12px; font-weight: 700; pointer-events: none; }
+  .keycap { font-size: 11px; font-weight: 600; color: #cbd0ec; background: #0e0e14;
+    border: 1px solid #4a4f6a; border-radius: 3px; padding: 0 5px; margin-left: 4px; }
   /* lift the hovered card (and its tooltip) above its row neighbours */
   .pick:hover { border-color: #ffd23d; transform: translateY(-8px) scale(1.04);
     position: relative; z-index: 50; box-shadow: 0 14px 26px rgba(0, 0, 0, 0.5),

@@ -22,6 +22,10 @@
   const END_DELAY_MS = 1800
   const HUMAN_FX_MS = 850
 
+  // true only while the Play tab is the visible tab — the board's window-level
+  // key handlers stay dormant when the tab is hidden but still mounted.
+  export let active = true
+
   let ready = false
   let error: string | null = null
   let gameId: string | null = null
@@ -37,6 +41,7 @@
   let showEnd = false
   let endTimer: ReturnType<typeof setTimeout> | null = null
   let staged: { cardIds: number[]; response: SubmitResponse } | null = null
+  let lastOpponent: string | null = null
 
   loadCards()
     .then(() => (ready = true))
@@ -114,6 +119,7 @@
 
   async function start(detail: { opponent: string; seed?: number }) {
     try {
+      lastOpponent = detail.opponent
       const g: CreatedGame = await createGame({ opponent: detail.opponent, seed: detail.seed })
       gameId = g.game_id
       you = g.you
@@ -217,6 +223,14 @@
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
 
+  // Rematch: tear the finished game down, then immediately start a fresh one
+  // against the same opponent (new random seed).
+  async function rematch() {
+    const opp = lastOpponent
+    again()
+    if (opp) await start({ opponent: opp })
+  }
+
   $: battlePending = (snap?.pending && snap.pending.phase === 'battle')
     ? (snap.pending as BattlePending)
     : finalBattle
@@ -230,6 +244,7 @@
     <NewGame on:start={(e) => start(e.detail)} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
     <DraftScreen
+      {active}
       pending={snap.pending as DraftPending}
       done={!!staged}
       doneCardIds={staged?.cardIds ?? []}
@@ -239,6 +254,7 @@
   {:else if battlePending}
     <div class="board-stage">
       <BattleScreen
+        {active}
         pending={battlePending}
         {you}
         {events}
@@ -249,11 +265,11 @@
         on:act={(e) => act(e.detail)}
       />
       {#if showEnd && snap?.result}
-        <EndOverlay result={snap.result} on:again={again} />
+        <EndOverlay {active} result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
     </div>
   {:else if snap?.result}
-    <EndOverlay result={snap.result} on:again={again} />
+    <EndOverlay {active} result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
   {/if}
 
   <!-- blocking error overlay: a failed request leaves the game state unknown,
@@ -274,7 +290,9 @@
 
 <style>
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
-  main { padding: 16px; color: #ddd; }
+  /* the board is a fixed-size card layout; on narrow viewports let it pan
+     horizontally instead of forcing a page-wide scrollbar */
+  main { padding: 16px; color: #ddd; overflow-x: auto; }
   h1 { font-size: 20px; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
   /* blocking modal: fixed full-viewport backdrop catches all clicks */
