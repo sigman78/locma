@@ -31,6 +31,8 @@
   export let fxToken = 0
   export let liveStep: PlayStep | null = null
   export let playing = false
+  // keyboard only fires while the Play tab is visible (tabs stay mounted hidden)
+  export let active = true
 
   const dispatch = createEventDispatcher<{ act: ActionDict }>()
 
@@ -404,7 +406,10 @@
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
     else send({ t: 'use', item: d.src, target })
   }
+  // Escape only: cancel an in-progress drag/aim. Ending the turn stays a
+  // deliberate click — a stray Space/Enter must not pass the turn.
   function onKey(e: KeyboardEvent) {
+    if (!active) return
     if (e.key === 'Escape') {
       drag = null
       snapId = null
@@ -528,6 +533,7 @@
     <button
       class="endturn"
       class:urge={passOnly && interactive}
+      title="End your turn"
       on:click={() => send({ t: 'pass' })}
       disabled={!interactive}>End Turn ⏭</button>
   </div>

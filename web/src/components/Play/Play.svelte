@@ -22,6 +22,10 @@
   const END_DELAY_MS = 1800
   const HUMAN_FX_MS = 850
 
+  // true only while the Play tab is the visible tab — the board's window-level
+  // key handlers stay dormant when the tab is hidden but still mounted.
+  export let active = true
+
   let ready = false
   let error: string | null = null
   let gameId: string | null = null
@@ -37,6 +41,7 @@
   let showEnd = false
   let endTimer: ReturnType<typeof setTimeout> | null = null
   let staged: { cardIds: number[]; response: SubmitResponse } | null = null
+  let lastOpponent: string | null = null
 
   loadCards()
     .then(() => (ready = true))
@@ -45,6 +50,7 @@
   onDestroy(() => {
     seq?.cancel()
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
   })
 
   function fire(evs: EventDict[], action: ActionDict | null) {
@@ -114,6 +120,7 @@
 
   async function start(detail: { opponent: string; seed?: number }) {
     try {
+      lastOpponent = detail.opponent
       const g: CreatedGame = await createGame({ opponent: detail.opponent, seed: detail.seed })
       gameId = g.game_id
       you = g.you
@@ -130,9 +137,37 @@
   // first-move model load) double-submits and the server answers 409 WrongPhase.
   let inFlight = false
 
+  // "AI is thinking" hint: a search policy (vbeam/rbeam/netdmcts) can spend a
+  // few seconds computing its turn. Show an animated indicator once a request
+  // has been in flight past THINK_HINT_MS so a slow reply doesn't look hung.
+  const THINK_HINT_MS = 1000
+  // Once the reply lands the AI is done thinking, but yank the pill the instant
+  // its cards start animating and it flickers — let it linger a beat instead.
+  const THINK_LINGER_MS = 1000
+  let thinking = false
+  let thinkTimer: ReturnType<typeof setTimeout> | null = null
+  function armThinking() {
+    thinkTimer = setTimeout(() => (thinking = true), THINK_HINT_MS)
+  }
+  // Reply arrived: if the pill is showing, keep it up for a short linger while
+  // the opponent's move begins to animate, then drop it. If it never appeared,
+  // just cancel the pending arm.
+  function releaseThinking() {
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
+    if (thinking) {
+      thinkTimer = setTimeout(() => { thinking = false; thinkTimer = null }, THINK_LINGER_MS)
+    }
+  }
+  // Hard clear (errors / teardown): kill the pill and any pending timer at once.
+  function disarmThinking() {
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
+    thinking = false
+  }
+
   async function pick(p: number) {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    armThinking()
     try {
       const r = await submitDraft(gameId, p)
       if (r.pending && r.pending.phase === 'battle') {
@@ -144,6 +179,7 @@
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -151,6 +187,7 @@
   async function autoDraft() {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    armThinking()
     try {
       let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       while (r.pending && r.pending.phase === 'draft') {
@@ -161,6 +198,7 @@
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -193,12 +231,20 @@
   async function act(a: ActionDict) {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    // only a turn-ending pass hands control to the AI; a plain board move
+    // resolves on the server without the opponent searching, so skip the hint.
+    if (a.t === 'pass') armThinking()
     try {
-      await applyResponse(await submitAction(gameId, a), a.t === 'pass')
+      const r = await submitAction(gameId, a)
+      // reply is here -> AI finished thinking; release the pill before the
+      // opponent's cards start animating so it doesn't sit there stale.
+      if (a.t === 'pass') releaseThinking()
+      await applyResponse(r, a.t === 'pass')
     } catch (e) {
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -217,6 +263,14 @@
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
 
+  // Rematch: tear the finished game down, then immediately start a fresh one
+  // against the same opponent (new random seed).
+  async function rematch() {
+    const opp = lastOpponent
+    again()
+    if (opp) await start({ opponent: opp })
+  }
+
   $: battlePending = (snap?.pending && snap.pending.phase === 'battle')
     ? (snap.pending as BattlePending)
     : finalBattle
@@ -230,6 +284,7 @@
     <NewGame on:start={(e) => start(e.detail)} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
     <DraftScreen
+      {active}
       pending={snap.pending as DraftPending}
       done={!!staged}
       doneCardIds={staged?.cardIds ?? []}
@@ -239,6 +294,7 @@
   {:else if battlePending}
     <div class="board-stage">
       <BattleScreen
+        {active}
         pending={battlePending}
         {you}
         {events}
@@ -248,12 +304,18 @@
         playing={playing || inFlight || !!snap?.result}
         on:act={(e) => act(e.detail)}
       />
+      {#if thinking}
+        <div class="thinking" role="status" aria-live="polite">
+          <span class="spinner"></span>
+          <span>AI is thinking<span class="dots"><i>.</i><i>.</i><i>.</i></span></span>
+        </div>
+      {/if}
       {#if showEnd && snap?.result}
-        <EndOverlay result={snap.result} on:again={again} />
+        <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
     </div>
   {:else if snap?.result}
-    <EndOverlay result={snap.result} on:again={again} />
+    <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
   {/if}
 
   <!-- blocking error overlay: a failed request leaves the game state unknown,
@@ -274,9 +336,29 @@
 
 <style>
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
-  main { padding: 16px; color: #ddd; }
+  /* the board is a fixed-size card layout; on narrow viewports let it pan
+     horizontally instead of forcing a page-wide scrollbar */
+  main { padding: 16px; color: #ddd; overflow-x: auto; }
   h1 { font-size: 20px; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
+
+  /* floating "AI is thinking" pill — only shown once a reply is slow, so the
+     board never looks hung during a search policy's turn */
+  .thinking { position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 40; display: flex; align-items: center; gap: 9px;
+    padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    color: #cfd4f2; background: rgba(20, 20, 30, 0.92); border: 1px solid #3b3f6a;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); animation: think-in 0.2s ease-out both; }
+  @keyframes think-in { from { opacity: 0; transform: translate(-50%, -6px); }
+    to { opacity: 1; transform: translate(-50%, 0); } }
+  .spinner { width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #4a4f8a; border-top-color: #9aa0ff;
+    animation: think-spin 0.7s linear infinite; }
+  @keyframes think-spin { to { transform: rotate(360deg); } }
+  .dots i { animation: think-blink 1.4s infinite both; }
+  .dots i:nth-child(2) { animation-delay: 0.2s; }
+  .dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes think-blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
   /* blocking modal: fixed full-viewport backdrop catches all clicks */
   .error-overlay { position: fixed; inset: 0; z-index: 1000;
     display: grid; place-items: center; background: rgba(0, 0, 0, 0.72); }
