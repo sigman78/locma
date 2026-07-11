@@ -117,9 +117,14 @@ def _mcts(params, spec):
 def _azlite(params, spec):
     """AlphaZero-lite — PUCT-guided MCTS with a heuristic (policy, value) oracle.
 
-    Spec ``azlite:iterations,c_puct,seed,rollout_turns``. Paired with the
+    Spec ``azlite:iterations,c_puct,seed,rollout_turns,draft``. Defaults to the
     `balanced` draft (the draft sweep's best partner; see docs/baseline.md), as
-    `ppo:` is — so the matchup against the baselines is apples-to-apples.
+    `ppo:` is — so the matchup against the baselines is apples-to-apples. The
+    optional 5th param overrides the draft like ``ppo``/``vbeam``/``netdmcts``
+    (see ``_draft_param``) so search can be compared on a matched deck
+    distribution (E25 strong-league, same-draft head-to-head). NB: azlite
+    *cheats* (perfect foresight over future draws) — a matched-draft comparison
+    isolates that information edge, it does not make it fair.
     """
     from locma.policies.azlite import AZLiteBattlePolicy  # noqa: PLC0415
 
@@ -129,7 +134,7 @@ def _azlite(params, spec):
     rollout_turns = int(params[3]) if len(params) > 3 else 0
     return Composer(
         AZLiteBattlePolicy(iterations=iters, c_puct=c_puct, seed=seed, rollout_turns=rollout_turns),
-        BalancedDraftPolicy(),
+        _draft_param(params, 4),
         name=spec,
     )
 

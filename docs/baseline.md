@@ -103,6 +103,31 @@ head-to-head. It is now the strongest config on BOTH rulers. (Lighter measuremen
 than the planner's ceiling-eval 1000-game/opp number — 200 direct-play games/opp
 here — but decisive at this saturation level.)
 
+## Strong-opponent league (E25) — does rbeam hold vs strong search, not just the pool?
+
+The HARD3 pool saturates (rbeam 0.983 / planner 0.978, both near 1.0), so it no
+longer discriminates. E25 (`scripts/e25_strong_league.py`) pits the rbeam-4x4 RoR
+against a panel of STRONG opponents at matched `ldraft` (mirrored, per-opponent
+Wilson CI), pilot seed 32M / confirm 33M:
+
+| opponent | rbeam WR | 95% CI | games | verdict |
+|---|---:|---|---:|---|
+| `vbeam` (fair planner RoR) | **0.665** | [0.597, 0.727] | 200 | rbeam ahead |
+| `dmcts:15,100` (fair MCTS, 1500 sims; beats the planner, E22) | **0.501** | [0.464, 0.538] | 700 | parity |
+| `azlite:100` (**CHEATS**: perfect foresight) | **0.790** | [0.728, 0.841] | 200 | rbeam ahead |
+
+rbeam beats the fair planner AND the cheating azlite outright, and sits at **parity
+with `dmcts:15,100`** — a *fair* multi-turn MCTS that itself beats the planner. So
+rbeam is at least as strong as strong fair tree search, at lower per-turn cost. The
+dmcts cell is a genuine coin-flip: the 200-game pilot read 0.540 but the fresh
+500-game confirm came back 0.486, pooling to 351/700 = 0.501. The non-transitivity
+(rbeam > vbeam, dmcts ~ rbeam, dmcts > vbeam) is the depth story — rbeam's one reply
+ply is worth ~dmcts's ~1.5 turns of real depth, both above vbeam's zero; consistent
+with rbeam already beating the net-guided `netdmcts:1,320` (0.548). `azlite`'s
+perfect foresight (excluded from any fair mean) does not save its shallow 100-iter
+heuristic search. Plumbing: `azlite` gained the same optional draft-override param
+as `mcts`/`dmcts`/`netdmcts` (backward-compatible) so it can run at matched draft.
+
 **Caveats.** The win over netdmcts is narrow (CI lo 0.504). No new artifact: the recipe
 is a spec over existing depot blobs (`depot:shared` + `depot:ldraft`), like the
 `vbeam`/`netdmcts` recipes. Cost is per-turn ~6.5 s/game on the RTX 4080 box;
