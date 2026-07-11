@@ -10,7 +10,11 @@ def test_e25_candidate_is_rbeam_ror_at_matched_ldraft():
     assert CANDIDATE.endswith(LDRAFT)
 
 
-def test_e25_every_opponent_uses_matched_ldraft_and_parses():
+def test_e25_every_opponent_uses_matched_ldraft_and_parses(monkeypatch):
+    # make_policy eagerly resolves depot: refs to on-disk blobs; CI runs without
+    # pulled artifacts, so stub the resolver. Models still load lazily, so this
+    # exercises spec parsing / policy construction without needing the weights.
+    monkeypatch.setattr("locma.policies.registry.resolve_path", lambda p: p)
     labels = [label for label, _spec, _fair in OPPONENTS]
     assert {"vbeam", "dmcts:15,100", "azlite:100"} <= set(labels)
     for _label, spec, _fair in OPPONENTS:
