@@ -6,8 +6,10 @@ max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record** (strongest reactive net and
 planner) are in the 2026-07-07 section below; the strongest **play-time
-search** config — deep single-tree `netdmcts`, confirmed to beat the planner
-head-to-head — is in the 2026-07-09 E23 section below. Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+search** config — `rbeam` (reply-aware turn beam), confirmed to beat both the
+planner and the deep-`netdmcts` search recipe head-to-head — is in the
+2026-07-10 E24 section below (it supersedes the 2026-07-09 E23 `netdmcts`
+search recipe). Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -32,6 +34,105 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-10: rbeam (reply-aware turn beam) promoted as play-time search recipe
+
+E24 (worklog "E24", `scripts/e24_rbeam_bench.py`): `rbeam` is `vbeam` plus exactly
+one genuine opponent-reply ply — turn-level expectiminimax over the beam's top
+`n_plans` own-turn plans, averaged across `n_worlds` fair determinizations, scored
+by the `shared` critic ensemble (which also models the opponent's reply). It
+directly targets the multi-turn depth E22/E23 found decisive, at turn granularity.
+Same head-to-head ruler as E22/E23 (matched `ldraft` both sides), NOT the
+avg-hard3-vs-HARD3-pool ruler.
+
+## The (n_plans x n_worlds) strength/cost frontier (pilot, 50 games/cell vs planner)
+
+| n_plans x n_worlds | reply beams | rbeam WR vs planner | s/game |
+|---:|---:|---:|---:|
+| 2x2 | 4 | 0.600 | 2.4 |
+| 3x3 | 9 | 0.640 | 4.3 |
+| **4x4** | 16 | **0.660** | 6.8 |
+| 2x4 | 8 | 0.580 | 4.3 |
+| 4x2 | 8 | 0.560 | 3.6 |
+
+Monotone along the diagonal; balanced beats lopsided (3x3 beats both 2x4 and 4x2
+at similar cost) — grow plans and worlds together, neither knob dominates alone.
+
+## Promoted search recipe of record
+
+| role | recipe | result |
+|---|---|---|
+| **play-time search (recipe of record)** | `rbeam:depot:shared/shared_s0.zip\|depot:shared/shared_s1.zip\|depot:shared/shared_s2.zip,8,20,4,4,depot:ldraft/ldraft_sX.zip` | see below |
+| prior search record (superseded) | `netdmcts:1,320,1.5,depot:shared/shared_s0.zip,depot:ldraft/ldraft_sX.zip` | 0.575 vs planner |
+
+**Why promoted.** Two fresh-seed confirmations, both head-to-head at matched
+`ldraft`:
+
+- vs the **vbeam planner** recipe of record (200 games, seed 30M): **0.640**
+  [0.571, 0.703], p=1e-4 — CI entirely above 0.5, at 6.5 s/game (inside the
+  Priority-2 <10 s/game gate). A larger margin than E23's netdmcts managed
+  (0.575).
+- vs the **netdmcts:1,320 search recipe** it supersedes (500 games, seed 30M):
+  **0.548** [0.5042, 0.5911], p=0.036, 274-226 — CI clears 0.5, a narrow but
+  confirmed win. (200 games was a wash, 0.560 [0.491, 0.627]; tightened to 500
+  to resolve it.)
+
+So `rbeam` beats BOTH the planner and the deep-`netdmcts` search recipe
+head-to-head, at **~2.6x lower cost** than netdmcts:1,320 (~6.5 vs ~17 s/game) —
+stronger on every axis. `3x3` is the ~1.5x-cheaper value alternate (0.595 vs the
+planner, confirmed, at 4.2 s/game).
+
+## avg-hard3 pool ruler (does it hold up off the head-to-head ruler?)
+
+Measured directly (200 mirrored games/opponent, fresh seed 31M, rbeam paired with
+`ldraft_s0` both via the recipe) — the same HARD3 pool the planner's 0.978 record
+sits on (`scripted`/`max-guard`/`max-attack`, `locma/envs/azloop.py:avg_hard3`):
+
+| opponent | rbeam win rate | 95% CI | record |
+|---|---:|---|---:|
+| `scripted` | 0.975 | [0.943, 0.989] | 195/200 |
+| `max-guard` | 0.980 | [0.950, 0.992] | 196/200 |
+| `max-attack` | 0.995 | [0.972, 0.999] | 199/200 |
+| **avg-hard3** | **0.983** | — | — |
+
+So `rbeam` does NOT regress on the pool ruler: **0.983** is statistically at the
+planner's 0.978 (the pool saturates near 1.0 for both), while `rbeam` wins the
+head-to-head. It is now the strongest config on BOTH rulers. (Lighter measurement
+than the planner's ceiling-eval 1000-game/opp number — 200 direct-play games/opp
+here — but decisive at this saturation level.)
+
+## Strong-opponent league (E25) — does rbeam hold vs strong search, not just the pool?
+
+The HARD3 pool saturates (rbeam 0.983 / planner 0.978, both near 1.0), so it no
+longer discriminates. E25 (`scripts/e25_strong_league.py`) pits the rbeam-4x4 RoR
+against a panel of STRONG opponents at matched `ldraft` (mirrored, per-opponent
+Wilson CI), pilot seed 32M / confirm 33M:
+
+| opponent | rbeam WR | 95% CI | games | verdict |
+|---|---:|---|---:|---|
+| `vbeam` (fair planner RoR) | **0.665** | [0.597, 0.727] | 200 | rbeam ahead |
+| `dmcts:15,100` (fair MCTS, 1500 sims; beats the planner, E22) | **0.501** | [0.464, 0.538] | 700 | parity |
+| `azlite:100` (**CHEATS**: perfect foresight) | **0.790** | [0.728, 0.841] | 200 | rbeam ahead |
+
+rbeam beats the fair planner AND the cheating azlite outright, and sits at **parity
+with `dmcts:15,100`** — a *fair* multi-turn MCTS that itself beats the planner. So
+rbeam is at least as strong as strong fair tree search, at lower per-turn cost. The
+dmcts cell is a genuine coin-flip: the 200-game pilot read 0.540 but the fresh
+500-game confirm came back 0.486, pooling to 351/700 = 0.501. The non-transitivity
+(rbeam > vbeam, dmcts ~ rbeam, dmcts > vbeam) is the depth story — rbeam's one reply
+ply is worth ~dmcts's ~1.5 turns of real depth, both above vbeam's zero; consistent
+with rbeam already beating the net-guided `netdmcts:1,320` (0.548). `azlite`'s
+perfect foresight (excluded from any fair mean) does not save its shallow 100-iter
+heuristic search. Plumbing: `azlite` gained the same optional draft-override param
+as `mcts`/`dmcts`/`netdmcts` (backward-compatible) so it can run at matched draft.
+
+**Caveats.** The win over netdmcts is narrow (CI lo 0.504). No new artifact: the recipe
+is a spec over existing depot blobs (`depot:shared` + `depot:ldraft`), like the
+`vbeam`/`netdmcts` recipes. Cost is per-turn ~6.5 s/game on the RTX 4080 box;
+the dominant cost is the n_plans*n_worlds opponent-reply beams (currently looped —
+batching them is a known future speedup).
 
 ---
 

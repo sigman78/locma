@@ -56,6 +56,19 @@ def test_dmcts_spec_and_selectable():
     assert d.battle.K == 15 and d.battle.I == 30
 
 
+def test_azlite_default_and_draft_override():
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+    from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
+
+    d = make_policy("azlite:100")  # bare spec: balanced draft (byte-compatible)
+    assert isinstance(d.draft, BalancedDraftPolicy)
+    assert d.battle.iterations == 100
+    # 5th param overrides the draft, like ppo/vbeam/netdmcts (E25 matched-draft);
+    # a model path loads a learned draft lazily (nothing read here).
+    o = make_policy("azlite:100,1.5,0,0,runs/ldraft_s0.zip")
+    assert isinstance(o.draft, MaskablePPODraftPolicy)
+
+
 def test_ppo_default_and_path():
     assert make_policy("ppo").battle.model_path == "model.zip"
     assert make_policy("ppo:runs/exp1.zip").battle.model_path == "runs/exp1.zip"
