@@ -1,40 +1,16 @@
 <!-- web/src/components/Play/EndOverlay.svelte -->
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte'
-  import { isTypingTarget } from '../../lib/keys'
+  import { createEventDispatcher } from 'svelte'
   import type { GameResult } from '../../lib/play'
 
   export let result: GameResult
   // The opponent spec of the game just finished, so we can offer a one-click
   // rematch against the same AI. Absent -> only the "new opponent" path shows.
   export let opponent: string | null = null
-  // keyboard only fires while the Play tab is visible (tabs stay mounted hidden)
-  export let active = true
 
   const dispatch = createEventDispatcher<{ again: void; rematch: void }>()
   const won = result.winner_is_human
-
-  // Keyboard: Enter / R rematch (or return to menu when no opponent is known),
-  // N picks a new opponent.
-  function onKey(e: KeyboardEvent) {
-    if (!active || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
-    const k = e.key.toLowerCase()
-    if (e.key === 'Enter' || k === 'r') {
-      e.preventDefault()
-      dispatch(opponent ? 'rematch' : 'again')
-    } else if (k === 'n') {
-      e.preventDefault()
-      dispatch('again')
-    }
-  }
-
-  // Move focus to the primary button so screen readers announce the result and
-  // Space/Enter act without a stray click first.
-  let primaryBtn: HTMLButtonElement
-  onMount(() => { if (active) primaryBtn?.focus() })
 </script>
-
-<svelte:window on:keydown={onKey} />
 
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Game over">
   <div class="card" class:win={won}>
@@ -46,14 +22,10 @@
     </dl>
     <div class="actions">
       {#if opponent}
-        <button bind:this={primaryBtn} class="primary" on:click={() => dispatch('rematch')}>
-          Rematch <span class="keycap">Enter</span>
-        </button>
-        <button on:click={() => dispatch('again')}>New opponent <span class="keycap">N</span></button>
+        <button class="primary" on:click={() => dispatch('rematch')}>Rematch</button>
+        <button on:click={() => dispatch('again')}>New opponent</button>
       {:else}
-        <button bind:this={primaryBtn} class="primary" on:click={() => dispatch('again')}>
-          Play again <span class="keycap">Enter</span>
-        </button>
+        <button class="primary" on:click={() => dispatch('again')}>Play again</button>
       {/if}
       <a href="#/replays" class="replay-btn">View replay</a>
     </div>
@@ -117,7 +89,4 @@
   }
   button.primary { background: #234a2c; border-color: #3fbf66; color: #d7ffd7; }
   button:hover, .replay-btn:hover { filter: brightness(1.15); }
-  .keycap { font-size: 11px; font-weight: 600; color: #cbd0ec; background: #0e0e14;
-    border: 1px solid #4a4f6a; border-radius: 3px; padding: 0 5px; margin-left: 7px; }
-  button.primary .keycap { color: #d7ffd7; border-color: #3fbf66aa; }
 </style>

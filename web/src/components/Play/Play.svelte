@@ -141,11 +141,24 @@
   // few seconds computing its turn. Show an animated indicator once a request
   // has been in flight past THINK_HINT_MS so a slow reply doesn't look hung.
   const THINK_HINT_MS = 1000
+  // Once the reply lands the AI is done thinking, but yank the pill the instant
+  // its cards start animating and it flickers — let it linger a beat instead.
+  const THINK_LINGER_MS = 1000
   let thinking = false
   let thinkTimer: ReturnType<typeof setTimeout> | null = null
   function armThinking() {
     thinkTimer = setTimeout(() => (thinking = true), THINK_HINT_MS)
   }
+  // Reply arrived: if the pill is showing, keep it up for a short linger while
+  // the opponent's move begins to animate, then drop it. If it never appeared,
+  // just cancel the pending arm.
+  function releaseThinking() {
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
+    if (thinking) {
+      thinkTimer = setTimeout(() => { thinking = false; thinkTimer = null }, THINK_LINGER_MS)
+    }
+  }
+  // Hard clear (errors / teardown): kill the pill and any pending timer at once.
   function disarmThinking() {
     if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
     thinking = false
@@ -222,7 +235,11 @@
     // resolves on the server without the opponent searching, so skip the hint.
     if (a.t === 'pass') armThinking()
     try {
-      await applyResponse(await submitAction(gameId, a), a.t === 'pass')
+      const r = await submitAction(gameId, a)
+      // reply is here -> AI finished thinking; release the pill before the
+      // opponent's cards start animating so it doesn't sit there stale.
+      if (a.t === 'pass') releaseThinking()
+      await applyResponse(r, a.t === 'pass')
     } catch (e) {
       await recover(e)
     } finally {
@@ -294,11 +311,11 @@
         </div>
       {/if}
       {#if showEnd && snap?.result}
-        <EndOverlay {active} result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
+        <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
     </div>
   {:else if snap?.result}
-    <EndOverlay {active} result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
+    <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
   {/if}
 
   <!-- blocking error overlay: a failed request leaves the game state unknown,
