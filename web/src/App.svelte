@@ -30,11 +30,10 @@
     location.hash = `#/${id}`
   }
 
-  // Number keys 1..N jump straight to a tab (skipped while typing in a field).
-  // The Play tab claims digits for the draft, so we don't steal them there.
+  // Alt+1..N jump straight to a tab. Alt keeps them out of the way of the
+  // play screens (which use bare digits for the draft) and of typing.
   function onKey(e: KeyboardEvent) {
-    if (e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
-    if (tab === 'play') return
+    if (!e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
     const idx = digitIndex(e.key, TABS.length)
     if (idx !== null) {
       e.preventDefault()
@@ -65,10 +64,10 @@
     {#each TABS as t, i}
       <button
         class:active={tab === t.id}
-        title={`${t.label} (press ${i + 1})`}
+        title={`${t.label} (press Alt+${i + 1})`}
         on:click={() => select(t.id)}
       >
-        <kbd>{i + 1}</kbd>{t.label}
+        <kbd>Alt+{i + 1}</kbd>{t.label}
       </button>
     {/each}
   </nav>

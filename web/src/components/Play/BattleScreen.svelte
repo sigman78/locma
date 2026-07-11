@@ -17,7 +17,6 @@
   import { spring, dealIn, deathFx } from '../../lib/motion'
   import { mergeDisplayBoard, planStepFx, type RectOf } from '../../lib/stepfx'
   import { nearestTarget, type AimTarget } from '../../lib/aim'
-  import { isTypingTarget } from '../../lib/keys'
   import { dock } from '../../lib/dock'
   import { card as cardMeta } from '../../lib/cards'
   import CardView from '../ReplayViewer/CardView.svelte'
@@ -407,6 +406,8 @@
     if (d.kind === 'attack') send({ t: 'attack', a: d.src, target })
     else send({ t: 'use', item: d.src, target })
   }
+  // Escape only: cancel an in-progress drag/aim. Ending the turn stays a
+  // deliberate click — a stray Space/Enter must not pass the turn.
   function onKey(e: KeyboardEvent) {
     if (!active) return
     if (e.key === 'Escape') {
@@ -414,16 +415,6 @@
       snapId = null
       overField = false
       if (handDrag) handRelease()
-      return
-    }
-    if (isTypingTarget(e.target)) return
-    // Space / E / Enter ends the turn — but only when the board is idle (not
-    // mid-drag, not mid-aim, and the AI is not playing), matching the button's
-    // own disabled/guard conditions so a keypress can't double-submit.
-    if ((e.key === ' ' || e.key === 'e' || e.key === 'E' || e.key === 'Enter')
-      && interactive && !drag && !handDrag) {
-      e.preventDefault()
-      send({ t: 'pass' })
     }
   }
   $: lineTo = drag
@@ -542,9 +533,9 @@
     <button
       class="endturn"
       class:urge={passOnly && interactive}
-      title="End your turn (press Space)"
+      title="End your turn"
       on:click={() => send({ t: 'pass' })}
-      disabled={!interactive}>End Turn <span class="keycap">Space</span></button>
+      disabled={!interactive}>End Turn ⏭</button>
   </div>
 </div>
 
@@ -668,9 +659,6 @@
   .endturn:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.2); }
   .endturn:not(:disabled):active { transform: translateY(0) scale(0.97); }
   .endturn:disabled { opacity: 0.5; cursor: default; }
-  .keycap { font-size: 11px; font-weight: 600; color: #cbd0ec; background: #0e0e14;
-    border: 1px solid #4a4f6a; border-radius: 3px; padding: 0 5px; margin-left: 6px; }
-  .endturn:disabled .keycap { opacity: 0.7; }
   /* a player panel acting as the face hit-area */
   .faceplate { border: 2px solid transparent; border-radius: 8px; padding: 2px 6px;
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }

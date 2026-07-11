@@ -31,13 +31,10 @@
   $: cards = pending.triplet.map(toCard)
   $: deckIds = done ? doneCardIds : pending.my_cards
 
-  // Keyboard: 1/2/3 pick a card, A auto-picks the rest; once drafted Enter plays.
+  // Keyboard (draft only): 1/2/3 pick a card, A auto-picks the rest. Starting
+  // the battle stays a deliberate click — no Enter-to-play.
   function onKey(e: KeyboardEvent) {
-    if (!active || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
-    if (done) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dispatch('play') }
-      return
-    }
+    if (!active || done || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
     const idx = digitIndex(e.key, cards.length)
     if (idx !== null) { e.preventDefault(); dispatch('pick', idx) }
     else if (e.key.toLowerCase() === 'a') { e.preventDefault(); dispatch('auto') }
@@ -72,9 +69,7 @@
   {/if}
 
   {#if done}
-    <button class="play-btn" title="Play (press Enter)" on:click={() => dispatch('play')}>
-      Play ▶ <span class="keycap">Enter</span>
-    </button>
+    <button class="play-btn" on:click={() => dispatch('play')}>Play ▶</button>
   {:else}
     <div class="foot">
       <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>

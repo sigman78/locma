@@ -50,6 +50,7 @@
   onDestroy(() => {
     seq?.cancel()
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
   })
 
   function fire(evs: EventDict[], action: ActionDict | null) {
@@ -136,9 +137,24 @@
   // first-move model load) double-submits and the server answers 409 WrongPhase.
   let inFlight = false
 
+  // "AI is thinking" hint: a search policy (vbeam/rbeam/netdmcts) can spend a
+  // few seconds computing its turn. Show an animated indicator once a request
+  // has been in flight past THINK_HINT_MS so a slow reply doesn't look hung.
+  const THINK_HINT_MS = 1000
+  let thinking = false
+  let thinkTimer: ReturnType<typeof setTimeout> | null = null
+  function armThinking() {
+    thinkTimer = setTimeout(() => (thinking = true), THINK_HINT_MS)
+  }
+  function disarmThinking() {
+    if (thinkTimer) { clearTimeout(thinkTimer); thinkTimer = null }
+    thinking = false
+  }
+
   async function pick(p: number) {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    armThinking()
     try {
       const r = await submitDraft(gameId, p)
       if (r.pending && r.pending.phase === 'battle') {
@@ -150,6 +166,7 @@
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -157,6 +174,7 @@
   async function autoDraft() {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    armThinking()
     try {
       let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
       while (r.pending && r.pending.phase === 'draft') {
@@ -167,6 +185,7 @@
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -199,12 +218,16 @@
   async function act(a: ActionDict) {
     if (!gameId || playing || inFlight) return
     inFlight = true
+    // only a turn-ending pass hands control to the AI; a plain board move
+    // resolves on the server without the opponent searching, so skip the hint.
+    if (a.t === 'pass') armThinking()
     try {
       await applyResponse(await submitAction(gameId, a), a.t === 'pass')
     } catch (e) {
       await recover(e)
     } finally {
       inFlight = false
+      disarmThinking()
     }
   }
 
@@ -264,6 +287,12 @@
         playing={playing || inFlight || !!snap?.result}
         on:act={(e) => act(e.detail)}
       />
+      {#if thinking}
+        <div class="thinking" role="status" aria-live="polite">
+          <span class="spinner"></span>
+          <span>AI is thinking<span class="dots"><i>.</i><i>.</i><i>.</i></span></span>
+        </div>
+      {/if}
       {#if showEnd && snap?.result}
         <EndOverlay {active} result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
@@ -295,6 +324,24 @@
   main { padding: 16px; color: #ddd; overflow-x: auto; }
   h1 { font-size: 20px; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
+
+  /* floating "AI is thinking" pill — only shown once a reply is slow, so the
+     board never looks hung during a search policy's turn */
+  .thinking { position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 40; display: flex; align-items: center; gap: 9px;
+    padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    color: #cfd4f2; background: rgba(20, 20, 30, 0.92); border: 1px solid #3b3f6a;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); animation: think-in 0.2s ease-out both; }
+  @keyframes think-in { from { opacity: 0; transform: translate(-50%, -6px); }
+    to { opacity: 1; transform: translate(-50%, 0); } }
+  .spinner { width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid #4a4f8a; border-top-color: #9aa0ff;
+    animation: think-spin 0.7s linear infinite; }
+  @keyframes think-spin { to { transform: rotate(360deg); } }
+  .dots i { animation: think-blink 1.4s infinite both; }
+  .dots i:nth-child(2) { animation-delay: 0.2s; }
+  .dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes think-blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
   /* blocking modal: fixed full-viewport backdrop catches all clicks */
   .error-overlay { position: fixed; inset: 0; z-index: 1000;
     display: grid; place-items: center; background: rgba(0, 0, 0, 0.72); }
