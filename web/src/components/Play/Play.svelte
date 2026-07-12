@@ -298,8 +298,10 @@
       on:auto={autoDraft}
       on:play={play} />
   {:else if battlePending}
-    <!-- only the (wide) battle board pans horizontally; keeping this on `main`
-         forced overflow-y to auto too and clipped the draft cards' hover tooltip -->
+    <!-- board + deck tracker as side-by-side flex items. Only the (wide) board
+         pans horizontally (its own wrapper); the tracker is a sibling, so its
+         height feeds the page scroll instead of a second inner scrollbar. -->
+    <div class="stage-row">
     <div class="board-scroll">
     <div class="board-stage">
       <BattleScreen
@@ -313,9 +315,6 @@
         playing={playing || inFlight || !!snap?.result}
         on:act={(e) => act(e.detail)}
       />
-      {#if myDeck.length}
-        <DeckTracker deck={myDeck} view={battlePending.view} />
-      {/if}
       {#if thinking}
         <div class="thinking" role="status" aria-live="polite">
           <span class="spinner"></span>
@@ -326,6 +325,10 @@
         <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
     </div>
+    </div>
+    {#if myDeck.length}
+      <DeckTracker deck={myDeck} view={battlePending.view} />
+    {/if}
     </div>
   {:else if snap?.result}
     <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
@@ -353,14 +356,15 @@
      horizontally instead of forcing a page-wide scrollbar */
   main { padding: 16px; color: #ddd; }
   h1 { font-size: 20px; }
-  /* the board can be wider than the viewport inside the tabbed shell; let just it
-     pan horizontally (main stays overflow:visible so draft tooltips aren't clipped) */
-  .board-scroll { overflow-x: auto; }
+  /* board + deck tracker sit side by side, centered as a group. Only the board
+     wrapper scrolls horizontally when the board is wider than the viewport; main
+     stays overflow:visible so the page's own vertical scroll isn't doubled by an
+     inner one and the draft tooltip isn't clipped. */
+  .stage-row { display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
+  .board-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
-  /* deck tracker floats to the right of the board so it doesn't shift the board's
-     centering or the overlays (thinking pill / end screen) anchored to board-stage */
-  .board-stage :global(.tracker) { position: absolute; left: 100%; top: 0;
-    margin-left: 12px; }
+  /* the tracker keeps its width and lives in page flow (never shrinks/scrolls) */
+  .stage-row :global(.tracker) { flex: none; }
 
   /* floating "AI is thinking" pill — only shown once a reply is slow, so the
      board never looks hung during a search policy's turn */
