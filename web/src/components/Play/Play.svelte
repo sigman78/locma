@@ -15,6 +15,7 @@
   import { playFrames, type Sequencer } from '../../lib/playback'
   import { pulse } from '../../lib/motion'
   import BattleScreen from './BattleScreen.svelte'
+  import DeckTracker from './DeckTracker.svelte'
   import DraftScreen from './DraftScreen.svelte'
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
@@ -42,6 +43,9 @@
   let endTimer: ReturnType<typeof setTimeout> | null = null
   let staged: { cardIds: number[]; response: SubmitResponse } | null = null
   let lastOpponent: string | null = null
+  // the human's whole drafted deck (30 card ids), captured when the battle starts;
+  // feeds the deck tracker so it can show which cards are still to be drawn
+  let myDeck: number[] = []
 
   loadCards()
     .then(() => (ready = true))
@@ -219,6 +223,7 @@
   async function play() {
     if (!staged) return
     const s = staged
+    myDeck = s.cardIds
     staged = null
     // Pre-update snap to battle phase so the DraftScreen unmounts immediately and the
     // BattleScreen mounts before AI steps play — prevents draft cards re-flashing during
@@ -260,6 +265,7 @@
     finalBattle = null
     showEnd = false
     staged = null
+    myDeck = []
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
 
@@ -304,6 +310,9 @@
         playing={playing || inFlight || !!snap?.result}
         on:act={(e) => act(e.detail)}
       />
+      {#if myDeck.length}
+        <DeckTracker deck={myDeck} view={battlePending.view} />
+      {/if}
       {#if thinking}
         <div class="thinking" role="status" aria-live="polite">
           <span class="spinner"></span>
@@ -341,6 +350,10 @@
   main { padding: 16px; color: #ddd; overflow-x: auto; }
   h1 { font-size: 20px; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
+  /* deck tracker floats to the right of the board so it doesn't shift the board's
+     centering or the overlays (thinking pill / end screen) anchored to board-stage */
+  .board-stage :global(.tracker) { position: absolute; left: 100%; top: 0;
+    margin-left: 12px; }
 
   /* floating "AI is thinking" pill — only shown once a reply is slow, so the
      board never looks hung during a search policy's turn */
