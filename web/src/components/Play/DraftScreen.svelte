@@ -54,7 +54,6 @@
     <div class="row">
       {#each cards as c, i (i)}
         <button class="pick" title={`Pick (press ${i + 1})`} on:click={() => dispatch('pick', i)}>
-          <span class="keyhint">{i + 1}</span>
           <CardView card={c} tipDir="below" />
         </button>
       {/each}
@@ -88,10 +87,6 @@
   .pick { position: relative; background: none; border: 2px solid transparent; border-radius: 8px;
     padding: 4px; cursor: pointer;
     transition: border-color 0.14s, transform 0.14s ease, box-shadow 0.14s ease; }
-  .keyhint { position: absolute; top: 8px; left: 8px; z-index: 2;
-    width: 22px; height: 22px; display: grid; place-items: center;
-    background: rgba(14, 14, 20, 0.85); border: 1px solid #ffd23d88; color: #ffd23d;
-    border-radius: 6px; font-size: 12px; font-weight: 700; pointer-events: none; }
   .keycap { font-size: 11px; font-weight: 600; color: #cbd0ec; background: #0e0e14;
     border: 1px solid #4a4f6a; border-radius: 3px; padding: 0 5px; margin-left: 4px; }
   /* lift the hovered card (and its tooltip) above its row neighbours */

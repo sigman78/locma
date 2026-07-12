@@ -15,6 +15,7 @@
   import { playFrames, type Sequencer } from '../../lib/playback'
   import { pulse } from '../../lib/motion'
   import BattleScreen from './BattleScreen.svelte'
+  import DeckTracker from './DeckTracker.svelte'
   import DraftScreen from './DraftScreen.svelte'
   import EndOverlay from './EndOverlay.svelte'
   import NewGame from './NewGame.svelte'
@@ -42,6 +43,9 @@
   let endTimer: ReturnType<typeof setTimeout> | null = null
   let staged: { cardIds: number[]; response: SubmitResponse } | null = null
   let lastOpponent: string | null = null
+  // the human's whole drafted deck (30 card ids), captured when the battle starts;
+  // feeds the deck tracker so it can show which cards are still to be drawn
+  let myDeck: number[] = []
 
   loadCards()
     .then(() => (ready = true))
@@ -219,6 +223,7 @@
   async function play() {
     if (!staged) return
     const s = staged
+    myDeck = s.cardIds
     staged = null
     // Pre-update snap to battle phase so the DraftScreen unmounts immediately and the
     // BattleScreen mounts before AI steps play — prevents draft cards re-flashing during
@@ -260,6 +265,7 @@
     finalBattle = null
     showEnd = false
     staged = null
+    myDeck = []
     if (endTimer) { clearTimeout(endTimer); endTimer = null }
   }
 
@@ -292,6 +298,11 @@
       on:auto={autoDraft}
       on:play={play} />
   {:else if battlePending}
+    <!-- board + deck tracker as side-by-side flex items. Only the (wide) board
+         pans horizontally (its own wrapper); the tracker is a sibling, so its
+         height feeds the page scroll instead of a second inner scrollbar. -->
+    <div class="stage-row">
+    <div class="board-scroll">
     <div class="board-stage">
       <BattleScreen
         {active}
@@ -313,6 +324,11 @@
       {#if showEnd && snap?.result}
         <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
+    </div>
+    </div>
+    {#if myDeck.length}
+      <DeckTracker deck={myDeck} view={battlePending.view} />
+    {/if}
     </div>
   {:else if snap?.result}
     <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
@@ -338,9 +354,17 @@
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
   /* the board is a fixed-size card layout; on narrow viewports let it pan
      horizontally instead of forcing a page-wide scrollbar */
-  main { padding: 16px; color: #ddd; overflow-x: auto; }
+  main { padding: 16px; color: #ddd; }
   h1 { font-size: 20px; }
+  /* board + deck tracker sit side by side, centered as a group. Only the board
+     wrapper scrolls horizontally when the board is wider than the viewport; main
+     stays overflow:visible so the page's own vertical scroll isn't doubled by an
+     inner one and the draft tooltip isn't clipped. */
+  .stage-row { display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
+  .board-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
+  /* the tracker keeps its width and lives in page flow (never shrinks/scrolls) */
+  .stage-row :global(.tracker) { flex: none; }
 
   /* floating "AI is thinking" pill — only shown once a reply is slow, so the
      board never looks hung during a search policy's turn */
