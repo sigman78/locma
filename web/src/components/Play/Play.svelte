@@ -298,6 +298,9 @@
       on:auto={autoDraft}
       on:play={play} />
   {:else if battlePending}
+    <!-- only the (wide) battle board pans horizontally; keeping this on `main`
+         forced overflow-y to auto too and clipped the draft cards' hover tooltip -->
+    <div class="board-scroll">
     <div class="board-stage">
       <BattleScreen
         {active}
@@ -323,6 +326,7 @@
         <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
       {/if}
     </div>
+    </div>
   {:else if snap?.result}
     <EndOverlay result={snap.result} opponent={lastOpponent} on:again={again} on:rematch={rematch} />
   {/if}
@@ -347,8 +351,11 @@
   :global(body) { margin: 0; background: #0e0e12; font-family: system-ui, sans-serif; }
   /* the board is a fixed-size card layout; on narrow viewports let it pan
      horizontally instead of forcing a page-wide scrollbar */
-  main { padding: 16px; color: #ddd; overflow-x: auto; }
+  main { padding: 16px; color: #ddd; }
   h1 { font-size: 20px; }
+  /* the board can be wider than the viewport inside the tabbed shell; let just it
+     pan horizontally (main stays overflow:visible so draft tooltips aren't clipped) */
+  .board-scroll { overflow-x: auto; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
   /* deck tracker floats to the right of the board so it doesn't shift the board's
      centering or the overlays (thinking pill / end screen) anchored to board-stage */
