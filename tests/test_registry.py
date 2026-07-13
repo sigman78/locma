@@ -85,3 +85,47 @@ def test_ppo_pairs_balanced_draft():
 def test_unknown_spec_raises():
     with pytest.raises(ValueError):
         make_policy("nope")
+
+
+def test_ppo_ensemble_spec_pipe_separated():
+    """``|``-separated model paths select the mean-of-policy-heads ensemble
+    (E26), same idiom as ``vbeam:``. Construction is lazy: no model files
+    need to exist."""
+    from locma.policies.ppo import MaskablePPOEnsembleBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("ppo:a.zip|b.zip|c.zip")
+    assert isinstance(p.battle, MaskablePPOEnsembleBattlePolicy)
+    assert p.battle.model_paths == ["a.zip", "b.zip", "c.zip"]
+    assert p.name == "ppo:a.zip|b.zip|c.zip"
+
+
+def test_bare_ppo_spec_unchanged_type():
+    from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("ppo:a.zip")
+    assert isinstance(p.battle, MaskablePPOBattlePolicy)
+    assert p.battle.model_path == "a.zip"
+
+
+def test_lppo_constructs_without_loading_model():
+    """``lppo:`` wraps a lazily-loaded inner battle policy in the lethal guard —
+    construction never touches the filesystem or imports the [ml] stack."""
+    from locma.policies.lguard import LethalGuardBattlePolicy  # noqa: PLC0415
+    from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("lppo:whatever.zip")
+    assert isinstance(p.battle, LethalGuardBattlePolicy)
+    assert isinstance(p.battle.inner, MaskablePPOBattlePolicy)
+    assert p.battle.inner.model_path == "whatever.zip"
+    assert p.battle.node_cap == 3000
+    assert p.name == "lppo:whatever.zip"
+    assert "lppo" not in policy_names()  # hidden: needs a model artifact
+
+
+def test_lppo_ensemble_inner_and_node_cap_param():
+    from locma.policies.ppo import MaskablePPOEnsembleBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("lppo:a.zip|b.zip,,500")
+    assert isinstance(p.battle.inner, MaskablePPOEnsembleBattlePolicy)
+    assert p.battle.inner.model_paths == ["a.zip", "b.zip"]
+    assert p.battle.node_cap == 500
