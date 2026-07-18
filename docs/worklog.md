@@ -10,6 +10,7 @@ Entries live in `docs/worklog/`, split by month.
 
 ## 2026-07
 
+- 2026-07-18 — [Net-probe instrument: NN-utilization metrics before the arch sweep](worklog/2026-07.md) — PR/erank/saturation/CKA/linear-probe instrument shipped; pilot: no capacity pressure in either net, no layer beats raw obs on teacher-action decoding — conditioning and head, not width, are the sweep candidates
 - 2026-07-09 — [E22: MCTS-depth pilot vs the planner RoR](worklog/2026-07.md) — both cheating MCTS and fair dMCTS cross over and beat the 0.978 planner at a shallow budget (~100-1500 sims); depth, not information, is the driver — vbeam only searches one turn deep
 - 2026-07-08 — [E21: advanced-opponent zoo pilot](worklog/2026-07.md) — swap boardkeep for an old-net+edraft opponent: reactive null, critic +0.013 (likely saturated), boardkeep guard REGRESSES — lever closed
 - 2026-07-07 — [E20: draft-priority distillation](worklog/2026-07.md) — per-card fit vs real picks is null (context confound); census heuristic (+0.067) and net-elicited priority (+0.107 reactive/+0.060 planner) both recover real headroom; depot:edraft published as a usable draft policy
