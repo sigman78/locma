@@ -4,12 +4,13 @@ The canonical pair-score matrix for the five built-in baseline policies — row'
 win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
-snapshots. The current **recipes of record** (strongest reactive net and
-planner) are in the 2026-07-07 section below; the strongest **play-time
-search** config — `rbeam` (reply-aware turn beam), confirmed to beat both the
-planner and the deep-`netdmcts` search recipe head-to-head — is in the
-2026-07-10 E24 section below (it supersedes the 2026-07-09 E23 `netdmcts`
-search recipe). Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+snapshots. The current **recipes of record**: the (guarded-)reactive recipe is
+in the 2026-07-13 E26 section below (superseding the 2026-07-07 reactive
+recipe); the planner recipe is in the 2026-07-07 section; the strongest
+**play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
+beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
+in the 2026-07-10 E24 section below (it supersedes the 2026-07-09 E23
+`netdmcts` search recipe). Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -34,6 +35,61 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-13: E26 micro-guards — lens promoted to (guarded-)reactive recipe (~0.85)
+
+E26 (worklog "E26", `scripts/e26_guards.py`, design pre-registered in
+`docs/e26-microguards-design.md`): two fair, zero-training play-time wrappers
+on the reactive rung — `lguard`, an exhaustive cap-bounded own-turn lethal
+solver (no net, never simulates `Pass`; closes E14a's measured 18.3% missed
+forced wins), and the mean-of-policy-heads ensemble over the three b0k
+checkpoints (`ppo:a|b|c`, the policy-head analog of E8's mean-of-critics).
+Standard paired ruler vs the reactive RoR pair, fulls 40x25 @ 34M anchors,
+fresh confirms @ 35M:
+
+| arm | battle half | full delta | confirm delta | verdict |
+|---|---|---:|---:|---|
+| A `lppo:b0k_sX,ldraft_sX` | guard(single net) | +0.0281 [+0.0254, +0.0307] | +0.0299 [+0.0264, +0.0336] | CI-positive both |
+| B `ppo:b0k s0\|s1\|s2,ldraft_sX` | policy ensemble | +0.0264 [+0.0203, +0.0326] | +0.0292 [+0.0238, +0.0349] | CI-positive both |
+| **C `lppo:b0k s0\|s1\|s2,ldraft_sX`** | guard(ensemble) | **+0.0572 [+0.0514, +0.0630]** | **+0.0568 [+0.0509, +0.0626]** | **headroom both** |
+
+| role | recipe of record since 2026-07-13 | avg-hard3 |
+|---|---|---|
+| **guarded-reactive (recipe of record)** | `lppo:depot:b0k/b0k_s0.zip\|depot:b0k/b0k_s1.zip\|depot:b0k/b0k_s2.zip,depot:ldraft/ldraft_sX.zip` | **~0.85** (0.856 / 0.847 on the two ranges) |
+| prior reactive record | `ppo:depot:b0k/b0k_sX.zip,depot:ldraft/ldraft_sX.zip` | 0.791 |
+
+**Why promoted.** First reactive-rung headroom verdict since E18b, replicated
+on a fully disjoint anchor range, from pure play-time machinery — no training,
+no new artifacts (the recipe is a spec over existing depot blobs). The two
+mechanisms are disjoint and compose additively (A +0.028 + B +0.026 ≈ C
++0.057). Mechanism probe (400 serial games vs HARD3+boardkeep @ 36M): the
+guard fires 0.81x/game and changes the net's move 92% of firings; 675 nodes
+per search, 13% cap-hit rate at node_cap=3000; cost 0.26 s/game vs 0.11 plain
+(2.5x — still ~3x cheaper than the vbeam planner, ~25x cheaper than rbeam).
+Boardkeep exploit guard-rail (E10/E18c protocol, 2000 mirrored games @ 5M
+common random numbers): boardkeep wins only **0.306** [0.286, 0.326] vs the
+promoted recipe, down from 0.408 vs the unguarded pair — no adversarial hole
+opened.
+
+**Labeling caveat.** `lens` is *guarded* reactive — it performs an exact
+own-turn solve, so the rung is no longer purely reactive; it stays fair,
+net-inference-bounded and in the same deployment cost class. For
+strictly-1x-inference deployments, arm A is the drop-in upgrade (+0.030).
+E8's "three seeds become one artifact" caveat now applies to this rung too.
+
+**Draft-side (stage E, closing E20's open item): `edraft` does NOT match
+`ldraft` at full scale.** Reactive -0.0188 [-0.0278, -0.0101]; planner
+-0.0050 [-0.0098, -0.0004] — both CI-negative. `depot:edraft` remains the
+zero-inference deployment option (retains ~85%/~92% of the learned draft's
+reactive/planner gain) but is not promotable as its equivalent.
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e26_guards.py   # idempotent; runs/e26-summary.json
+```
 
 ---
 

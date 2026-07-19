@@ -248,9 +248,9 @@ def _rbeam(params, spec):
 def _ppo(params, spec):
     from locma.policies.ppo import (  # noqa: PLC0415
         MaskablePPOBattlePolicy,
+        MaskablePPOEnsembleBattlePolicy,
     )
 
-    model_path = resolve_path(params[0] if params else "model.zip")
     # Pair the learned battle net with a `balanced` draft, not `greedy`: the draft
     # sweep (docs/baseline.md "PPO × draft sweep") found the greedy draft is the
     # WORST partner (0.39 avg vs the ground baselines) while `balanced` (0.54) makes
@@ -258,9 +258,44 @@ def _ppo(params, spec):
     # no retraining. Optional second param overrides the draft: a float sets the
     # balanced item discount (``ppo:path,3`` — E17 guard-rail arms), a model path
     # loads a learned draft (``ppo:path,draft.zip`` — E18b). See ``_draft_param``.
-    return Composer(
-        MaskablePPOBattlePolicy(model_path=model_path), _draft_param(params, 1), name=spec
+    # `model` may also be `|`-separated paths (``ppo:a.zip|b.zip|c.zip``), same
+    # idiom as ``vbeam:`` — the battle half is then the mean-of-policy-heads
+    # ensemble (E26, ``MaskablePPOEnsembleBattlePolicy``) instead of one net.
+    raw = params[0] if params else "model.zip"
+    if "|" in raw:
+        paths = [resolve_path(p) for p in raw.split("|")]
+        battle = MaskablePPOEnsembleBattlePolicy(paths)
+    else:
+        battle = MaskablePPOBattlePolicy(model_path=resolve_path(raw))
+    return Composer(battle, _draft_param(params, 1), name=spec)
+
+
+def _lppo(params, spec):
+    """Lethal-guarded PPO — spec ``lppo:model[,draft[,node_cap]]`` (E26/E14a).
+
+    ``ppo:`` (same ``model``/``draft`` parsing, including the ``|``-separated
+    ensemble form) wrapped in ``LethalGuardBattlePolicy``: an exhaustive,
+    zero-training own-turn lethal solver that plays a forced win when one
+    exists this turn and otherwise gets out of the way (see
+    ``locma.policies.lguard`` for the fairness/soundness argument). ``model``
+    may be a single path or ``|``-separated paths (ensemble inner). The
+    optional 3rd param overrides the solver's DFS node cap (default 3000).
+    """
+    from locma.policies.lguard import LethalGuardBattlePolicy  # noqa: PLC0415
+    from locma.policies.ppo import (  # noqa: PLC0415
+        MaskablePPOBattlePolicy,
+        MaskablePPOEnsembleBattlePolicy,
     )
+
+    raw = params[0] if params and params[0] else "model.zip"
+    node_cap = int(params[2]) if len(params) > 2 and params[2] else 3000
+    if "|" in raw:
+        paths = [resolve_path(p) for p in raw.split("|")]
+        inner_battle = MaskablePPOEnsembleBattlePolicy(paths)
+    else:
+        inner_battle = MaskablePPOBattlePolicy(model_path=resolve_path(raw))
+    battle = LethalGuardBattlePolicy(inner_battle, node_cap=node_cap)
+    return Composer(battle, _draft_param(params, 1), name=spec)
 
 
 # --- E10 exploit archetypes: scripted strategies aimed at the learned
@@ -336,6 +371,7 @@ _FACTORIES = {
     "vbeam": _vbeam,
     "rbeam": _rbeam,
     "ppo": _ppo,
+    "lppo": _lppo,
     "mixed": _mixed,
     "rnddeck": _rnddeck,
     "guardwall": _guardwall,
@@ -345,11 +381,12 @@ _FACTORIES = {
 }
 
 # Not offered as bare selectable names (e.g. in the server dropdown):
-# `ppo`, `netdmcts`, `vbeam` and `rbeam` need a model artifact + the [ml] extra
-# (use `ppo:path`, `netdmcts:K,I,c,path`, `vbeam:path,width,max_actions` or
-# `rbeam:path,width,max_actions,n_plans,n_worlds`); `mixed` is a non-stationary
-# training opponent, not a baseline to rank.
-_HIDDEN = {"ppo", "mixed", "netdmcts", "vbeam", "rbeam"}
+# `ppo`, `lppo`, `netdmcts`, `vbeam` and `rbeam` need a model artifact + the
+# [ml] extra (use `ppo:path`, `lppo:path`, `netdmcts:K,I,c,path`,
+# `vbeam:path,width,max_actions` or `rbeam:path,width,max_actions,n_plans,
+# n_worlds`); `mixed` is a non-stationary training opponent, not a baseline
+# to rank.
+_HIDDEN = {"ppo", "lppo", "mixed", "netdmcts", "vbeam", "rbeam"}
 
 
 def policy_names() -> list[str]:

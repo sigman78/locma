@@ -1,9 +1,10 @@
+import random
 import types
 
 import numpy as np
 import pytest
 
-from locma.policies.ppo import MaskablePPOBattlePolicy
+from locma.policies.ppo import MaskablePPOBattlePolicy, MaskablePPOEnsembleBattlePolicy
 
 
 def test_constructs_without_loading_model():
@@ -104,3 +105,53 @@ def test_token_model_save_load_produces_legal_action(tmp_path):
     pol = MaskablePPOBattlePolicy(model_path=path)
     action = pol.battle_action(view, legal, gs)
     assert action in legal, f"Policy returned illegal action {action!r}"
+
+
+# ---------------------------------------------------------------------------
+# MaskablePPOEnsembleBattlePolicy (E26)
+# ---------------------------------------------------------------------------
+
+
+def test_ensemble_constructs_without_loading_models():
+    p = MaskablePPOEnsembleBattlePolicy(["a.zip", "b.zip"])
+    assert p.model_paths == ["a.zip", "b.zip"]
+    assert p._models is None
+
+
+def test_ensemble_requires_two_members():
+    with pytest.raises(ValueError, match="at least 2"):
+        MaskablePPOEnsembleBattlePolicy(["a.zip"])
+
+
+def test_ensemble_of_identical_models_matches_single_model_action(tmp_path):
+    """An ensemble of copies of one model must reproduce that model's own
+    masked argmax exactly (mean of identical distributions == the distribution)."""
+    pytest.importorskip("sb3_contrib")
+    from locma.core import battle as battlemod  # noqa: PLC0415
+    from locma.core.draft import apply_draft_pick, start_draft  # noqa: PLC0415
+    from locma.core.engine import make_battle_view  # noqa: PLC0415
+    from locma.core.state import GameState, Phase  # noqa: PLC0415
+    from locma.data.cards_db import load_cards  # noqa: PLC0415
+    from locma.envs.training import _build_env, _make_model  # noqa: PLC0415
+
+    env = _build_env("random", 0, 1, obs_mode="token")
+    model = _make_model(env, obs_mode="token", seed=0, verbose=0, ent_coef=0.02)
+    path = str(tmp_path / "m.zip")
+    model.save(path)
+    env.close()
+
+    gs = GameState.new(random.Random(0))
+    start_draft(gs, load_cards())
+    while gs.phase == Phase.DRAFT:
+        apply_draft_pick(gs, 0)
+    battlemod.start_battle(gs)
+    view = make_battle_view(gs)
+    legal = battlemod.battle_legal(gs)
+
+    single = MaskablePPOBattlePolicy(model_path=path)
+    ens = MaskablePPOEnsembleBattlePolicy([path, path, path])
+
+    a1 = single.battle_action(view, legal, gs)
+    a2 = ens.battle_action(view, legal, gs)
+    assert a1 == a2
+    assert a2 in legal

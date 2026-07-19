@@ -65,6 +65,63 @@ class MaskablePPOBattlePolicy:
         pass
 
 
+class MaskablePPOEnsembleBattlePolicy:
+    """Mean-of-policy-heads ensemble over several MaskablePPO battle nets (E26).
+
+    E8 found mean-of-critics ensembling the single biggest zero-training gain
+    on the ``vbeam`` planner rung; this is the POLICY-head analog for the bare
+    reactive net: batch each member's masked action distribution for the
+    current view (same trunk-forward recipe as ``vbeam.NetValueEvaluator.
+    _forward`` — ``obs_to_tensor``, ``extract_features``, ``mlp_extractor``,
+    ``_get_action_dist_from_latent``, ``apply_masking``,
+    ``distribution.probs``), mean the probabilities across members, and take
+    the argmax. Deterministic by construction (no sampling). Members are
+    loaded lazily on first use, exactly like ``MaskablePPOBattlePolicy``, so
+    construction never touches the filesystem or imports the ``[ml]`` stack.
+    """
+
+    def __init__(self, model_paths: list[str], name: str = "ppo-ens"):
+        if len(model_paths) < 2:
+            raise ValueError("MaskablePPOEnsembleBattlePolicy needs at least 2 model paths")
+        self.model_paths = list(model_paths)
+        self.name = name
+        self._models: list | None = None
+
+    def _ensure(self) -> None:
+        if self._models is None:
+            from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
+
+            self._models = [MaskablePPO.load(p) for p in self.model_paths]
+
+    def battle_action(self, view, legal, state=None):
+        import numpy as np  # noqa: PLC0415 — lazy [ml]-adjacent dep
+        import torch  # noqa: PLC0415 — lazy [ml] dep
+
+        self._ensure()
+        mask = action_mask(view, legal)
+        probs = []
+        for model in self._models:
+            obs = _encode_for(model, view)
+            policy = model.policy
+            if isinstance(obs, dict):
+                batch = {k: np.expand_dims(v, 0) for k, v in obs.items()}
+            else:
+                batch = obs[None]
+            obs_t, _ = policy.obs_to_tensor(batch)
+            with torch.no_grad():
+                features = policy.extract_features(obs_t)
+                latent_pi, _latent_vf = policy.mlp_extractor(features)
+                dist = policy._get_action_dist_from_latent(latent_pi)
+                dist.apply_masking(mask[None])
+                probs.append(dist.distribution.probs.cpu().numpy()[0])
+        mean_probs = np.mean(np.stack(probs), axis=0)
+        idx = int(np.argmax(mean_probs))
+        return index_to_action(view, legal, idx)
+
+    def reset(self, seed=None) -> None:
+        pass
+
+
 class MaskablePPODraftPolicy:
     """Wraps a saved MaskablePPO DRAFT model (train_draft, E18b) as a draft policy.
 
