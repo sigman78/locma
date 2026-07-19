@@ -50,6 +50,16 @@ direct fix for the E27 routing defect.
   the boardkeep guard-rail (E26 protocol). Success = CI-positive; stretch =
   approach the lens-guarded 0.85 with no guard.
 
+**VERDICT (2026-07-19): PROMOTED on both rungs** (worklog E28 gates 1-2 +
+stack; baseline.md 2026-07-19 section; artifact `depot:e28p` v1). Gate 1: BC
+agreement 0.423/0.436 vs 0.390-0.392 capacity-matched control — first break
+of the ~0.37 imitation cap; but NOT via items (recall a wash — access was
+never the item problem, refining the E27 mechanism). Gate 2 + stack: pure
+net +0.073 headroom (0.856/0.858, milestone 1 cleared with no guard);
+`lppo:e28p trio` 0.908 beats the guarded RoR (+0.059, confirmed); boardkeep
+neutralized to 0.221. Items unmoved by slot access even under PPO — three
+instruments agree it is consequence valuation (E30's question).
+
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
 Fixes the measured pathology (first-layer saturation with LOW PR), likely a
@@ -85,7 +95,10 @@ play-time guards as ends (E26 stands as-is).
 ## Milestones
 
 1. Pure net > 0.85 (lens-guarded RoR) — the net has internalized the lethal
-   readout + item routing that guards currently patch.
+   readout + item routing that guards currently patch. **REACHED 2026-07-19**
+   (E28 pointer trio 0.865, no guards).
 2. Pure net ~ 0.890 (single-critic vbeam ceiling) — the net has absorbed
-   what one beam ply adds.
-3. Stretch: approach 0.926 (ensemble planner RoR).
+   what one beam ply adds. 0.025 away after E28; E29/E30 are the remaining
+   levers.
+3. Stretch: approach 0.926 (ensemble planner RoR). (The GUARDED stack is
+   already 0.908.)

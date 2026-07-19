@@ -4,9 +4,10 @@ The canonical pair-score matrix for the five built-in baseline policies — row'
 win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
-snapshots. The current **recipes of record**: the (guarded-)reactive recipe is
-in the 2026-07-13 E26 section below (superseding the 2026-07-07 reactive
-recipe); the planner recipe is in the 2026-07-07 section; the strongest
+snapshots. The current **recipes of record**: the reactive and guarded-reactive
+recipes are in the 2026-07-19 E28 section below (pointer action head,
+superseding the 2026-07-13 E26 recipes, which had superseded the 2026-07-07
+reactive recipe); the planner recipe is in the 2026-07-07 section; the strongest
 **play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
 beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
 in the 2026-07-10 E24 section below (it supersedes the 2026-07-09 E23
@@ -35,6 +36,75 @@ the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
 (0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
 `max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
 not just the ordinal.
+
+---
+
+# Recipes of record — 2026-07-19: E28 pointer action head — promoted on BOTH reactive rungs (0.865 / 0.908)
+
+E28 (branch feat/e28-pointer-head, worklog "E28" gates 1-2 + stack, program
+doc `docs/reactive-limits-program.md`): the dense action head (`action_net`,
+Linear 64->155 — the routing bottleneck E27 located) is replaced by a
+pointer-style head that computes each Summon/Use logit from that action's own
+hand-card token and each Attack logit from the corresponding board token
+(`PointerMaskablePolicy`, `locma/envs/pointer_head.py`; trained via
+`locma train-zoo --pointer-head`). Three seeds at the EXACT b0k recipe (token
+V0, lr=1e-4, target_kl=0.025, dropout=0.1, n_envs=16, 5-phase zoo x 200k = 1M
+steps), published as `depot:e28p` v1 (gh:depot/e28p-v1, parent b0k@1). The
+first architecture win after seven training-side nulls, and the largest
+reactive-rung gain on record.
+
+| role | recipe of record since 2026-07-19 | avg-hard3 |
+|---|---|---|
+| **guarded-reactive (recipe of record)** | `lppo:depot:e28p/e28p_s0.zip\|depot:e28p/e28p_s1.zip\|depot:e28p/e28p_s2.zip,depot:ldraft/ldraft_sX.zip` | **0.908** (confirm 0.906) |
+| **reactive (recipe of record)** | `ppo:depot:e28p/e28p_sX.zip,depot:ldraft/ldraft_sX.zip` | **0.865** (per-seed 0.856/0.858 on the gate-2 ranges) |
+| prior guarded-reactive record (E26 lens over b0k) | `lppo:depot:b0k s0\|s1\|s2,depot:ldraft/ldraft_sX.zip` | ~0.85 |
+| prior reactive record (E18b/E11) | `ppo:depot:b0k/b0k_sX.zip,depot:ldraft/ldraft_sX.zip` | 0.791 |
+
+**Why promoted.** Headroom on both rungs, full AND fresh-anchor confirm, all
+pre-registered (standard paired 40x25 ruler):
+
+| verdict | delta | 95% CI |
+|---|---:|---|
+| gate 2: e28p pair vs reactive RoR pair, full @ 40M | +0.0729 | [+0.0652, +0.0808] |
+| gate 2 confirm @ 41M (fresh) | +0.0687 | [+0.0608, +0.0765] |
+| pure trio vs b0k trio @ 43M (3-seed artifact) | +0.0714 | [+0.0646, +0.0785] |
+| **stack: `lppo:e28p trio` vs guarded RoR @ 43M** | **+0.0593** | [+0.0531, +0.0658] |
+| stack confirm @ 44M (fresh) | +0.0583 | [+0.0524, +0.0642] |
+| lens increment ON pointer nets @ 43M | +0.0418 | [+0.0366, +0.0471] |
+
+0.908 is a new reactive summit — above the single-critic vbeam planner
+ceiling (0.890), within 0.02 of the 3-critic ensemble planner RoR (0.926), at
+~0.26 s/game (~3x cheaper than the planner, ~25x cheaper than rbeam). The
+lens mechanisms stay disjoint under the pointer head (+0.042 increment vs
++0.057 on b0k — the pointer net finds more kills itself). Boardkeep
+guard-rail (E10/E18c protocol, 2000 mirrored @ 5M CRN): boardkeep wins only
+**0.221** vs the stack and 0.258/0.310 vs single pointer nets — vs 0.306
+against the prior guarded RoR and 0.408 against unguarded b0k. The
+slot-addressed head nearly neutralizes the archetype that resisted
+everything since E10; most exploit-robust config ever measured here.
+
+**Mechanism (gates 1-2).** Gate 1 (BC, frozen extractor, capacity-matched
+control): the pointer head breaks the ~0.37-0.39 BC-agreement plateau
+(0.423/0.436 vs 0.390-0.392 for a params-matched dense MLP head, both seeds)
+— the gain is structural slot access, not width. It is broad decision
+quality (targeting), NOT items: item recall is a wash vs control, and the
+gate-2 item rate straddles b0k (0.144/0.214 vs 0.171). Three instruments now
+agree (E27 probes, gate-1 BC, gate-2 PPO): item underuse is consequence
+valuation (E14a turn-level branching), not access — E30 territory.
+
+**Caveats.** E26's labeling caveat carries over: the guarded recipe performs
+an exact own-turn lethal solve; for strictly-1x-inference deployments the
+single-net `ppo:e28p_sX,ldraft_sX` is the record at 0.865 (already above the
+prior GUARDED record). The three seeds again become one deployment artifact
+in the guarded recipe (E8 caveat). Program milestone 1 (pure net > 0.85) is
+cleared; milestone 2 (0.890 pure) remains open — E29/E30.
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e28_gate2_bench.py   # gate 2; runs/netprobe/e28_gate2_summary.json
+uv run --extra ml python scripts/e28_stack_bench.py   # trio + stack; runs/netprobe/e28_stack_summary.json
+```
 
 ---
 
