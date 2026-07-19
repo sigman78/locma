@@ -21,7 +21,10 @@ Any command that takes a policy name (`play`, `tournament`, `noise-floor`,
 
 Model-backed specs (**require the `[ml]` extra** and a checkpoint):
 
-- `ppo:PATH` — reactive MaskablePPO battle net + `balanced` draft.
+- `ppo:PATH[,DRAFT]` — reactive MaskablePPO battle net + `balanced` draft.
+  `PATH` may be `|`-separated (`ppo:a.zip|b.zip|c.zip`) for the
+  mean-of-policy-heads ensemble (E26): each member's masked action
+  distribution is averaged and the argmax taken, deterministic.
 - `vbeam:PATH,width,max_actions` — own-turn beam planner scored by the token
   model's value head (defaults 8/20). The current strongest policy:
   `vbeam:depot:b0/b0_s0.zip` (avg-hard3 0.863).
@@ -33,6 +36,11 @@ Model-backed specs (**require the `[ml]` extra** and a checkpoint):
   defaults 8/20/4/4). `PATH` may be `|`-separated for the shared-critic ensemble
   (the same critic also models the opponent's reply), like `vbeam`. Targets the
   multi-turn depth E22/E23 found decisive; ~6 s/game with the 3-critic ensemble.
+- `lppo:PATH[,DRAFT[,NODE_CAP]]` — `ppo:` wrapped in an exhaustive own-turn
+  lethal solver (E26/E14a): plays a forced win this turn when one exists
+  (cap-bounded DFS, no net, `NODE_CAP` default 3000) and otherwise delegates
+  to the wrapped `ppo:` policy unchanged. `PATH` may be `|`-separated like
+  `ppo:` (the guard then wraps the policy-head ensemble).
 
 `PATH` is a plain file **or a `depot:` ref** (`depot:<name>[@N|@latest]/<file>`,
 see [docs/depot.md](depot.md)) — depot refs are the canonical way to name
@@ -41,8 +49,8 @@ published checkpoints: `ppo:depot:b0/b0_s0.zip`, `vbeam:depot:b0/b0_s2.zip`.
 `max-guard` and `max-attack` share a "ground" battle: develop the board and
 swing at the enemy face, falling back to clearing Guards when the face is not a
 legal target. `mcts`/`dmcts` pair their search battle with a greedy draft;
-`ppo`/`vbeam`/`netdmcts`/`rbeam` pair with the `balanced` draft by default. Each
-accepts an optional learned or heuristic draft override for same-draft
+`ppo`/`vbeam`/`netdmcts`/`rbeam`/`lppo` pair with the `balanced` draft by
+default. Each accepts an optional learned or heuristic draft override for same-draft
 experiments.
 
 ## play
