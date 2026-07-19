@@ -4,7 +4,8 @@ __pycache__/
 *.zip
 locma/data/assets/*
 !locma/data/assets/manifest.json
-runs/
+runs/*
+!runs/netprobe/
 depot/store/
 depot/tmp/
 docs/superpowers/*

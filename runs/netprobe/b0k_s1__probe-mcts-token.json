@@ -1,0 +1,374 @@
+{
+  "model": "depot:b0k/b0k_s1.zip",
+  "data": "runs/probe-mcts-token.npz",
+  "obs_mode": "token",
+  "teacher": "mcts:100",
+  "n_examples": 33186,
+  "seed": 0,
+  "l2": 1.0,
+  "val_frac": 0.2,
+  "notes": "raw_obs token baseline = tokens+scalars+token_mask (card_ids omitted)",
+  "model_teacher_agreement": 0.37189716312056736,
+  "raw_obs": {
+    "spectrum": {
+      "width": 373,
+      "participation_ratio": 7.661611093770741,
+      "pr_frac": 0.02054051231573925,
+      "effective_rank": 84.30609671361819,
+      "stable_rank": 3.301107965037346,
+      "n90": 20,
+      "n99": 69,
+      "total_var": 710.1146595452276
+    },
+    "probes": {
+      "outcome": {
+        "accuracy": 0.9004137115839244,
+        "majority_accuracy": 0.8921394799054374,
+        "n_train": 26418,
+        "n_test": 6768,
+        "auc": 0.8815172855023209
+      },
+      "teacher_action": {
+        "accuracy": 0.34544917257683216,
+        "majority_accuracy": 0.3113179669030733,
+        "n_train": 26418,
+        "n_test": 6768
+      }
+    }
+  },
+  "layers": {
+    "slots": {
+      "spectrum": {
+        "width": 1280,
+        "participation_ratio": 111.74345117028179,
+        "pr_frac": 0.08729957122678264,
+        "effective_rank": 696.6699356621139,
+        "stable_rank": 22.78542038564569,
+        "n90": 250,
+        "n99": 712,
+        "total_var": 603.0598665622846
+      },
+      "unit_health": {
+        "width": 1280,
+        "kind": "linear",
+        "dead_frac": 0.0
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.8940602836879432,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.8148192724616243
+        },
+        "teacher_action": {
+          "accuracy": 0.3433806146572104,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 1280,
+        "participation_ratio": 16.559502673666927,
+        "pr_frac": 0.012937111463802286,
+        "effective_rank": 419.2814586716155,
+        "stable_rank": 5.418876205325662,
+        "n90": 122,
+        "n99": 331,
+        "total_var": 332.0100981756836
+      },
+      "cka_vs_reinit": 0.5855073376721404
+    },
+    "features": {
+      "spectrum": {
+        "width": 256,
+        "participation_ratio": 22.511576629194458,
+        "pr_frac": 0.08793584620779085,
+        "effective_rank": 186.83257915175878,
+        "stable_rank": 6.001407046008846,
+        "n90": 103,
+        "n99": 206,
+        "total_var": 324.05669698213643
+      },
+      "unit_health": {
+        "width": 256,
+        "kind": "relu",
+        "dead_frac": 0.02734375,
+        "mean_duty_cycle": 0.40371386842343154
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9185874704491725,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.9082121449994782
+        },
+        "teacher_action": {
+          "accuracy": 0.30998817966903075,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 256,
+        "participation_ratio": 18.419161810699716,
+        "pr_frac": 0.07194985082304577,
+        "effective_rank": 169.98981476531617,
+        "stable_rank": 6.344562525802175,
+        "n90": 83,
+        "n99": 184,
+        "total_var": 8.330210291657528
+      },
+      "cka_vs_reinit": 0.4653508305166425
+    },
+    "pi_a1": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 14.27197222965362,
+        "pr_frac": 0.22299956608833782,
+        "effective_rank": 51.61809551617433,
+        "stable_rank": 4.803392413578337,
+        "n90": 36,
+        "n99": 54,
+        "total_var": 30.473735311336362
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.25,
+        "saturation_rate": 0.4415364347917797
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9066193853427896,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.8869608915226397
+        },
+        "teacher_action": {
+          "accuracy": 0.2993498817966903,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 14.785033876756607,
+        "pr_frac": 0.231016154324322,
+        "effective_rank": 52.044674368539376,
+        "stable_rank": 5.471231316032386,
+        "n90": 32,
+        "n99": 57,
+        "total_var": 0.6318292042764033
+      },
+      "cka_vs_reinit": 0.33387867924180764
+    },
+    "pi_a2": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 9.765142519391507,
+        "pr_frac": 0.1525803518654923,
+        "effective_rank": 48.528174956997226,
+        "stable_rank": 3.86539844100863,
+        "n90": 30,
+        "n99": 55,
+        "total_var": 24.317385819926855
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.03125,
+        "saturation_rate": 0.1281616306575062
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9078014184397163,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.8786008249125402
+        },
+        "teacher_action": {
+          "accuracy": 0.30407801418439717,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 13.197177578638536,
+        "pr_frac": 0.20620589966622713,
+        "effective_rank": 42.70776695467739,
+        "stable_rank": 5.263811783346992,
+        "n90": 22,
+        "n99": 43,
+        "total_var": 0.19472920475620037
+      },
+      "cka_vs_reinit": 0.2661394106755777
+    },
+    "vf_a1": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 3.004581652743742,
+        "pr_frac": 0.04694658832412097,
+        "effective_rank": 32.21980942587313,
+        "stable_rank": 1.7700189753884334,
+        "n90": 16,
+        "n99": 31,
+        "total_var": 12.933196125955389
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.734375,
+        "saturation_rate": 0.7350586467184957
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9184397163120568,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.924617604486653
+        },
+        "teacher_action": {
+          "accuracy": 0.30747635933806144,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 13.329649947583189,
+        "pr_frac": 0.20827578043098732,
+        "effective_rank": 51.74458019117992,
+        "stable_rank": 5.0313658927936835,
+        "n90": 32,
+        "n99": 57,
+        "total_var": 0.6692097789803418
+      },
+      "cka_vs_reinit": 0.2967024945274745
+    },
+    "vf_a2": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 2.1423234412233123,
+        "pr_frac": 0.033473803769114255,
+        "effective_rank": 31.16416236785373,
+        "stable_rank": 1.4766758521325514,
+        "n90": 10,
+        "n99": 32,
+        "total_var": 7.425630338235305
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.125,
+        "saturation_rate": 0.15733761977942506
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9190307328605201,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.9232395740220611
+        },
+        "teacher_action": {
+          "accuracy": 0.30777186761229314,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 12.184868377400806,
+        "pr_frac": 0.1903885683968876,
+        "effective_rank": 42.44625805814345,
+        "stable_rank": 4.8074427556692365,
+        "n90": 22,
+        "n99": 43,
+        "total_var": 0.2027935095127894
+      },
+      "cka_vs_reinit": 0.19349003465259218
+    },
+    "logits": {
+      "spectrum": {
+        "width": 155,
+        "participation_ratio": 3.965579912841484,
+        "pr_frac": 0.025584386534461188,
+        "effective_rank": 22.696692548035564,
+        "stable_rank": 2.1861623959742698,
+        "n90": 7,
+        "n99": 19,
+        "total_var": 25.61085976518436
+      },
+      "unit_health": {
+        "width": 155,
+        "kind": "linear",
+        "dead_frac": 0.0
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9082446808510638,
+          "majority_accuracy": 0.8921394799054374,
+          "n_train": 26418,
+          "n_test": 6768,
+          "auc": 0.8787512421331567
+        },
+        "teacher_action": {
+          "accuracy": 0.3048167848699764,
+          "majority_accuracy": 0.3113179669030733,
+          "n_train": 26418,
+          "n_test": 6768
+        }
+      },
+      "spectrum_reinit": {
+        "width": 155,
+        "participation_ratio": 12.603928944400058,
+        "pr_frac": 0.08131567060903264,
+        "effective_rank": 40.67929686688848,
+        "stable_rank": 5.4845127063292285,
+        "n90": 21,
+        "n99": 40,
+        "total_var": 0.15410696203698457
+      },
+      "cka_vs_reinit": 0.23079716775578976
+    }
+  },
+  "cka_pairs": {
+    "slots|features": 0.6149250520864967,
+    "slots|pi_a1": 0.46672768176724183,
+    "slots|pi_a2": 0.3936815337792186,
+    "slots|vf_a1": 0.25326451642055303,
+    "slots|vf_a2": 0.22816335523123626,
+    "slots|logits": 0.297732991851757,
+    "features|pi_a1": 0.8669412938986362,
+    "features|pi_a2": 0.8122959597458443,
+    "features|vf_a1": 0.7201632362688939,
+    "features|vf_a2": 0.668192367528766,
+    "features|logits": 0.7544137401826613,
+    "pi_a1|pi_a2": 0.9464835970465607,
+    "pi_a1|vf_a1": 0.66948176546894,
+    "pi_a1|vf_a2": 0.6223971770837022,
+    "pi_a1|logits": 0.8737043029574024,
+    "pi_a2|vf_a1": 0.6637557973818966,
+    "pi_a2|vf_a2": 0.6210542708463175,
+    "pi_a2|logits": 0.9448933414488303,
+    "vf_a1|vf_a2": 0.9803871540553292,
+    "vf_a1|logits": 0.6910406529633992,
+    "vf_a2|logits": 0.6521187223191238
+  }
+}
