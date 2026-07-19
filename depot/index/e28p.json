@@ -1,0 +1,40 @@
+{
+  "name": "e28p",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-19T20:01:59+00:00",
+      "git_commit": "f706943",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish e28p runs/e28p_s0.zip runs/e28p_s1.zip runs/e28p_s2.zip --kind model --note E28 pointer action head - reactive recipe of record. Trained via 'locma train-zoo --pointer-head' at the exact b0k recipe (token V0, lr=1e-4, target_kl=0.025, dropout=0.1, n_envs=16, 5-phase zoo x 200k = 1M steps), seeds 0/1/2. PointerMaskablePolicy (locma/envs/pointer_head.py). --meta {\"avg_hard3_reactive_pair\": 0.8653, \"avg_hard3_lens_stack\": 0.908, \"gate2_delta\": 0.0729, \"stack_vs_ror_delta\": 0.0593, \"boardkeep_wr_vs_stack\": 0.221} --parent b0k@1",
+      "parents": [
+        "b0k@1"
+      ],
+      "note": "E28 pointer action head - reactive recipe of record. Trained via 'locma train-zoo --pointer-head' at the exact b0k recipe (token V0, lr=1e-4, target_kl=0.025, dropout=0.1, n_envs=16, 5-phase zoo x 200k = 1M steps), seeds 0/1/2. PointerMaskablePolicy (locma/envs/pointer_head.py).",
+      "meta": {
+        "avg_hard3_reactive_pair": 0.8653,
+        "avg_hard3_lens_stack": 0.908,
+        "gate2_delta": 0.0729,
+        "stack_vs_ror_delta": 0.0593,
+        "boardkeep_wr_vs_stack": 0.221
+      },
+      "files": {
+        "e28p_s0.zip": {
+          "sha256": "3b30659c35a0e190b7308f7cbc284091fbed2189fc154756ff10c1695c1425f7",
+          "size": 5955730
+        },
+        "e28p_s1.zip": {
+          "sha256": "c91e2c4a19d211bd3974cd01939f9cf44524b3613f5de20d68adef9b35c4fd0d",
+          "size": 5955734
+        },
+        "e28p_s2.zip": {
+          "sha256": "bd587c51cdd7445e3920901e7b5c04469c1a7cbcebb885afc2f1e20cb93a4de5",
+          "size": 5955730
+        }
+      },
+      "published": "gh:depot/e28p-v1"
+    }
+  ]
+}

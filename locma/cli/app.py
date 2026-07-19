@@ -480,10 +480,17 @@ def train_zoo_cmd(
         help="shared draft variant: picks deplete the offer, first pick alternates "
         "by round (asymmetric decks)",
     ),
+    pointer_head: bool = typer.Option(
+        False,
+        "--pointer-head",
+        help="E28 pointer action head over slot tokens (token obs_mode only)",
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
     [ml] extra."""
+    if pointer_head and not obs_mode.startswith("token"):
+        raise typer.BadParameter("--pointer-head requires a token obs_mode")
     if steps_per_opponent < 1:
         raise typer.BadParameter("steps-per-opponent must be >= 1")
     if n_envs < 1:
@@ -522,6 +529,7 @@ def train_zoo_cmd(
             tensorboard_log=tensorboard_log,
             draft_noise=draft_noise,
             shared_draft=shared_draft,
+            pointer_head=pointer_head,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

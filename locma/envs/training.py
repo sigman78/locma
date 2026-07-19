@@ -170,11 +170,16 @@ def _make_model(
     device: str = "auto",
     extractor_kwargs: dict | None = None,
     tensorboard_log: str | None = None,
+    pointer_head: bool = False,
 ):
     """Construct a MaskablePPO model, selecting the policy class by obs_mode.
 
     All PPO knobs are explicit so a sweep can set them; defaults match SB3's own
     defaults, so an unset knob reproduces the pre-sweep behavior byte-for-byte.
+
+    ``pointer_head`` (token obs_mode only): swap the dense ``action_net`` for
+    the E28 pointer action head (``PointerMaskablePolicy``) — each action logit
+    computed from the slot tokens of the cards that action involves.
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
@@ -202,8 +207,14 @@ def _make_model(
         pk = dict(features_extractor_class=TokenSetExtractor)
         if extractor_kwargs:
             pk["features_extractor_kwargs"] = dict(extractor_kwargs)
+        if pointer_head:
+            from locma.envs.pointer_head import PointerMaskablePolicy  # noqa: PLC0415
+
+            return MaskablePPO(PointerMaskablePolicy, env, policy_kwargs=pk, **common)
         return MaskablePPO("MultiInputPolicy", env, policy_kwargs=pk, **common)
 
+    if pointer_head:
+        raise ValueError("pointer_head requires a token obs_mode")
     # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
     return MaskablePPO("MlpPolicy", env, **common)
 
@@ -506,6 +517,7 @@ def train_zoo(
     draft_noise: int = 0,
     shared_draft: bool = False,
     draft_override: str | None = None,
+    pointer_head: bool = False,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -575,6 +587,7 @@ def train_zoo(
         device=device,
         extractor_kwargs=extractor_kwargs,
         tensorboard_log=tensorboard_log,
+        pointer_head=pointer_head,
     )
     try:
         for i, opp in enumerate(opps):
