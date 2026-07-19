@@ -68,6 +68,32 @@ MIXING_UNNECESSARY). The BC-cap break is pure structural slot access.
 Scope: the context path (latent_pi) still used the full trunk; a
 transformer-free TRUNK is a retrain question, folded into E29 below.
 
+### E28c — feature completion: play-effect columns (PREREQUISITE for E29)
+
+Census (2026-07-19): **44/160 cards — including 7 of 8 blue items — have
+play effects (player_hp / enemy_hp / card_draw) that are NOT in the 17
+numeric token features.** The only path to that information is the card-id
+embedding, which measurably never trains (encoder-viz: 0.997 cross-net
+correlation with init, probes at chance). The net is blind to burn/heal/
+draw semantics except via cost/type/stat correlations — a confound inside
+the item-underuse mechanism (E27 probed can_item ACCESS, not effect
+KNOWLEDGE) and an unfair handicap for any slim-extractor comparison.
+
+Fix: opt-in token variant `fx` (`obs_mode="token-fx"`, TOKEN_FEATS_FX=20)
+appends the 3 effect columns for HAND cards (board slots zero — effects are
+spent on play); scalars stay v0; extractor reads token width from the obs
+space; play-time consumers detect the variant via
+`encode.token_variant_for_space` (scalar width alone can no longer
+disambiguate). Default paths byte-identical.
+
+- Gate (CPU-minutes): E28b-protocol BC — raw gather vs raw+fx gather.
+  Asymmetric read: a positive on item behavior fast-tracks; a null does NOT
+  kill (BC against a search teacher cannot price consequence value — the
+  known residual). The real test is PPO.
+- Bench: pointer-head retrain at the e28p recipe with token-fx, paired
+  ruler vs the e28p RoR pair + boardkeep guard-rail (gate-2 protocol).
+  E29 arms then build on whichever obs variant wins.
+
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
 Fixes the measured pathology (first-layer saturation with LOW PR), likely a

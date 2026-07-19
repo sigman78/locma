@@ -78,7 +78,7 @@ class BattleEnv(gym.Env):
         shared_draft: bool = False,
     ) -> None:
         super().__init__()
-        _VALID_OBS_MODES = {"flat", "token", "token-v1"}
+        _VALID_OBS_MODES = {"flat", "token", "token-v1", "token-fx"}
         if obs_mode not in _VALID_OBS_MODES:
             raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
         self.obs_mode = obs_mode
@@ -113,8 +113,10 @@ class BattleEnv(gym.Env):
     # ------------------------------------------------------------------
 
     def _obs_variant(self) -> str:
-        """Map self.obs_mode to the token encoder variant ("v0"/"v1")."""
-        return "v1" if self.obs_mode == "token-v1" else "v0"
+        """Map self.obs_mode to the token encoder variant ("v0"/"v1"/"fx")."""
+        if self.obs_mode == "token-v1":
+            return "v1"
+        return "fx" if self.obs_mode == "token-fx" else "v0"
 
     def _encode_obs(self):
         """Build the current observation according to self.obs_mode."""
