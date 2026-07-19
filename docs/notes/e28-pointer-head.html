@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E28 — pointer action head: architecture and verdict</title>
+<style>
+  :root {
+    --ground: #EEF1EF;
+    --panel: #FBFCFB;
+    --ink: #1A2420;
+    --ink-soft: #46534D;
+    --hair: #D5DCD8;
+    --petrol: #136A6E;
+    --petrol-soft: #cfe2e2;
+    --brass: #9A8F65;
+    --alarm: #B54A32;
+    --alarm-tint: #F4E4DF;
+    --slate: #5B7A99;
+    --slate-tint: #E2E8EE;
+    --umber: #A2652F;
+    --gray: #6B7A74;
+    --ok: #2E6B46;
+    --ok-tint: #DFEDE4;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body { margin: 0; font-family: var(--sans); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 28px 72px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px;
+  }
+  h1 { font-size: 34px; line-height: 1.15; margin: 0 0 12px; letter-spacing: -.01em;
+       text-wrap: balance; font-weight: 650; }
+  h1 .yes { color: var(--petrol); }
+  .dek { max-width: 66ch; color: var(--ink-soft); margin: 0 0 22px; }
+  .dek code, .method code, .sub code, td code, .readout code {
+    font-family: var(--mono); font-size: .88em; background: #E3E8E5;
+    padding: 1px 5px; border-radius: 3px;
+  }
+
+  .criteria { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 34px; }
+  .crit {
+    flex: 1 1 280px; background: var(--panel); border: 1px solid var(--hair);
+    border-radius: 6px; padding: 12px 14px 11px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .crit .tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    align-self: flex-start; padding: 2px 8px; border-radius: 3px;
+  }
+  .crit.was .tag { background: #E3E8E5; color: var(--ink-soft); }
+  .crit.met .tag { background: var(--ok-tint); color: var(--ok); }
+  .crit .v { font-family: var(--mono); font-size: 27px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .crit.met .v { color: var(--petrol); }
+  .crit.was .v { color: var(--ink-soft); }
+  .crit .a { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
+  .crit .a b { color: var(--ink); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 6px;
+    padding: 16px 18px 12px; min-width: 0;
+  }
+  .panel.wide { grid-column: 1 / -1; }
+  .panel h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+  .panel .sub { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.4; max-width: 88ch; }
+  .panel .chartbox { overflow-x: auto; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .panel .note {
+    font-size: 12px; color: var(--alarm); background: var(--alarm-tint);
+    border-radius: 4px; padding: 6px 10px; margin-top: 8px; font-family: var(--mono);
+  }
+  .panel .foot { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; line-height: 1.45; }
+
+  svg text { font-family: var(--mono); fill: var(--ink-soft); }
+  svg .num { font-variant-numeric: tabular-nums; }
+
+  /* segmented controls (family tabs + head toggle) */
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 4px 0 14px; }
+  .seg { display: flex; border: 1px solid var(--hair); border-radius: 5px; overflow: hidden; background: var(--panel); }
+  .seg button {
+    font-family: var(--mono); font-size: 12px; padding: 7px 13px; border: 0;
+    background: transparent; color: var(--ink-soft); cursor: pointer; border-right: 1px solid var(--hair);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--petrol); color: #fff; }
+  .seg button:focus-visible, .chip:focus-visible { outline: 2px solid var(--petrol); outline-offset: 1px; }
+  .seglbl { font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); }
+
+  /* explorer: board row on top, wiring diagram below — nothing shares a column */
+  .expl-grid { display: flex; flex-direction: column; gap: 18px; }
+  .expl-grid .diagram { max-width: 780px; }
+  .board-row { display: flex; gap: 34px; flex-wrap: wrap; align-items: flex-start; }
+  .board-row .readout { flex: 1 1 300px; margin-top: 2px; }
+  .board { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
+  .zone { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .zone .zl { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--gray); width: 66px; flex: none; text-align: right; padding-right: 2px; }
+  .chip {
+    position: relative; width: 62px; height: 56px; border-radius: 5px; border: 1px solid var(--hair);
+    background: var(--panel); color: var(--ink); font-family: var(--mono); cursor: default;
+    padding: 4px 5px; display: flex; flex-direction: column; justify-content: space-between; text-align: left;
+  }
+  .chip .k { font-size: 9px; color: var(--gray); letter-spacing: .04em; }
+  .chip .s { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .chip.empty { border-style: dashed; background: transparent; }
+  .chip.empty .k { color: #B9C2BC; }
+  .chip.face { width: 108px; }
+  .chip.itemG { background: #E7EFE7; border-color: #B9CDB9; }
+  .chip.itemR { background: #F2E6E1; border-color: #D6B4A8; }
+  .chip.itemB { background: #E4EAF1; border-color: #B3C2D4; }
+  .chip.pickable { cursor: pointer; border-color: #A9B6AF; }
+  .chip.pickable:hover { border-color: var(--petrol); }
+  .chip.src { border-color: var(--petrol); box-shadow: 0 0 0 2px var(--petrol-soft); }
+  .chip.tgt { border-color: var(--slate); box-shadow: 0 0 0 2px var(--slate-tint); }
+  .chip .tag { position: absolute; top: -8px; right: -5px; font-size: 8.5px; letter-spacing: .06em;
+    padding: 1px 5px; border-radius: 3px; color: #fff; font-weight: 600; font-family: var(--mono); }
+  .chip .tag.tsrc { background: var(--petrol); }
+  .chip .tag.ttgt { background: var(--slate); }
+  .readout {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--ink-soft);
+    border-left: 2px solid var(--hair); padding-left: 12px; margin-top: 12px;
+  }
+  .readout b { color: var(--ink); font-weight: 600; }
+  .readout .warn { color: var(--alarm); }
+
+  /* layer tables */
+  .tblbox { overflow-x: auto; border: 1px solid var(--hair); border-radius: 6px; background: var(--panel); }
+  table.layers { border-collapse: collapse; font-family: var(--mono); font-size: 12px; width: 100%; }
+  table.layers th, table.layers td { padding: 5px 10px; white-space: nowrap; }
+  table.layers th { font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--hair);
+    font-size: 11px; text-align: left; }
+  table.layers th:last-child, table.layers td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  table.layers td { border-bottom: 1px solid #E8ECEA; vertical-align: top; }
+  table.layers tr:last-child td { border-bottom: 0; }
+  table.layers td .n { color: var(--ink-soft); white-space: normal; font-size: 11px; }
+  table.layers td.shape { white-space: normal; min-width: 210px; }
+  table.layers tr.hd td:first-child { color: var(--petrol); font-weight: 600; }
+  table.layers tr.dense td:first-child { color: var(--slate); font-weight: 600; }
+
+  #tip {
+    position: fixed; pointer-events: none; background: var(--ink); color: #F2F5F3;
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.5; padding: 7px 10px;
+    border-radius: 4px; opacity: 0; transition: opacity .08s linear; z-index: 20; white-space: pre;
+  }
+  @media (prefers-reduced-motion: reduce) { #tip { transition: none; } .chip { transition: none; } }
+  @media (prefers-reduced-motion: no-preference) { .chip, .seg button { transition: border-color .1s, box-shadow .1s; } }
+
+  .method {
+    margin-top: 30px; border-top: 1px solid var(--hair); padding-top: 18px;
+    font-size: 12.5px; color: var(--ink-soft); columns: 2; column-gap: 36px;
+  }
+  .method p { margin: 0 0 10px; break-inside: avoid; }
+  .method b { color: var(--ink); }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+    .method { columns: 1; }
+    h1 { font-size: 27px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">E28 · reactive-limits program · pointer action head · promoted 2026-07-19</p>
+    <h1>The dense action head <span class="yes">was</span> the bottleneck.</h1>
+    <p class="dek">
+      The reactive net read all 155 action logits off one 64-number tower latent
+      (<code>action_net</code>, Linear 64&rarr;155) — so per-card information had to survive
+      flatten(1280) &rarr; fuse(256) &rarr; tower(64) to reach "its" logit. E27 measured the damage:
+      <code>can_item</code> decodes at 0.98 from the raw observation, 0.61 from the towers.
+      E28 replaces that layer with a pointer head — each logit computed <b>from the slot tokens of
+      the cards that action involves</b> — trained at the exact b0k recipe
+      (<code>locma train-zoo --pointer-head</code>, <code>PointerMaskablePolicy</code>).
+      First architecture win after seven training-side nulls; recipe of record on both reactive rungs.
+    </p>
+    <div class="criteria">
+      <div class="crit was">
+        <span class="tag">Prior reactive RoR — dense head</span>
+        <span class="v num">0.791</span>
+        <span class="a"><code>ppo:b0k_sX,ldraft_sX</code> — the b0k trio at the learned draft (E18b/E11).
+        The lens-guarded b0k stack sat at <b>~0.849</b>.</span>
+      </div>
+      <div class="crit met">
+        <span class="tag">New reactive RoR — no guards</span>
+        <span class="v num">0.865</span>
+        <span class="a"><code>ppo:depot:e28p/e28p_sX.zip,ldraft_sX</code> — the pure pointer net
+        already <b>beats the prior guarded record</b>. Gate-2 headroom +0.073, confirm +0.069.</span>
+      </div>
+      <div class="crit met">
+        <span class="tag">New guarded RoR — lens over pointer</span>
+        <span class="v num">0.908</span>
+        <span class="a"><code>lppo:e28p s0|s1|s2,ldraft_sX</code> — new reactive summit, above the
+        0.890 single-critic planner ceiling, 0.018 below the ensemble planner RoR at ~3&times; lower cost.</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <div class="panel wide">
+      <h2>How one logit is computed — pick an action</h2>
+      <p class="sub">Choose a family, click cards on the mock board (or hover the 155-logit strip),
+      then flip between the two heads. Petrol wiring = the source-card token gathered for the selected
+      action; slate = the target-card token.</p>
+      <div class="controls">
+        <span class="seglbl">family</span>
+        <div class="seg" id="famTabs"></div>
+        <span class="seglbl">head</span>
+        <div class="seg" id="headToggle"></div>
+      </div>
+      <div class="expl-grid">
+        <div class="board-row">
+          <div class="board" id="board"></div>
+          <div class="readout" id="readout"></div>
+        </div>
+        <div class="chartbox diagram"><svg id="headSvg" viewBox="0 0 640 470" role="img" aria-label="head wiring diagram"></svg></div>
+      </div>
+      <p class="foot">Slot layout is fixed and semantic: tokens 0&ndash;7 hand, 8&ndash;13 my board,
+      14&ndash;19 op board; slot 20 is a virtual all-zeros row for "no source / no target" (Pass, face
+      attacks, untargeted items). Indices: Pass = 0 · Summon = 1+s · Use = 9 + s&middot;13 + tc
+      (tc 0&ndash;5 my board, 6&ndash;11 op board, 12 none/face) · Attack = 113 + a&middot;7 + tc
+      (tc 0&ndash;5 op board, 6 face). Greyed strip cells are illegal in this mock state — the action
+      mask zeroes them either way; the head computes every logit the same way.</p>
+    </div>
+
+    <div class="panel wide">
+      <h2>The network, before and after</h2>
+      <p class="sub">Layer stack shared by b0k and e28p (gray), diverging only at the action head:
+      the dense <code>Linear 64&rarr;155</code> (slate, before) reads latent_pi alone; the pointer head
+      (petrol, after) additionally taps the transformer's per-slot output <b>z</b> through a forward
+      hook — per-card information reaches its logit without passing the flatten&rarr;fuse&rarr;tower
+      funnel. The value path is untouched.</p>
+      <div class="chartbox"><svg id="stackSvg" viewBox="0 0 1040 640" role="img" aria-label="layer stack before and after"></svg></div>
+    </div>
+
+    <div class="panel wide">
+      <h2>Shared trunk — identical in b0k and e28p</h2>
+      <p class="sub"><code>TokenSetExtractor</code> + towers; the b0k recipe is reused exactly
+      (token V0, lr 1e-4, target_kl 0.025, dropout 0.1, 5-phase zoo &times; 200k = 1M steps).</p>
+      <div class="tblbox"><table class="layers">
+        <tr><th>layer</th><th>out shape</th><th>params</th></tr>
+        <tr><td>obs</td><td class="shape">tokens (20,17) · card_ids (20) · token_mask (20) · scalars (13)</td><td>–</td></tr>
+        <tr><td>id_embed</td><td class="shape">(20,16) <span class="n">Embedding(161,16), pad 0</span></td><td>2,576</td></tr>
+        <tr><td>proj + token_ln</td><td class="shape">(20,64) <span class="n">Linear(33&rarr;64), LayerNorm</span></td><td>2,304</td></tr>
+        <tr><td>pos_embed</td><td class="shape">(1,20,64) <span class="n">learned per-slot, init 0 — keeps slot identity</span></td><td>1,280</td></tr>
+        <tr><td>transformer &times;2</td><td class="shape">(20,64) <span class="n">4 heads, ff 128, dropout 0.1, key-padding mask — this per-slot output <b>z</b> is what the pointer head reads</span></td><td>66,944</td></tr>
+        <tr><td>flatten</td><td class="shape">(1280) <span class="n">slot s at offset [s&middot;64 : (s+1)&middot;64]</span></td><td>–</td></tr>
+        <tr><td>scalar_mlp</td><td class="shape">(64) <span class="n">LayerNorm(13), Linear(13&rarr;64), ReLU</span></td><td>922</td></tr>
+        <tr><td>fuse head</td><td class="shape">(256) <span class="n">Linear(1344&rarr;256), ReLU</span></td><td>344,320</td></tr>
+        <tr><td>pi tower</td><td class="shape">(64) <span class="n">256&rarr;64 tanh &rarr; 64&rarr;64 tanh = latent_pi</span></td><td>20,608</td></tr>
+        <tr><td>vf tower + value_net</td><td class="shape">(1) <span class="n">same-shape tower, Linear(64&rarr;1)</span></td><td>20,673</td></tr>
+      </table></div>
+    </div>
+
+    <div class="panel wide">
+      <h2>The action head — dense vs pointer</h2>
+      <p class="sub">The only architectural difference between b0k and e28p.</p>
+      <div class="tblbox"><table class="layers">
+        <tr><th>layer</th><th>out shape</th><th>params</th></tr>
+        <tr class="dense"><td>dense action_net</td><td class="shape">(155) <span class="n">Linear(64&rarr;155); logit_a = w_a&middot;latent_pi + b_a — all 155 rows read the <b>same</b> 64 numbers</span></td><td>10,075</td></tr>
+        <tr class="hd"><td>pointer: gather</td><td class="shape">(155,128) <span class="n">z padded with zero row 20; per-action src/tgt slot lookup — fixed buffers, no params</span></td><td>0</td></tr>
+        <tr class="hd"><td>pointer: concat</td><td class="shape">(155,196) <span class="n">[ z_src 64 | z_tgt 64 | latent_pi 64 | family one-hot 4 ]</span></td><td>–</td></tr>
+        <tr class="hd"><td>pointer: mlp</td><td class="shape">(155,1)&rarr;(155) <span class="n">Linear(196&rarr;128), ReLU, Linear(128&rarr;1) — ONE shared MLP batched over all actions; final layer orthogonal gain 0.01, matching SB3's near-uniform init</span></td><td>25,345</td></tr>
+      </table></div>
+      <p class="foot">Head params 10k &rarr; 25k, but width is not the mechanism: gate 1's
+      capacity-matched control (fresh dense MLP 64&rarr;113&rarr;155, ~25.0k params) gains nothing
+      over the plain dense head. The gain is structural slot access.</p>
+    </div>
+
+    <div class="panel wide">
+      <h2>Verdicts — headroom on every pre-registered ruler, replicated fresh</h2>
+      <p class="sub">Paired 40&times;25 avg-hard3 deltas, 95% CI; each full verdict replicated on a
+      disjoint fresh anchor range. "Guarded RoR" = the E26 lens over the b0k trio, the strongest
+      previous reactive config. The pre-registered headroom bar is +0.03.</p>
+      <div class="chartbox"><div id="chartCI"></div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Gate 1 — the BC-agreement cap breaks</h2>
+      <p class="sub">Held-out action agreement with the <code>mcts:100</code> teacher, seeds 0 / 1
+      per arm. All arms init from b0k_s0, extractor frozen, pi tower + head fine-tuned by masked-CE
+      behavior cloning. The ~0.37&ndash;0.39 plateau held through every prior distill attempt.</p>
+      <div class="chartbox"><div id="chartBC"></div></div>
+      <p class="foot">Item recall was a wash vs the matched control — information access was never
+      the item problem; the gain is broad targeting quality.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Boardkeep guard-rail — the exploit closes</h2>
+      <p class="sub">Boardkeep win rate vs each config (2000 mirrored games, common random numbers;
+      lower is better). The disciplined-trader archetype has exploited every reactive net since E10;
+      zoo hardening only reached 0.512 parity.</p>
+      <div class="chartbox"><div id="chartBK"></div></div>
+      <p class="foot">0.221 vs the stack is the most exploit-robust configuration ever measured on
+      this project — plausibly the same slot-targeting precision as the gate-1 agreement gain.</p>
+    </div>
+
+    <div class="panel wide">
+      <h2>Where the rungs stand — avg-hard3 at the learned draft</h2>
+      <p class="sub">The guarded pointer stack is the new reactive summit: above the single-critic
+      vbeam planner ceiling, within 0.02 of the 3-critic ensemble planner recipe, at ~0.26 s/game
+      (~3&times; cheaper than the planner, ~25&times; cheaper than rbeam).</p>
+      <div class="chartbox"><div id="chartLadder"></div></div>
+      <div class="note">What did NOT move: items. E27 probes, gate-1 BC and gate-2 PPO all agree —
+      item underuse is consequence valuation (E14a turn-level branching), not access. E30 territory.</div>
+    </div>
+
+  </div>
+
+  <div class="method">
+    <p><b>Mechanism.</b> Gate 1 (BC, frozen extractor, capacity-matched control): the pointer head
+    breaks the imitation plateau at matched trainable params — 0.423/0.436 agreement vs
+    0.390&ndash;0.392 for a params-matched dense MLP head, both seeds. The gain is NOT concentrated
+    in item or lethal states: slot-addressed logits improve targeting broadly (which attacker, which
+    summon). Gate 2 converted it to play strength at the identical training recipe, so the dense
+    head was a genuine bottleneck, not a BC artifact.</p>
+    <p><b>Plumbing.</b> <code>PointerMaskablePolicy</code> builds the standard
+    <code>MaskableMultiInputActorCriticPolicy</code>, then swaps <code>action_net</code> for
+    <code>PointerActionNet</code>. A forward hook on <code>features_extractor.transformer</code>
+    caches the (B,20,64) per-slot output; the head reads it through a closure, so
+    <code>forward(latent_pi)</code> keeps the exact <code>action_net</code> signature and SB3's
+    distribution plumbing is untouched. The optimizer is rebuilt over the final parameter set
+    (the one built by <code>_build()</code> still references the discarded dense head). Save/load
+    round-trips through normal SB3 machinery — e28p checkpoints load with the ordinary
+    <code>ppo:</code> registry spec.</p>
+    <p><b>Items, three instruments.</b> E27: <code>can_item</code> representation decays down the
+    trunk but the head gain does not come from item states. Gate 1: item recall a wash vs control
+    (0.289/0.277 vs 0.295/0.282). Gate 2: item rate per opportunity 0.144/0.214 vs b0k's 0.171 — a
+    seed split, not a mechanism. Item plays pay off across the turn's branching; a single forward
+    pass never simulates that. The autoregressive turn-plan head (E30) is aimed at exactly this
+    residual; E29 (trunk conditioning) is the other open lever toward the pure-net 0.890 milestone.</p>
+    <p><b>Provenance.</b> Branch <code>feat/e28-pointer-head</code>, PR #87. Code:
+    <code>locma/envs/pointer_head.py</code> (head + policy), <code>locma/envs/extractor.py</code>
+    (trunk). Artifact <code>depot:e28p</code> v1 (gh:depot/e28p-v1, parent <code>b0k@1</code>),
+    seeds 0/1/2. Verdicts: <code>runs/netprobe/e28_gate2_summary.json</code>,
+    <code>e28_stack_summary.json</code>; worklog <code>docs/worklog/2026-07.md</code> 2026-07-19;
+    recipes of record in <code>docs/baseline.md</code>.</p>
+  </div>
+</div>
+<div id="tip" role="presentation"></div>
+
+<script>
+"use strict";
+/* ---------- action table (mirrors locma/envs/pointer_head.py) ---------- */
+const ACTION_SIZE=155, NONE=20, USE_LO=9, USE_HI=113;
+const FAMS=["pass","summon","use","attack"];
+const SRC=new Array(ACTION_SIZE).fill(NONE), TGT=new Array(ACTION_SIZE).fill(NONE),
+      FAM=new Array(ACTION_SIZE).fill(0);
+for(let i=1;i<9;i++){SRC[i]=i-1;FAM[i]=1;}
+for(let i=USE_LO;i<USE_HI;i++){
+  const s=Math.floor((i-USE_LO)/13), tc=(i-USE_LO)%13;
+  SRC[i]=s;FAM[i]=2;
+  if(tc<6)TGT[i]=8+tc; else if(tc<12)TGT[i]=14+(tc-6);
+}
+for(let i=USE_HI;i<ACTION_SIZE;i++){
+  const a=Math.floor((i-USE_HI)/7), tc=(i-USE_HI)%7;
+  SRC[i]=8+a;FAM[i]=3;
+  if(tc<6)TGT[i]=14+tc;
+}
+
+/* ---------- palette (netprobe house tokens) ---------- */
+const INK="#1A2420", SOFT="#46534D", GRAY="#6B7A74", HAIR="#D5DCD8",
+      PETROL="#136A6E", PETROL_SOFT="#cfe2e2", SLATE="#5B7A99", SLATE_TINT="#E2E8EE",
+      BRASS="#9A8F65", ALARM="#B54A32", UMBER="#A2652F", OK="#2E6B46", PANEL="#FBFCFB";
+const famColor={pass:GRAY,summon:OK,use:UMBER,attack:ALARM};
+const MONO="Cascadia Mono,Consolas,Menlo,monospace";
+
+/* ---------- mock game state ---------- */
+const hand=[
+  {t:"C",cost:2,atk:3,def:2},{t:"C",cost:4,atk:5,def:4},{t:"G",cost:2,txt:"+2/+2"},
+  {t:"C",cost:1,atk:2,def:1},{t:"R",cost:3,txt:"-2/-2"},{t:"B",cost:2,txt:"face 4"},
+  {t:"C",cost:6,atk:6,def:5,kw:"G"},null];
+const myb=[{atk:3,def:2},{atk:5,def:4,kw:"G"},{atk:2,def:1},null,null,null];
+const opb=[{atk:4,def:4,kw:"G"},{atk:3,def:3},{atk:1,def:6,kw:"W"},null,null,null];
+
+function legal(a){
+  const f=FAM[a],s=SRC[a];
+  if(f===0)return true;
+  if(f===1)return !!(hand[s]&&hand[s].t==="C");
+  if(f===2){
+    const c=hand[s]; if(!c||c.t==="C")return false;
+    const tc=(a-USE_LO)%13;
+    if(c.t==="G")return tc<6&&!!myb[tc];
+    if(c.t==="R")return tc>=6&&tc<12&&!!opb[tc-6];
+    return tc===12;                       /* blue: face */
+  }
+  const tc=(a-USE_HI)%7;
+  return !!(myb[s-8]&&(tc===6||opb[tc]));
+}
+
+let sel={fam:"use",a:USE_LO+4*13+7};      /* use hand[4] on op board 1 */
+let headMode="pointer";
+const defaults={pass:0, summon:1, use:USE_LO+4*13+7, attack:USE_HI};
+
+/* ---------- board ---------- */
+const boardEl=document.getElementById("board");
+function chipLabel(c,zone){
+  if(!c)return "<span class='k'>empty</span>";
+  if(zone==="hand"){
+    if(c.t==="C")return `<span class='k'>creature · ${c.cost}m${c.kw?" · "+c.kw:""}</span><span class='s'>${c.atk}/${c.def}</span>`;
+    const n={G:"green item",R:"red item",B:"blue item"}[c.t];
+    return `<span class='k'>${n} · ${c.cost}m</span><span class='s'>${c.txt}</span>`;
+  }
+  return `<span class='k'>creature${c.kw?" · "+c.kw:""}</span><span class='s'>${c.atk}/${c.def}</span>`;
+}
+function renderBoard(){
+  const f=sel.fam, a=sel.a, src=SRC[a], tgt=TGT[a];
+  const rows=[
+    {label:"op face", zone:"face"},
+    {label:"op board", zone:"op", cards:opb, base:14},
+    {label:"my board", zone:"my", cards:myb, base:8},
+    {label:"my hand", zone:"hand", cards:hand, base:0},
+  ];
+  let h="";
+  for(const r of rows){
+    h+=`<div class="zone"><div class="zl">${r.label}</div>`;
+    if(r.zone==="face"){
+      const blueSel=f==="use"&&hand[SRC[a]]&&hand[SRC[a]].t==="B";
+      const isTgt=(f==="attack"&&FAM[a]===3&&tgt===NONE)||(blueSel&&(a-USE_LO)%13===12);
+      const pick=f==="attack"||blueSel;
+      h+=`<button class="chip face${isTgt?" tgt":""}${pick?" pickable":""}" data-face="1">
+        ${isTgt?"<span class='tag ttgt'>TGT</span>":""}
+        <span class="k">opponent</span><span class="s">30 hp</span></button>`;
+    }else{
+      r.cards.forEach((c,i)=>{
+        const slot=r.base+i;
+        let cls="chip"; if(!c)cls+=" empty";
+        if(c&&r.zone==="hand"&&c.t!=="C")cls+=" item"+c.t;
+        let pick=false;
+        if(c){
+          if(f==="summon"&&r.zone==="hand"&&c.t==="C")pick=true;
+          if(f==="use"&&r.zone==="hand"&&c.t!=="C")pick=true;
+          if(f==="use"&&hand[SRC[a]]){
+            const it=hand[SRC[a]].t;
+            if(it==="G"&&r.zone==="my")pick=true;
+            if(it==="R"&&r.zone==="op")pick=true;
+          }
+          if(f==="attack"&&(r.zone==="my"||r.zone==="op"))pick=true;
+        }
+        const isSrc=slot===src, isTgt=slot===tgt;
+        if(isSrc)cls+=" src"; if(isTgt)cls+=" tgt"; if(pick)cls+=" pickable";
+        h+=`<button class="${cls}" data-slot="${slot}" ${c?"":"tabindex='-1'"}>
+          ${isSrc?"<span class='tag tsrc'>SRC</span>":""}${isTgt?"<span class='tag ttgt'>TGT</span>":""}
+          ${chipLabel(c,r.zone)}</button>`;
+      });
+    }
+    h+="</div>";
+  }
+  boardEl.innerHTML=h;
+}
+boardEl.addEventListener("click",e=>{
+  const chip=e.target.closest(".chip"); if(!chip)return;
+  const f=sel.fam;
+  if(chip.dataset.face){
+    if(f==="attack"){const src=SRC[sel.a];sel.a=USE_HI+(src-8)*7+6;}
+    if(f==="use"){const s=SRC[sel.a];if(hand[s]&&hand[s].t==="B")sel.a=USE_LO+s*13+12;}
+    update();return;
+  }
+  const slot=+chip.dataset.slot, c=slot<8?hand[slot]:slot<14?myb[slot-8]:opb[slot-14];
+  if(!c)return;
+  if(f==="summon"&&slot<8&&c.t==="C")sel.a=1+slot;
+  else if(f==="use"){
+    if(slot<8&&c.t!=="C"){ /* new src item -> default legal target */
+      const tc=c.t==="G"?myb.findIndex(x=>x):c.t==="R"?6+opb.findIndex(x=>x):12;
+      sel.a=USE_LO+slot*13+tc;
+    }else{
+      const s=SRC[sel.a], it=hand[s]&&hand[s].t;
+      if(it==="G"&&slot>=8&&slot<14)sel.a=USE_LO+s*13+(slot-8);
+      if(it==="R"&&slot>=14)sel.a=USE_LO+s*13+6+(slot-14);
+    }
+  }
+  else if(f==="attack"){
+    if(slot>=8&&slot<14){const tc=(sel.a-USE_HI)%7;sel.a=USE_HI+(slot-8)*7+tc;}
+    if(slot>=14){const src=SRC[sel.a];sel.a=USE_HI+(src-8)*7+(slot-14);}
+  }
+  update();
+});
+
+/* ---------- controls ---------- */
+const famTabs=document.getElementById("famTabs");
+for(const f of FAMS){
+  const b=document.createElement("button");
+  b.textContent=f; b.dataset.fam=f;
+  b.addEventListener("click",()=>{ sel.fam=f; sel.a=defaults[f]; update(); });
+  famTabs.appendChild(b);
+}
+const headToggle=document.getElementById("headToggle");
+for(const [key,label] of [["pointer","pointer head (e28p)"],["dense","dense head (b0k)"]]){
+  const b=document.createElement("button");
+  b.textContent=label; b.dataset.head=key;
+  b.addEventListener("click",()=>{ headMode=key; update(); });
+  headToggle.appendChild(b);
+}
+function syncButtons(){
+  famTabs.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.fam===sel.fam));
+  headToggle.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.head===headMode));
+}
+
+/* ---------- readout ---------- */
+function slotName(s){
+  if(s===NONE)return "none &rarr; zero row (slot 20)";
+  if(s<8)return `hand[${s}] &rarr; slot ${s}`;
+  if(s<14)return `my board[${s-8}] &rarr; slot ${s}`;
+  return `op board[${s-14}] &rarr; slot ${s}`;
+}
+function indexMath(a){
+  const f=FAM[a];
+  if(f===0)return "a = 0";
+  if(f===1)return `a = 1 + s = 1 + ${SRC[a]} = ${a}`;
+  if(f===2){const s=SRC[a],tc=(a-USE_LO)%13;return `a = 9 + s·13 + tc = 9 + ${s}·13 + ${tc} = ${a}`;}
+  const s=SRC[a]-8,tc=(a-USE_HI)%7;return `a = 113 + a·7 + tc = 113 + ${s}·7 + ${tc} = ${a}`;
+}
+function renderReadout(){
+  const a=sel.a, f=FAM[a];
+  const oh=[0,0,0,0]; oh[f]=1;
+  let h=`<b>action ${a}</b> · ${FAMS[f]} · ${indexMath(a)}`;
+  h+=`<br>src: ${slotName(SRC[a])} · tgt: ${slotName(TGT[a])}`;
+  h+=`<br>family one-hot [${oh.join(",")}]`;
+  if(headMode==="pointer"){
+    h+=`<br>logit(${a}) = mlp([ z<sub>${SRC[a]===NONE?"0":SRC[a]}</sub> | z<sub>${TGT[a]===NONE?"0":TGT[a]}</sub> | latent_pi | fam ]) — 196 &rarr; 128 &rarr; 1`;
+  }else{
+    h+=`<br>logit(${a}) = w<sub>${a}</sub> · latent_pi + b<sub>${a}</sub> — row ${a} of the 64&times;155 matrix; card tokens only arrive via flatten(1280) &rarr; fuse(256) &rarr; tower(64)`;
+  }
+  if(!legal(a))h+=`<br><span class="warn">illegal in this mock state — masked before sampling</span>`;
+  document.getElementById("readout").innerHTML=h;
+}
+
+/* ---------- head SVG ---------- */
+const svgEl=document.getElementById("headSvg");
+function tokY(s){ /* 21 rows incl none */
+  if(s<8)return 26+s*16;
+  if(s<14)return 26+8*16+10+(s-8)*16;
+  if(s<20)return 26+8*16+10+6*16+10+(s-14)*16;
+  return 26+8*16+10+6*16+10+6*16+12;
+}
+function wire(x1,y1,x2,y2,color,w,dash){
+  const mx=(x1+x2)/2;
+  return `<path d="M${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none"
+    stroke="${color}" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:""} />`;
+}
+function box(x,y,w,h,label,sub,stroke,fill){
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${fill||PANEL}" stroke="${stroke}"/>
+    <text x="${x+w/2}" y="${y+(sub?h/2-3:h/2+4)}" text-anchor="middle" fill="${INK}" font-size="11">${label}</text>
+    ${sub?`<text x="${x+w/2}" y="${y+h/2+13}" text-anchor="middle" fill="${GRAY}" font-size="9.5">${sub}</text>`:""}`;
+}
+function stripCells(selA,y){
+  let h="";
+  const x0=120,x1=628,cw=(x1-x0)/ACTION_SIZE;
+  for(let a=0;a<ACTION_SIZE;a++){
+    const c=famColor[FAMS[FAM[a]]];
+    const on=a===selA, ok=legal(a);
+    h+=`<rect class="scell" data-a="${a}" x="${(x0+a*cw).toFixed(2)}" y="${y}" width="${Math.max(cw-0.6,1.6).toFixed(2)}"
+      height="16" fill="${c}" opacity="${on?1:ok?0.55:0.14}" ${on?`stroke="${INK}" stroke-width="1"`:""}></rect>`;
+  }
+  const segs=[["pass",0,1],["summon",1,9],["use",9,113],["attack",113,155]];
+  for(const[name,lo,hi]of segs){
+    const xm=x0+(lo+hi)/2*cw;
+    h+=`<text x="${xm}" y="${y+29}" text-anchor="middle" fill="${GRAY}" font-size="9">${name} ${hi-lo}</text>`;
+  }
+  return {h,cellX:a=>x0+(a+0.5)*cw};
+}
+function zoneLab(y,txt){
+  return `<text x="8" y="${y}" fill="${GRAY}" font-size="9">${txt}</text>`;
+}
+function renderSvg(){
+  const a=sel.a, src=SRC[a], tgt=TGT[a], fam=FAM[a];
+  const DIM="#C9D2CD";
+  let h="";
+  h+=`<text x="8" y="14" fill="${SOFT}" font-size="10">z (20&times;64) per-slot tokens</text>`;
+  h+=zoneLab(tokY(0)+9,"hand")+zoneLab(tokY(8)+9,"my")+zoneLab(tokY(14)+9,"op")+zoneLab(tokY(20)+9,"none");
+  for(let s=0;s<=20;s++){
+    const y=tokY(s), isS=s===src, isT=s===tgt, hot=isS||isT;
+    const col=s===20?"#B9C2BC":hot?(isS?PETROL:SLATE):HAIR;
+    h+=`<rect x="46" y="${y}" width="24" height="12" rx="2"
+       fill="${hot?(isS?PETROL_SOFT:SLATE_TINT):PANEL}" stroke="${col}" stroke-width="${hot?1.6:1}"/>`;
+    if(hot)h+=`<text x="34" y="${y+10}" text-anchor="end" fill="${isS?PETROL:SLATE}" font-size="9">${isS?"src":"tgt"}</text>`;
+  }
+  const strip=stripCells(a,414);
+
+  if(headMode==="pointer"){
+    h+=box(210,60,130,34,"z_src (64)",`slot ${src===NONE?"20 = zeros":src}`,PETROL);
+    h+=box(210,116,130,34,"z_tgt (64)",`slot ${tgt===NONE?"20 = zeros":tgt}`,SLATE);
+    h+=box(210,196,130,34,"latent_pi (64)","pi tower ctx",GRAY);
+    h+=box(210,252,130,34,"family (4)",`[${[0,0,0,0].map((_,i)=>i===fam?1:0).join(",")}]`,GRAY);
+    h+=wire(70,tokY(src===NONE?20:src)+6,210,77,PETROL,2);
+    h+=wire(70,tokY(tgt===NONE?20:tgt)+6,210,133,SLATE,2);
+    h+=wire(70,tokY(4)+6,210,213,DIM,1,"3 3");
+    h+=`<text x="150" y="238" fill="${GRAY}" font-size="8.5">(all slots &rarr; flatten &rarr; fuse &rarr; tower)</text>`;
+    h+=box(392,120,64,120,"concat","(196)",GRAY);
+    h+=wire(340,77,392,150,PETROL,2)+wire(340,133,392,170,SLATE,2)
+      +wire(340,213,392,195,GRAY,1.5)+wire(340,269,392,220,GRAY,1.5);
+    h+=box(492,140,120,80,"shared MLP","196&rarr;128&rarr;1",PETROL,PETROL_SOFT);
+    h+=wire(456,180,492,180,PETROL,2.2);
+    const cx=strip.cellX(a);
+    h+=`<path d="M552 220 C 552 300, ${cx} 330, ${cx} 412" fill="none" stroke="${PETROL}" stroke-width="2"/>`;
+    h+=`<circle cx="${cx}" cy="408" r="3.2" fill="${PETROL}"/>`;
+    h+=`<text x="552" y="248" text-anchor="middle" fill="${PETROL}" font-size="10">logit(${a})</text>`;
+    h+=`<text x="120" y="398" fill="${SOFT}" font-size="10">155 logits — one MLP pass per action, each reading its own cards</text>`;
+  }else{
+    h+=box(180,120,120,46,"flatten","20&times;64 = 1280",GRAY);
+    for(let s=0;s<=20;s+=2)h+=wire(70,tokY(s)+6,180,143,DIM,1);
+    h+=wire(70,tokY(src===NONE?20:src)+6,180,143,PETROL,1.6);
+    if(tgt!==NONE)h+=wire(70,tokY(tgt)+6,180,143,SLATE,1.6);
+    h+=box(340,124,96,38,"fuse (256)","Linear 1344&rarr;256",GRAY);
+    h+=wire(300,143,340,143,GRAY,1.5);
+    h+=box(476,124,96,38,"pi tower (64)","tanh &times;2",GRAY);
+    h+=wire(436,143,476,143,GRAY,1.5);
+    h+=box(440,220,168,40,"Linear 64&rarr;155","one weight row per action",SLATE,SLATE_TINT);
+    h+=wire(524,162,524,220,SLATE,2);
+    for(let a2=0;a2<ACTION_SIZE;a2+=6){
+      const cx=strip.cellX(a2);
+      h+=`<path d="M524 260 C 524 320, ${cx} 340, ${cx} 412" fill="none" stroke="${DIM}" stroke-width="1"/>`;
+    }
+    const cx=strip.cellX(a);
+    h+=`<path d="M524 260 C 524 320, ${cx} 340, ${cx} 412" fill="none" stroke="${SLATE}" stroke-width="1.8"/>`;
+    h+=`<text x="120" y="398" fill="${SOFT}" font-size="10">all 155 logits read the SAME 64 numbers — per-card identity must survive the funnel</text>`;
+    h+=`<text x="180" y="106" fill="${ALARM}" font-size="9.5">can_item decodable: 0.98 at input &rarr; 0.61 here</text>`;
+  }
+  h+=strip.h;
+  svgEl.innerHTML=h;
+}
+
+/* strip: shared house tooltip + hover-select */
+const tip=document.getElementById("tip");
+svgEl.addEventListener("pointermove",e=>{
+  const c=e.target.closest(".scell");
+  if(!c){tip.style.opacity=0;return;}
+  const a=+c.dataset.a;
+  tip.textContent=`action ${a} — ${FAMS[FAM[a]]}${legal(a)?"":" (illegal here)"}`;
+  tip.style.opacity=1;
+  const x=Math.min(e.clientX+14, window.innerWidth-tip.offsetWidth-8);
+  tip.style.left=x+"px"; tip.style.top=(e.clientY+16)+"px";
+  if(a!==sel.a){ sel.a=a; sel.fam=FAMS[FAM[a]]; update(); }
+});
+svgEl.addEventListener("pointerleave",()=>{tip.style.opacity=0;});
+
+function update(){syncButtons();renderBoard();renderReadout();renderSvg();}
+update();
+
+/* ---------- before/after layer stack ---------- */
+(function(){
+  const DIMW="#C9D2CD";
+  let h="";
+  /* legend */
+  h+=`<rect x="770" y="14" width="12" height="12" rx="2" fill="${PANEL}" stroke="${GRAY}"/>
+      <text x="788" y="24" font-size="10">shared trunk</text>
+      <rect x="880" y="14" width="12" height="12" rx="2" fill="${SLATE_TINT}" stroke="${SLATE}"/>
+      <text x="898" y="24" font-size="10" fill="${SLATE}">b0k — before</text>
+      <rect x="770" y="36" width="12" height="12" rx="2" fill="${PETROL_SOFT}" stroke="${PETROL}"/>
+      <text x="788" y="46" font-size="10" fill="${PETROL}">e28p — after</text>`;
+  /* inputs */
+  h+=box(150,16,150,32,"tokens (20,17)","",GRAY);
+  h+=box(320,16,130,32,"card_ids (20)","",GRAY);
+  h+=box(470,16,130,32,"token_mask (20)","",GRAY);
+  h+=box(640,16,110,32,"scalars (13)","",GRAY);
+  /* embed/proj */
+  h+=box(260,76,260,38,"id_embed · proj · LN · +pos_embed","(20,64) · 6,160 params",GRAY);
+  h+=wire(225,48,340,76,GRAY,1.2)+wire(385,48,400,76,GRAY,1.2);
+  /* transformer */
+  h+=box(260,142,260,46,"TransformerEncoder ×2  →  z","(20,64) · 4 heads · ff 128 · 66,944 params",GRAY);
+  h+=wire(390,114,390,142,GRAY,1.4);
+  h+=wire(535,48,520,155,DIMW,1.2,"3 3");
+  h+=`<text x="545" y="130" font-size="8.5" fill="${GRAY}">key-padding mask</text>`;
+  /* flatten + scalar branch */
+  h+=box(260,216,150,34,"flatten (1280)","",GRAY);
+  h+=box(610,216,170,34,"scalar_mlp → (64)","922 params",GRAY);
+  h+=wire(390,188,335,216,GRAY,1.4);
+  h+=wire(695,48,695,216,GRAY,1.2);
+  /* fuse */
+  h+=box(260,278,260,38,"fuse: Linear 1344→256 · ReLU","344,320 params",GRAY);
+  h+=wire(335,250,350,278,GRAY,1.4)+wire(695,250,520,290,GRAY,1.2);
+  h+=`<text x="70" y="292" font-size="9.5" fill="${ALARM}">per-card info crushed in this funnel:</text>
+      <text x="70" y="305" font-size="9.5" fill="${ALARM}">can_item 0.98 raw → 0.61 at the towers</text>
+      <line x1="238" y1="297" x2="258" y2="297" stroke="${ALARM}" stroke-dasharray="3 3"/>`;
+  /* towers */
+  h+=box(200,344,170,40,"pi tower → latent_pi","(64) · 20,608 params",GRAY);
+  h+=box(460,344,170,40,"vf tower (64)","20,608 params",GRAY);
+  h+=box(660,350,110,28,"value_net (1)","",GRAY);
+  h+=wire(340,316,285,344,GRAY,1.4)+wire(440,316,545,344,GRAY,1.4)+wire(630,364,660,364,GRAY,1.2);
+  /* branch labels */
+  h+=`<text x="210" y="432" font-size="11" font-weight="700" fill="${SLATE}">BEFORE — b0k dense head</text>
+      <text x="560" y="432" font-size="11" font-weight="700" fill="${PETROL}">AFTER — e28p pointer head</text>`;
+  /* dense branch */
+  h+=box(90,445,240,46,"action_net: Linear 64→155","10,075 params — logits from latent_pi only",SLATE,SLATE_TINT);
+  h+=wire(240,384,210,445,SLATE,1.8);
+  h+=`<rect x="90" y="588" width="240" height="14" rx="2" fill="${SLATE_TINT}" stroke="${SLATE}"/>
+      <text x="210" y="599" text-anchor="middle" font-size="9.5" fill="${SLATE}">155 logits</text>`;
+  h+=wire(210,491,210,588,SLATE,1.6);
+  /* pointer branch */
+  h+=box(560,440,210,34,"gather z_src , z_tgt","per-action slot lookup · 0 params",PETROL);
+  h+=box(560,486,210,30,"concat (155,196)","",PETROL);
+  h+=box(400,486,110,30,"family (4)","",GRAY);
+  h+=box(560,528,210,42,"shared MLP 196→128→1","25,345 params · batched over 155 actions",PETROL,PETROL_SOFT);
+  h+=wire(665,474,665,486,PETROL,1.6)+wire(665,516,665,528,PETROL,1.6);
+  h+=wire(510,501,560,501,GRAY,1.2);
+  h+=wire(285,384,560,496,GRAY,1.4);
+  h+=`<text x="380" y="470" font-size="8.5" fill="${GRAY}">latent_pi (64) as context</text>`;
+  /* the z tap — the point of the whole change */
+  h+=`<path d="M520 165 C 985 165, 985 330, 775 447" fill="none" stroke="${PETROL}" stroke-width="2.4"/>`;
+  h+=`<text x="905" y="255" font-size="10" fill="${PETROL}">forward hook: z (20,64)</text>
+      <text x="905" y="268" font-size="9" fill="${PETROL}">bypasses the funnel entirely</text>`;
+  h+=`<rect x="560" y="588" width="210" height="14" rx="2" fill="${PETROL_SOFT}" stroke="${PETROL}"/>
+      <text x="665" y="599" text-anchor="middle" font-size="9.5" fill="${PETROL}">155 logits</text>`;
+  h+=wire(665,570,665,588,PETROL,1.6);
+  document.getElementById("stackSvg").innerHTML=h;
+})();
+
+/* ================= charts ================= */
+function svgOpen(w,h){return `<svg viewBox="0 0 ${w} ${h}" role="img">`;}
+function axisTicks(x0,x1,y,lo,hi,step,fmt){
+  let h="";
+  for(let v=lo;v<=hi+1e-9;v+=step){
+    const x=x0+(v-lo)/(hi-lo)*(x1-x0);
+    h+=`<line x1="${x}" y1="${y-4}" x2="${x}" y2="${y}" stroke="${HAIR}"/>
+        <text x="${x}" y="${y+14}" text-anchor="middle" fill="${GRAY}" font-size="10" class="num">${fmt(v)}</text>`;
+  }
+  h+=`<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${HAIR}"/>`;
+  return h;
+}
+
+/* CI deltas */
+(function(){
+  const rows=[
+    ["gate 2: pair vs reactive RoR, full @40M",0.0729,0.0652,0.0808],
+    ["gate 2: confirm @41M (fresh)",0.0687,0.0608,0.0765],
+    ["3-seed trio vs b0k trio @43M",0.0714,0.0646,0.0785],
+    ["stack: lens-pointer vs guarded RoR @43M",0.0593,0.0531,0.0658],
+    ["stack: confirm @44M (fresh)",0.0583,0.0524,0.0642],
+    ["lens increment on pointer nets",0.0418,0.0366,0.0471],
+  ];
+  const W=1040,rh=36,x0=330,x1=990,lo=0,hi=0.09,H=rows.length*rh+48;
+  const X=v=>x0+(v-lo)/(hi-lo)*(x1-x0);
+  let h=svgOpen(W,H);
+  h+=`<line x1="${X(0.03)}" y1="8" x2="${X(0.03)}" y2="${H-32}" stroke="${BRASS}" stroke-dasharray="4 3"/>
+      <text x="${X(0.03)}" y="${H-36}" text-anchor="middle" fill="${BRASS}" font-size="9.5">headroom bar +0.03</text>`;
+  rows.forEach((r,i)=>{
+    const y=20+i*rh;
+    h+=`<text x="${x0-12}" y="${y+8}" text-anchor="end" fill="${INK}" font-size="11">${r[0]}</text>`;
+    h+=`<rect x="${x0}" y="${y-2}" width="${X(r[1])-x0}" height="12" rx="1.5" fill="${PETROL}" opacity="0.88"/>`;
+    h+=`<line x1="${X(r[2])}" y1="${y+4}" x2="${X(r[3])}" y2="${y+4}" stroke="${INK}" stroke-width="1.4"/>
+        <line x1="${X(r[2])}" y1="${y-1}" x2="${X(r[2])}" y2="${y+9}" stroke="${INK}" stroke-width="1.4"/>
+        <line x1="${X(r[3])}" y1="${y-1}" x2="${X(r[3])}" y2="${y+9}" stroke="${INK}" stroke-width="1.4"/>`;
+    h+=`<text x="${X(r[3])+8}" y="${y+9}" fill="${PETROL}" font-size="10.5" class="num">+${r[1].toFixed(4)}</text>`;
+  });
+  h+=axisTicks(x0,x1,H-26,lo,hi,0.03,v=>"+"+v.toFixed(2));
+  h+=`</svg>`;
+  document.getElementById("chartCI").innerHTML=h;
+})();
+
+/* Gate-1 BC bars */
+(function(){
+  const rows=[
+    ["b0k as-is (reference)",[0.370,0.367],0],
+    ["warm dense head",[0.390,0.390],0],
+    ["fresh dense MLP, capacity-matched",[0.391,0.392],0],
+    ["pointer head",[0.423,0.436],1],
+  ];
+  const W=520,rh=44,x0=230,x1=470,lo=0.30,hi=0.46,H=rows.length*rh+42;
+  const X=v=>x0+(v-lo)/(hi-lo)*(x1-x0);
+  let h=svgOpen(W,H);
+  h+=`<line x1="${X(0.39)}" y1="10" x2="${X(0.39)}" y2="${H-30}" stroke="${BRASS}" stroke-dasharray="4 3"/>
+      <text x="${X(0.39)}" y="${H-34}" text-anchor="middle" fill="${BRASS}" font-size="9.5">the old cap ~0.37&ndash;0.39</text>`;
+  rows.forEach((r,i)=>{
+    const y=18+i*rh, hot=r[2]===1, col=hot?PETROL:SLATE;
+    h+=`<text x="${x0-10}" y="${y+16}" text-anchor="end" fill="${INK}" font-size="10.5">${r[0]}</text>`;
+    r[1].forEach((v,j)=>{
+      const yy=y+j*13;
+      h+=`<rect x="${x0}" y="${yy}" width="${X(v)-x0}" height="10" rx="1.5" fill="${col}" opacity="${j?0.55:0.9}"/>
+          <text x="${X(v)+6}" y="${yy+9}" fill="${col}" font-size="10" class="num">${v.toFixed(3)}</text>`;
+    });
+  });
+  h+=axisTicks(x0,x1,H-24,lo,hi,0.04,v=>v.toFixed(2));
+  h+=`</svg>`;
+  document.getElementById("chartBC").innerHTML=h;
+})();
+
+/* boardkeep */
+(function(){
+  const rows=[
+    ["vs b0k pair (unguarded)",0.408,0],
+    ["vs lens-b0k — prior guarded RoR",0.306,0],
+    ["vs e28p_s0 single, no guard",0.258,1],
+    ["vs e28p_s1 single, no guard",0.310,1],
+    ["vs lens-e28p stack — NEW guarded RoR",0.221,1],
+  ];
+  const W=520,rh=34,x0=240,x1=470,lo=0,hi=0.5,H=rows.length*rh+48;
+  const X=v=>x0+(v-lo)/(hi-lo)*(x1-x0);
+  let h=svgOpen(W,H);
+  h+=`<line x1="${X(0.5)}" y1="8" x2="${X(0.5)}" y2="${H-32}" stroke="${ALARM}" stroke-dasharray="4 3"/>
+      <text x="${X(0.5)-6}" y="18" text-anchor="end" fill="${ALARM}" font-size="9.5">parity 0.5</text>`;
+  rows.forEach((r,i)=>{
+    const y=18+i*rh, hot=r[2]===1, col=hot?PETROL:SLATE;
+    h+=`<text x="${x0-10}" y="${y+9}" text-anchor="end" fill="${INK}" font-size="10.5">${r[0]}</text>`;
+    h+=`<rect x="${x0}" y="${y}" width="${X(r[1])-x0}" height="12" rx="1.5" fill="${col}" opacity="0.9"/>
+        <text x="${X(r[1])+7}" y="${y+10}" fill="${col}" font-size="10" class="num">${r[1].toFixed(3)}</text>`;
+  });
+  h+=axisTicks(x0,x1,H-26,0,0.5,0.1,v=>v.toFixed(1));
+  h+=`</svg>`;
+  document.getElementById("chartBK").innerHTML=h;
+})();
+
+/* ladder lollipop */
+(function(){
+  const rows=[
+    ["ppo:b0k,ldraft — prior reactive RoR (E18b)",0.791,0],
+    ["lppo:b0k trio — prior guarded RoR (E26)",0.849,0],
+    ["ppo:e28p,ldraft — NEW reactive RoR, no guards",0.865,1],
+    ["lppo:e28p trio — NEW guarded RoR",0.908,1],
+  ];
+  const refs=[[0.890,"vbeam single-critic ceiling"],[0.926,"ensemble planner RoR"]];
+  const W=1040,rh=42,x0=380,x1=990,lo=0.76,hi=0.95,H=rows.length*rh+56;
+  const X=v=>x0+(v-lo)/(hi-lo)*(x1-x0);
+  let h=svgOpen(W,H);
+  refs.forEach(r=>{
+    h+=`<line x1="${X(r[0])}" y1="8" x2="${X(r[0])}" y2="${H-40}" stroke="${BRASS}" stroke-dasharray="4 3"/>
+        <text x="${X(r[0])}" y="${H-28}" text-anchor="middle" fill="${BRASS}" font-size="9.5" class="num">${r[0].toFixed(3)}</text>
+        <text x="${X(r[0])}" y="${H-17}" text-anchor="middle" fill="${BRASS}" font-size="9">${r[1]}</text>`;
+  });
+  rows.forEach((r,i)=>{
+    const y=24+i*rh, hot=r[2]===1, col=hot?PETROL:SLATE;
+    h+=`<text x="${x0-12}" y="${y+4}" text-anchor="end" fill="${INK}" font-size="11">${r[0]}</text>`;
+    h+=`<line x1="${x0}" y1="${y}" x2="${X(r[1])}" y2="${y}" stroke="${col}" stroke-width="${hot?2.4:1.6}" opacity="${hot?1:0.75}"/>
+        <circle cx="${X(r[1])}" cy="${y}" r="${hot?5.5:4.5}" fill="${col}"/>
+        <text x="${X(r[1])}" y="${y-11}" text-anchor="middle" fill="${col}" font-size="11" font-weight="${hot?700:400}" class="num">${r[1].toFixed(3)}</text>`;
+  });
+  h+=axisTicks(x0,x1,H-42,0.78,0.94,0.04,v=>v.toFixed(2));
+  h+=`</svg>`;
+  document.getElementById("chartLadder").innerHTML=h;
+})();
+</script>
+</body>
+</html>
