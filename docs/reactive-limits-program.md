@@ -4,6 +4,15 @@ Goal (2026-07-19): evolve the reactive PPO net itself — architecture and
 training — toward the fair-search rungs. Play-time guards (E26 lens) stay in
 production but are not the direction; no further guard work as an end.
 
+Terminology (canonical, pinned to code): **action head** = `action_net`
+(Linear 64→155; older entries say "policy head"), **value head** =
+`value_net`, **extractor head** = `features_extractor.head` (the token
+extractor's fuse layer), **towers** = the two 64x64 tanh MLPs
+(`mlp_extractor.policy_net`/`value_net`), **extractor** =
+`features_extractor`, **trunk** = extractor + towers (everything before the
+two output heads; NB the policies code separately uses "trunk forward" for
+one full net pass), **arm** = an experiment variant, never a network part.
+
 ## Where the gap is (established)
 
 - **Perception is complete.** Everything needed is linearly decodable from
