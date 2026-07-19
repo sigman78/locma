@@ -94,6 +94,17 @@ disambiguate). Default paths byte-identical.
   ruler vs the e28p RoR pair + boardkeep guard-rail (gate-2 protocol).
   E29 arms then build on whichever obs variant wins.
 
+**VERDICT (2026-07-19, worklog E28c): CI-POSITIVE, replicated; items move
+for the first time.** BC gate null-by-construction (the practicum has ZERO
+blue items in hand — the training/deploy item-distribution gap is itself a
+finding). PPO at the exact recipe: **+0.0212 [+0.0140, +0.0282]** vs the
+e28p pair, confirm +0.0215 [+0.0157, +0.0273] — sub-headroom but
+zero-excluding twice; item rate per opportunity **0.142 -> 0.19-0.23**, the
+first instrument to move item behavior in the program; boardkeep stays
+closed (0.28-0.30). E29 arms build on token-fx. Open follow-ups: s2 +
+stack bench for the promotion decision; fx + item-rich training decks
+(draft_override) as the motivated escalation.
+
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
 Fixes the measured pathology (first-layer saturation with LOW PR), likely a

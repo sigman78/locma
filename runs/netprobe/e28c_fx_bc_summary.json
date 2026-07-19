@@ -1,0 +1,67 @@
+{
+ "config": {
+  "model": "depot:b0k/b0k_s0.zip",
+  "data": "runs/e27-concepts.npz",
+  "epochs": 12,
+  "batch": 512,
+  "lr": 0.0003,
+  "val_frac": 0.2,
+  "seeds": "0,1",
+  "out": "runs/netprobe/e28c_fx_bc_summary.json"
+ },
+ "n": 33186,
+ "seeds": {
+  "0": {
+   "raw": {
+    "trainable_params": 45905,
+    "final": {
+     "agreement": 0.4292,
+     "item_recall": 0.3121,
+     "item_rate_pred": 0.1708,
+     "agreement_item_states": 0.2197,
+     "agreement_blue_item_states": null,
+     "n_blue_item_states": 0,
+     "agreement_lethal_states": 0.2355
+    }
+   },
+   "rawfx": {
+    "trainable_params": 45885,
+    "final": {
+     "agreement": 0.4285,
+     "item_recall": 0.3699,
+     "item_rate_pred": 0.1808,
+     "agreement_item_states": 0.2659,
+     "agreement_blue_item_states": null,
+     "n_blue_item_states": 0,
+     "agreement_lethal_states": 0.2313
+    }
+   }
+  },
+  "1": {
+   "raw": {
+    "trainable_params": 45905,
+    "final": {
+     "agreement": 0.4319,
+     "item_recall": 0.3059,
+     "item_rate_pred": 0.1558,
+     "agreement_item_states": 0.1882,
+     "agreement_blue_item_states": null,
+     "n_blue_item_states": 0,
+     "agreement_lethal_states": 0.2327
+    }
+   },
+   "rawfx": {
+    "trainable_params": 45885,
+    "final": {
+     "agreement": 0.4322,
+     "item_recall": 0.3235,
+     "item_rate_pred": 0.1524,
+     "agreement_item_states": 0.1941,
+     "agreement_blue_item_states": null,
+     "n_blue_item_states": 0,
+     "agreement_lethal_states": 0.2265
+    }
+   }
+  }
+ }
+}
