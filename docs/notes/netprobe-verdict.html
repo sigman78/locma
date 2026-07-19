@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Net-probe verdict — capacity is not the lever</title>
+<style>
+  :root {
+    --ground: #EEF1EF;
+    --panel: #FBFCFB;
+    --ink: #1A2420;
+    --ink-soft: #46534D;
+    --hair: #D5DCD8;
+    --petrol: #136A6E;
+    --petrol-soft: #cfe2e2;
+    --brass: #9A8F65;
+    --alarm: #B54A32;
+    --alarm-tint: #F4E4DF;
+    --slate: #5B7A99;
+    --umber: #A2652F;
+    --gray: #6B7A74;
+    --ok: #2E6B46;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 28px 72px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    font-weight: 650;
+  }
+  h1 .no { color: var(--alarm); }
+  .dek {
+    max-width: 62ch;
+    color: var(--ink-soft);
+    margin: 0 0 22px;
+  }
+  .dek code, .method code, td code {
+    font-family: var(--mono);
+    font-size: .88em;
+    background: #E3E8E5;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .criteria { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 34px; }
+  .crit {
+    flex: 1 1 280px;
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    padding: 12px 14px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .crit .tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    align-self: flex-start;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+  .crit.fail .tag { background: var(--alarm-tint); color: var(--alarm); }
+  .crit.met  .tag { background: #DFEDE4; color: var(--ok); }
+  .crit .q { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+  .crit .a { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; }
+  .crit .a b { color: var(--ink); }
+
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--ground);
+    padding: 10px 0 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--hair);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+  }
+  .seg { display: flex; border: 1px solid var(--hair); border-radius: 5px; overflow: hidden; background: var(--panel); }
+  .seg button {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 13px;
+    border: 0;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-right: 1px solid var(--hair);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--petrol); color: #fff; }
+  .seg button:focus-visible, .seeds label:focus-within, details summary:focus-visible {
+    outline: 2px solid var(--petrol);
+    outline-offset: 1px;
+  }
+  .seeds { display: flex; gap: 4px; align-items: center; font-family: var(--mono); font-size: 12px; }
+  .seeds .lbl { color: var(--ink-soft); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-right: 2px; }
+  .seeds label {
+    border: 1px solid var(--hair);
+    background: var(--panel);
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    user-select: none;
+  }
+  .seeds label.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .seeds label.off-limits { opacity: .35; cursor: default; }
+  .seeds input { position: absolute; opacity: 0; pointer-events: none; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); margin-left: auto; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    padding: 16px 18px 12px;
+    min-width: 0;
+  }
+  .panel.wide { grid-column: 1 / -1; }
+  .panel h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+  .panel .sub { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.4; max-width: 78ch; }
+  .panel .chartbox { overflow-x: auto; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .panel .note {
+    font-size: 12px;
+    color: var(--alarm);
+    background: var(--alarm-tint);
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin-top: 8px;
+    font-family: var(--mono);
+  }
+  .panel .foot { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; }
+
+  svg text { font-family: var(--mono); fill: var(--ink-soft); }
+  svg .num { font-variant-numeric: tabular-nums; }
+
+  #tip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--ink);
+    color: #F2F5F3;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    padding: 7px 10px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity .08s linear;
+    z-index: 20;
+    white-space: pre;
+  }
+  @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+
+  details.matrix { margin-top: 26px; }
+  details.matrix summary {
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 8px 0;
+  }
+  .tblbox { overflow-x: auto; border: 1px solid var(--hair); border-radius: 6px; background: var(--panel); }
+  table { border-collapse: collapse; font-family: var(--mono); font-size: 12px; min-width: 760px; width: 100%; }
+  th, td { padding: 5px 10px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th { font-weight: 600; color: var(--ink-soft); border-bottom: 1px solid var(--hair); font-size: 11px; }
+  td:first-child, th:first-child { text-align: left; }
+  tr.cellhead td {
+    text-align: left;
+    font-weight: 600;
+    color: var(--ink);
+    background: #EFF3F1;
+    border-top: 1px solid var(--hair);
+  }
+  td.worse { color: var(--alarm); }
+  td.better { color: var(--ok); }
+
+  .method {
+    margin-top: 30px;
+    border-top: 1px solid var(--hair);
+    padding-top: 18px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    columns: 2;
+    column-gap: 36px;
+  }
+  .method p { margin: 0 0 10px; break-inside: avoid; }
+  .method b { color: var(--ink); }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+    .method { columns: 1; }
+    h1 { font-size: 27px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Net-probe bench · arch-sweep prestudy · held-out verdict · 2026-07-18</p>
+    <h1>Capacity is <span class="no">not</span> the lever.</h1>
+    <p class="dek">
+      Held-out replication (seed 1,000,000, outside every training stream) of the
+      NN-utilization pilot: <code>b0k</code> seeds s0/s1/s2 probed on a
+      <code>netdmcts:1,320</code> teacher set (9,269 states) and an
+      <code>mcts:100</code> companion set (33,186 states), plus the flat-tower arm.
+      The picture is stable across all three seeds and both teachers: the 64-wide
+      towers are nowhere near full; what limits them is conditioning and content,
+      not size.
+    </p>
+    <div class="criteria">
+      <div class="crit fail">
+        <span class="tag">Not met — width/depth arms dead</span>
+        <span class="q">C1 · Capacity-bound? PR/width &gt; 0.5, or heavy saturation with high PR</span>
+        <span class="a">Max observed PR/width is <b>0.28</b> (pi_a1). Value towers collapse to
+        PR 2&ndash;5 of 64. Saturation only ever co-occurs with <b>low</b> PR.</span>
+      </div>
+      <div class="crit fail">
+        <span class="tag">Not met — best is +0.008, noise</span>
+        <span class="q">C2 · Trunk computes features the head wastes? Any layer beats raw obs by &ge; +0.03 on action decoding</span>
+        <span class="a">No layer, no seed, no teacher. Every tower layer <b>loses</b>
+        tactical information relative to a linear probe on the raw observation.</span>
+      </div>
+      <div class="crit met">
+        <span class="tag">Met — the surviving arms</span>
+        <span class="q">C3 · Low PR + flat probes across depth &rArr; sweep targets conditioning and the head</span>
+        <span class="a">First-layer tanh saturation up to <b>94%</b> with unnormalized inputs:
+        obs normalization / LayerNorm and head-objective work are the only justified arms.
+        Play-time search (rbeam RoR) remains the lever.</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="seg" id="dsSeg" role="tablist" aria-label="Probe dataset"></div>
+    <div class="seeds" id="seedBox"><span class="lbl">seeds</span></div>
+    <span class="meta" id="metaLine"></span>
+  </div>
+
+  <div class="grid">
+    <div class="panel" id="p-capacity">
+      <h2>Effective dimensionality: trained vs random init</h2>
+      <p class="sub">Participation ratio &divide; width per layer. Filled = trained (one dot per seed),
+      open = same architecture re-initialized. Training <em>shrinks</em> most layers away
+      from the capacity-bound region.</p>
+      <div class="chartbox"><svg id="svg-capacity"></svg></div>
+    </div>
+    <div class="panel" id="p-sat">
+      <h2>Saturation is conditioning, not capacity pressure</h2>
+      <p class="sub">Every probed layer from all 7 matrix cells. A capacity-bound layer
+      would be saturated <em>and</em> high-PR (shaded corner) &mdash; that corner is empty.</p>
+      <div class="chartbox"><svg id="svg-sat"></svg></div>
+    </div>
+    <div class="panel wide" id="p-probe">
+      <h2>Action decoding: no layer beats the raw observation</h2>
+      <p class="sub">Ridge-probe accuracy at predicting the teacher's move, per layer, one dot per seed.
+      The solid line is the same probe on the raw observation; the shaded band is the +0.03
+      promotion criterion &mdash; nothing enters it. At far right: the trained net's own masked argmax.</p>
+      <div class="chartbox"><svg id="svg-probe"></svg></div>
+      <div class="note" id="probeNote" hidden></div>
+    </div>
+    <div class="panel" id="p-argmax">
+      <h2>The net loses to a linear probe on its own input</h2>
+      <p class="sub">Agreement with the <code>netdmcts:1,320</code> teacher of record (held-out set).
+      A ridge probe on the <em>raw observation</em> out-predicts the full trained
+      net's argmax &mdash; on all three seeds.</p>
+      <div class="chartbox"><svg id="svg-argmax"></svg></div>
+      <p class="foot">Consistent with the ~0.37 behavior-cloning cap (2026-06-27) and E22/E23/E24:
+      representational content plateaus; search at play time converts it into decisions.</p>
+    </div>
+    <div class="panel" id="p-critic">
+      <h2>The critic genuinely computes — but low-dim</h2>
+      <p class="sub">Outcome-AUC of a probe on each layer vs the raw observation.
+      Value layers add +0.04&ndash;0.05 AUC while sitting at PR 2&ndash;3: a real,
+      compact value feature.</p>
+      <div class="chartbox"><svg id="svg-critic"></svg></div>
+      <div class="note" id="criticNote" hidden></div>
+    </div>
+  </div>
+
+  <details class="matrix">
+    <summary>Full probe matrix — all 7 cells, exact values</summary>
+    <div class="tblbox"><table id="matrixTbl"></table></div>
+  </details>
+
+  <div class="method">
+    <p><b>Data.</b> Teacher-vs-baseline games recorded at seed 1,000,000 (outside every
+    training stream). netdmcts set: teacher
+    <code>netdmcts:1,320,1.5,depot:shared/shared_s0.zip,depot:ldraft/ldraft_s0.zip</code>
+    (the promoted E23 search recipe), 4 opponent shards &times; 50 games &times; 2 seats
+    = 400 games, 9,269 battle decisions, shards merged with game_id offsets.
+    Companion sets: <code>mcts:100</code> teacher, 150 games, 33,186 decisions each in
+    token and flat encodings.</p>
+    <p><b>Probes.</b> Ridge regression (l2 = 1.0) on standardized activations,
+    game-level 80/20 split. Action probe is masked multinomial over 155 logits;
+    outcome probe is win/loss AUC. Raw-observation probes are the control that
+    separates &ldquo;the layer computes&rdquo; from &ldquo;the layer re-embeds the
+    input&rdquo;. Probe deltas &lt; 0.01 are noise per the seed spread.</p>
+    <p><b>Caveats.</b> Outcome AUC on the netdmcts set is uninformative (the teacher
+    wins ~everything; majority baseline 0.996). netdmcts states are also easier for
+    the action probe (masked-majority 0.490 vs 0.311), and b0k's higher argmax
+    agreement there (0.52&ndash;0.55 vs 0.36&ndash;0.37 on mcts sets) partly reflects
+    the shared-family critic guiding that search. Re-init clones use PyTorch default
+    init, not SB3 orthogonal &mdash; read init markers coarsely.</p>
+    <p><b>Provenance.</b> Branch <code>feat/net-probe</code>, commit
+    <code>ed9d8bc</code>. Instrument: <code>locma/stats/netdiag.py</code> +
+    <code>scripts/net_probe.py</code>. Result JSONs committed under
+    <code>runs/netprobe/</code>. Verdict entry: <code>docs/worklog/2026-07.md</code>,
+    2026-07-18.</p>
+  </div>
+</div>
+<div id="tip" role="presentation"></div>
+
+<script>
+"use strict";
+const DATA = {"ab-flat-s0__probe-mcts-flat":{"n":33186,"agree":0.3387,"maj_out":0.8921,"maj_act":0.3113,"layers":{"raw":{"w":308,"pr":9.1,"pr_init":null,"sat":null,"auc":0.8813,"acc":0.3454},"pi_a1":{"w":64,"pr":14.02,"pr_init":8.21,"sat":0.938,"auc":0.8735,"acc":0.311},"pi_a2":{"w":64,"pr":14.38,"pr_init":7.14,"sat":0.047,"auc":0.864,"acc":0.3045},"vf_a1":{"w":64,"pr":7.96,"pr_init":8.08,"sat":0.672,"auc":0.9316,"acc":0.315},"vf_a2":{"w":64,"pr":2.21,"pr_init":8.43,"sat":0.109,"auc":0.9325,"acc":0.3122},"logits":{"w":155,"pr":5.51,"pr_init":6.98,"sat":0.0,"auc":0.864,"acc":0.3045}}},"b0k_s0__probe-mcts-token":{"n":33186,"agree":0.3703,"maj_out":0.8921,"maj_act":0.3113,"layers":{"raw":{"w":373,"pr":7.66,"pr_init":null,"sat":null,"auc":0.8815,"acc":0.3454},"slots":{"w":1280,"pr":98.88,"pr_init":16.56,"sat":0.0,"auc":0.8083,"acc":0.3533},"features":{"w":256,"pr":22.21,"pr_init":18.42,"sat":0.016,"auc":0.9115,"acc":0.3156},"pi_a1":{"w":64,"pr":15.39,"pr_init":14.79,"sat":0.406,"auc":0.9074,"acc":0.3044},"pi_a2":{"w":64,"pr":10.84,"pr_init":13.2,"sat":0.031,"auc":0.8931,"acc":0.303},"vf_a1":{"w":64,"pr":2.93,"pr_init":13.33,"sat":0.875,"auc":0.9312,"acc":0.3019},"vf_a2":{"w":64,"pr":2.09,"pr_init":12.18,"sat":0.156,"auc":0.9305,"acc":0.31},"logits":{"w":155,"pr":4.29,"pr_init":12.6,"sat":0.0,"auc":0.8931,"acc":0.303}}},"b0k_s0__probe-netdmcts":{"n":9269,"agree":0.5171,"maj_out":0.9955,"maj_act":0.4896,"layers":{"raw":{"w":373,"pr":6.79,"pr_init":null,"sat":null,"auc":0.9891,"acc":0.6068},"slots":{"w":1280,"pr":92.25,"pr_init":22.17,"sat":0.0,"auc":0.9923,"acc":0.5822},"features":{"w":256,"pr":24.64,"pr_init":20.81,"sat":0.027,"auc":0.9405,"acc":0.5311},"pi_a1":{"w":64,"pr":14.96,"pr_init":19.6,"sat":0.281,"auc":0.9914,"acc":0.5306},"pi_a2":{"w":64,"pr":10.48,"pr_init":16.61,"sat":0.0,"auc":0.9861,"acc":0.525},"vf_a1":{"w":64,"pr":3.67,"pr_init":14.96,"sat":0.844,"auc":0.9332,"acc":0.5233},"vf_a2":{"w":64,"pr":2.61,"pr_init":12.19,"sat":0.172,"auc":0.9827,"acc":0.5188},"logits":{"w":155,"pr":4.18,"pr_init":15.07,"sat":0.0,"auc":0.9846,"acc":0.5255}}},"b0k_s1__probe-mcts-token":{"n":33186,"agree":0.3719,"maj_out":0.8921,"maj_act":0.3113,"layers":{"raw":{"w":373,"pr":7.66,"pr_init":null,"sat":null,"auc":0.8815,"acc":0.3454},"slots":{"w":1280,"pr":111.74,"pr_init":16.56,"sat":0.0,"auc":0.8148,"acc":0.3434},"features":{"w":256,"pr":22.51,"pr_init":18.42,"sat":0.027,"auc":0.9082,"acc":0.31},"pi_a1":{"w":64,"pr":14.27,"pr_init":14.79,"sat":0.25,"auc":0.887,"acc":0.2993},"pi_a2":{"w":64,"pr":9.77,"pr_init":13.2,"sat":0.031,"auc":0.8786,"acc":0.3041},"vf_a1":{"w":64,"pr":3.0,"pr_init":13.33,"sat":0.734,"auc":0.9246,"acc":0.3075},"vf_a2":{"w":64,"pr":2.14,"pr_init":12.18,"sat":0.125,"auc":0.9232,"acc":0.3078},"logits":{"w":155,"pr":3.97,"pr_init":12.6,"sat":0.0,"auc":0.8788,"acc":0.3048}}},"b0k_s1__probe-netdmcts":{"n":9269,"agree":0.544,"maj_out":0.9955,"maj_act":0.4896,"layers":{"raw":{"w":373,"pr":6.79,"pr_init":null,"sat":null,"auc":0.9891,"acc":0.6068},"slots":{"w":1280,"pr":102.86,"pr_init":22.17,"sat":0.0,"auc":0.9869,"acc":0.5799},"features":{"w":256,"pr":26.8,"pr_init":20.81,"sat":0.023,"auc":0.9822,"acc":0.5558},"pi_a1":{"w":64,"pr":17.08,"pr_init":19.6,"sat":0.219,"auc":0.9933,"acc":0.5418},"pi_a2":{"w":64,"pr":12.31,"pr_init":16.61,"sat":0.016,"auc":0.999,"acc":0.5356},"vf_a1":{"w":64,"pr":4.51,"pr_init":14.96,"sat":0.766,"auc":0.9918,"acc":0.5463},"vf_a2":{"w":64,"pr":3.34,"pr_init":12.19,"sat":0.141,"auc":0.9939,"acc":0.5334},"logits":{"w":155,"pr":4.83,"pr_init":15.07,"sat":0.0,"auc":0.9989,"acc":0.5362}}},"b0k_s2__probe-mcts-token":{"n":33186,"agree":0.3638,"maj_out":0.8921,"maj_act":0.3113,"layers":{"raw":{"w":373,"pr":7.66,"pr_init":null,"sat":null,"auc":0.8815,"acc":0.3454},"slots":{"w":1280,"pr":106.54,"pr_init":16.56,"sat":0.0,"auc":0.81,"acc":0.3512},"features":{"w":256,"pr":26.65,"pr_init":18.42,"sat":0.008,"auc":0.9042,"acc":0.3095},"pi_a1":{"w":64,"pr":15.97,"pr_init":14.79,"sat":0.234,"auc":0.8775,"acc":0.3045},"pi_a2":{"w":64,"pr":10.74,"pr_init":13.2,"sat":0.031,"auc":0.872,"acc":0.3013},"vf_a1":{"w":64,"pr":3.37,"pr_init":13.33,"sat":0.797,"auc":0.9198,"acc":0.3057},"vf_a2":{"w":64,"pr":2.54,"pr_init":12.18,"sat":0.109,"auc":0.9222,"acc":0.3048},"logits":{"w":155,"pr":4.62,"pr_init":12.6,"sat":0.0,"auc":0.872,"acc":0.301}}},"b0k_s2__probe-netdmcts":{"n":9269,"agree":0.548,"maj_out":0.9955,"maj_act":0.4896,"layers":{"raw":{"w":373,"pr":6.79,"pr_init":null,"sat":null,"auc":0.9891,"acc":0.6068},"slots":{"w":1280,"pr":99.52,"pr_init":22.17,"sat":0.0,"auc":0.9932,"acc":0.5754},"features":{"w":256,"pr":30.41,"pr_init":20.81,"sat":0.016,"auc":0.9982,"acc":0.5306},"pi_a1":{"w":64,"pr":17.99,"pr_init":19.6,"sat":0.172,"auc":0.9833,"acc":0.5255},"pi_a2":{"w":64,"pr":12.88,"pr_init":16.61,"sat":0.016,"auc":0.981,"acc":0.5222},"vf_a1":{"w":64,"pr":5.05,"pr_init":14.96,"sat":0.672,"auc":0.982,"acc":0.5351},"vf_a2":{"w":64,"pr":3.35,"pr_init":12.19,"sat":0.109,"auc":0.9953,"acc":0.5244},"logits":{"w":155,"pr":5.85,"pr_init":15.07,"sat":0.0,"auc":0.9811,"acc":0.5227}}}};
+
+const LAYER_ORDER = ["raw","slots","features","pi_a1","pi_a2","vf_a1","vf_a2","logits"];
+const GROUP = { raw:"input", slots:"extractor", features:"extractor",
+                pi_a1:"policy", pi_a2:"policy", vf_a1:"value", vf_a2:"value", logits:"head" };
+const GCOLOR = { input:"#1A2420", extractor:"#5B7A99", policy:"#136A6E", value:"#A2652F", head:"#6B7A74" };
+const BRASS = "#9A8F65", ALARM = "#B54A32", INK = "#1A2420", SOFT = "#8A968F", HAIR = "#D5DCD8";
+
+const DS = {
+  netdmcts:   { label:"netdmcts held-out", seeds:["s0","s1","s2"],
+                cell:s=>`b0k_${s}__probe-netdmcts`, model:"b0k (token)" },
+  mctsToken:  { label:"mcts:100 token", seeds:["s0","s1","s2"],
+                cell:s=>`b0k_${s}__probe-mcts-token`, model:"b0k (token)" },
+  mctsFlat:   { label:"mcts:100 flat", seeds:["s0"],
+                cell:()=>"ab-flat-s0__probe-mcts-flat", model:"ab-flat (flat)" },
+};
+let curDS = "netdmcts";
+let curSeeds = new Set(["s0","s1","s2"]);
+
+const $ = id => document.getElementById(id);
+const fmt = (v,d=3) => v==null ? "–" : v.toFixed(d);
+
+function activeCells() {
+  const ds = DS[curDS];
+  return ds.seeds.filter(s=>curSeeds.has(s)).map(s=>({seed:s, cell:DATA[ds.cell(s)]}));
+}
+function layersFor(cells) {
+  return LAYER_ORDER.filter(l => cells.length && cells[0].cell.layers[l]);
+}
+
+/* ---------- svg helpers ---------- */
+function el(tag, attrs, text) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+function clear(svg){ while(svg.firstChild) svg.removeChild(svg.firstChild); }
+function tipOn(node, text) {
+  node.addEventListener("pointerenter", ev => { const t=$("tip"); t.textContent=text; t.style.opacity=1; });
+  node.addEventListener("pointermove", ev => {
+    const t=$("tip");
+    const x = Math.min(ev.clientX+14, window.innerWidth - t.offsetWidth - 8);
+    t.style.left = x+"px"; t.style.top = (ev.clientY+16)+"px";
+  });
+  node.addEventListener("pointerleave", () => { $("tip").style.opacity=0; });
+}
+
+/* ---------- panel 1: capacity dumbbells ---------- */
+function drawCapacity() {
+  const svg = $("svg-capacity"); clear(svg);
+  const cells = activeCells(); if (!cells.length) return;
+  const layers = layersFor(cells).filter(l=>l!=="raw");
+  const W=520, ROWH=40, ML=76, MR=18, MT=30, MB=34;
+  const H = MT+MB+layers.length*ROWH;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const XMAX=0.62, xs = v => ML + Math.min(v,XMAX)/XMAX*(W-ML-MR);
+
+  svg.appendChild(el("rect",{x:xs(0.5),y:MT-14,width:xs(XMAX)-xs(0.5),height:H-MT-MB+14,fill:"#F4E4DF",opacity:.55}));
+  svg.appendChild(el("text",{x:xs(0.5)+5,y:MT-2,"font-size":9.5,fill:ALARM},"capacity-bound ≥ 0.5"));
+  for (const g of [0,0.1,0.2,0.3,0.4,0.5,0.6]) {
+    svg.appendChild(el("line",{x1:xs(g),y1:MT-14,x2:xs(g),y2:H-MB,stroke:g===0.5?ALARM:HAIR,"stroke-width":g===0.5?1.2:1,"stroke-dasharray":g===0.5?"4 3":"none"}));
+    svg.appendChild(el("text",{x:xs(g),y:H-MB+14,"font-size":9.5,"text-anchor":"middle",class:"num"},g.toFixed(1)));
+  }
+  svg.appendChild(el("text",{x:(ML+W-MR)/2,y:H-6,"font-size":10,"text-anchor":"middle"},"participation ratio ÷ width"));
+
+  layers.forEach((l,i)=>{
+    const y = MT+i*ROWH+ROWH/2-6;
+    const col = GCOLOR[GROUP[l]];
+    svg.appendChild(el("text",{x:ML-8,y:y+3,"font-size":11,"text-anchor":"end",fill:INK},l));
+    const w = cells[0].cell.layers[l].w;
+    svg.appendChild(el("text",{x:ML-8,y:y+14,"font-size":8.5,"text-anchor":"end",fill:SOFT,class:"num"},"w="+w));
+    const initVals = cells.map(c=>c.cell.layers[l].pr_init/w);
+    const trVals = cells.map(c=>c.cell.layers[l].pr/w);
+    const im = initVals.reduce((a,b)=>a+b)/initVals.length;
+    const tm = trVals.reduce((a,b)=>a+b)/trVals.length;
+    svg.appendChild(el("line",{x1:xs(im),y1:y,x2:xs(tm),y2:y,stroke:HAIR,"stroke-width":1.6}));
+    const io = el("circle",{cx:xs(im),cy:y,r:4.5,fill:"none",stroke:BRASS,"stroke-width":1.8});
+    tipOn(io, `${l}  random init\nPR/w = ${fmt(im,3)}`); svg.appendChild(io);
+    cells.forEach(c=>{
+      const v = c.cell.layers[l].pr/w;
+      const d = el("circle",{cx:xs(v),cy:y,r:4.5,fill:col});
+      tipOn(d, `${l}  ${c.seed} trained\nPR = ${fmt(c.cell.layers[l].pr,1)} of ${w}\nPR/w = ${fmt(v,3)}`);
+      svg.appendChild(d);
+    });
+    svg.appendChild(el("text",{x:xs(Math.max(tm,im))+9,y:y+3.5,"font-size":9.5,fill:col,class:"num"},fmt(tm,2)));
+  });
+  const lg = el("g",{}); svg.appendChild(lg);
+  lg.appendChild(el("circle",{cx:ML+4,cy:12,r:4,fill:GCOLOR.policy}));
+  lg.appendChild(el("text",{x:ML+12,y:15,"font-size":9.5},"trained (per seed)"));
+  lg.appendChild(el("circle",{cx:ML+128,cy:12,r:4,fill:"none",stroke:BRASS,"stroke-width":1.8}));
+  lg.appendChild(el("text",{x:ML+136,y:15,"font-size":9.5},"random init"));
+}
+
+/* ---------- panel 2: saturation scatter (global) ---------- */
+function drawSat() {
+  const svg = $("svg-sat"); clear(svg);
+  const W=520, H=320, ML=52, MR=16, MT=26, MB=40;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const XMAX=0.62;
+  const xs=v=>ML+Math.min(v,XMAX)/XMAX*(W-ML-MR), ys=v=>H-MB-(v)*(H-MT-MB);
+  svg.appendChild(el("rect",{x:xs(0.5),y:ys(1),width:xs(XMAX)-xs(0.5),height:ys(0.4)-ys(1),fill:"#F4E4DF",opacity:.6}));
+  svg.appendChild(el("text",{x:xs(XMAX)-4,y:ys(0.96),"font-size":9.5,fill:ALARM,"text-anchor":"end"},"capacity-bound"));
+  svg.appendChild(el("text",{x:xs(XMAX)-4,y:ys(0.96)+11,"font-size":9.5,fill:ALARM,"text-anchor":"end"},"corner: empty"));
+  for (const g of [0,0.2,0.4,0.6,0.8,1.0]) {
+    svg.appendChild(el("line",{x1:ML,y1:ys(g),x2:W-MR,y2:ys(g),stroke:HAIR}));
+    svg.appendChild(el("text",{x:ML-6,y:ys(g)+3,"font-size":9.5,"text-anchor":"end",class:"num"},g.toFixed(1)));
+  }
+  for (const g of [0,0.1,0.2,0.3,0.4,0.5,0.6]) {
+    svg.appendChild(el("line",{x1:xs(g),y1:MT,x2:xs(g),y2:H-MB,stroke:g===0.5?ALARM:HAIR,"stroke-dasharray":g===0.5?"4 3":"none"}));
+    svg.appendChild(el("text",{x:xs(g),y:H-MB+14,"font-size":9.5,"text-anchor":"middle",class:"num"},g.toFixed(1)));
+  }
+  svg.appendChild(el("text",{x:(ML+W-MR)/2,y:H-8,"font-size":10,"text-anchor":"middle"},"participation ratio ÷ width (trained)"));
+  svg.appendChild(el("text",{x:12,y:MT-10,"font-size":10},"saturated / dead unit fraction"));
+
+  const labeled = new Set();
+  for (const key in DATA) {
+    const c = DATA[key];
+    for (const l in c.layers) {
+      const d = c.layers[l];
+      if (d.sat == null) continue;
+      const v = d.pr/d.w;
+      const col = GCOLOR[GROUP[l]];
+      const pt = el("circle",{cx:xs(v),cy:ys(d.sat),r:4.5,fill:col,opacity:.85});
+      tipOn(pt, `${key}\n${l}: sat ${fmt(d.sat,2)}, PR/w ${fmt(v,3)}`);
+      svg.appendChild(pt);
+      if (d.sat>0.6) {
+        const lab = l+(key.includes("flat")?" (flat)":"");
+        if (!labeled.has(lab)) {
+          labeled.add(lab);
+          svg.appendChild(el("text",{x:xs(v)+8,y:ys(d.sat)+3,"font-size":9,fill:col},lab));
+        }
+      }
+    }
+  }
+  let lx=ML+2;
+  for (const g of ["extractor","policy","value","head"]) {
+    svg.appendChild(el("circle",{cx:lx,cy:14,r:4,fill:GCOLOR[g]}));
+    svg.appendChild(el("text",{x:lx+8,y:17,"font-size":9.5},g));
+    lx += 14 + g.length*6.4 + 14;
+  }
+}
+
+/* ---------- panel 3: action-decoding probe ---------- */
+function drawProbe() {
+  const svg = $("svg-probe"); clear(svg);
+  const cells = activeCells(); if (!cells.length) return;
+  const layers = layersFor(cells);
+  const cats = layers.concat(["net argmax"]);
+  const W=1040, H=330, ML=64, MR=20, MT=30, MB=44;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const raw = cells[0].cell.layers.raw.acc;
+  const maj = cells[0].cell.maj_act;
+  let vals = [maj, raw, raw+0.035];
+  cells.forEach(c=>{ layers.forEach(l=>vals.push(c.cell.layers[l].acc)); vals.push(c.cell.agree); });
+  const lo = Math.min(...vals)-0.012, hi = Math.max(...vals)+0.012;
+  const ys=v=>H-MB-(v-lo)/(hi-lo)*(H-MT-MB);
+  const xcat=i=>ML+(i+0.5)*(W-ML-MR)/cats.length;
+
+  const yt=[]; for(let v=Math.ceil(lo*50)/50; v<=hi; v+=0.02) yt.push(v);
+  yt.forEach(v=>{
+    svg.appendChild(el("line",{x1:ML,y1:ys(v),x2:W-MR,y2:ys(v),stroke:HAIR}));
+    svg.appendChild(el("text",{x:ML-8,y:ys(v)+3.5,"font-size":10,"text-anchor":"end",class:"num"},v.toFixed(2)));
+  });
+  // criterion band raw..raw+0.03
+  svg.appendChild(el("rect",{x:ML,y:ys(raw+0.03),width:W-ML-MR,height:ys(raw)-ys(raw+0.03),fill:"#DFEDE4",opacity:.7}));
+  svg.appendChild(el("text",{x:W-MR-4,y:ys(raw+0.03)-4,"font-size":9.5,fill:"#2E6B46","text-anchor":"end"},"promotion criterion: raw + 0.03 — empty"));
+  // raw line
+  svg.appendChild(el("line",{x1:ML,y1:ys(raw),x2:W-MR,y2:ys(raw),stroke:INK,"stroke-width":1.6}));
+  svg.appendChild(el("text",{x:ML+4,y:ys(raw)-5,"font-size":10,fill:INK},`raw-obs probe ${fmt(raw,3)}`));
+  // majority line
+  svg.appendChild(el("line",{x1:ML,y1:ys(maj),x2:W-MR,y2:ys(maj),stroke:SOFT,"stroke-dasharray":"5 4"}));
+  svg.appendChild(el("text",{x:ML+4,y:ys(maj)-5,"font-size":10,fill:SOFT},`masked-majority ${fmt(maj,3)}`));
+
+  const sepX = (xcat(cats.length-2)+xcat(cats.length-1))/2;
+  svg.appendChild(el("line",{x1:sepX,y1:MT,x2:sepX,y2:H-MB,stroke:HAIR,"stroke-dasharray":"2 4"}));
+
+  cats.forEach((cat,i)=>{
+    svg.appendChild(el("text",{x:xcat(i),y:H-MB+16,"font-size":11,"text-anchor":"middle",fill:cat==="net argmax"?ALARM:INK},cat));
+    if (cat!=="net argmax" && cat!=="raw")
+      svg.appendChild(el("text",{x:xcat(i),y:H-MB+29,"font-size":8.5,"text-anchor":"middle",fill:SOFT},GROUP[cat]));
+    cells.forEach((c,si)=>{
+      const jitter = (si-(cells.length-1)/2)*9;
+      let v, col, shape;
+      if (cat==="net argmax") { v=c.cell.agree; col=ALARM; }
+      else { v=c.cell.layers[cat].acc; col=GCOLOR[GROUP[cat]]; }
+      const cx=xcat(i)+jitter;
+      let node;
+      if (cat==="net argmax") {
+        node = el("rect",{x:cx-4.5,y:ys(v)-4.5,width:9,height:9,fill:col,transform:`rotate(45 ${cx} ${ys(v)})`});
+        tipOn(node,`net masked argmax  ${c.seed}\nagreement = ${fmt(v,3)}\n(vs raw-obs probe ${fmt(raw,3)})`);
+      } else {
+        node = el("circle",{cx:cx,cy:ys(v),r:5,fill:col,opacity:cat==="raw"?1:.9});
+        tipOn(node,`${cat}  ${c.seed}\nprobe acc = ${fmt(v,3)}\nΔ vs raw = ${(v-raw>=0?"+":"")+fmt(v-raw,3)}`);
+      }
+      svg.appendChild(node);
+    });
+  });
+
+  const note = $("probeNote");
+  if (curDS==="netdmcts") {
+    note.hidden = false;
+    note.textContent = "Note: the net's own argmax (0.517–0.548) sits BELOW the raw-obs linear probe (0.607) against this teacher.";
+  } else note.hidden = true;
+}
+
+/* ---------- panel 4: argmax vs raw probe (fixed, netdmcts) ---------- */
+function drawArgmax() {
+  const svg = $("svg-argmax"); clear(svg);
+  const rows = [
+    { label:"raw-obs ridge probe", v:DATA["b0k_s0__probe-netdmcts"].layers.raw.acc, col:INK },
+    { label:"b0k argmax s2", v:DATA["b0k_s2__probe-netdmcts"].agree, col:ALARM },
+    { label:"b0k argmax s1", v:DATA["b0k_s1__probe-netdmcts"].agree, col:ALARM },
+    { label:"b0k argmax s0", v:DATA["b0k_s0__probe-netdmcts"].agree, col:ALARM },
+    { label:"masked-majority", v:DATA["b0k_s0__probe-netdmcts"].maj_act, col:SOFT },
+  ];
+  const W=520, ROWH=36, ML=170, MR=52, MT=14, MB=30;
+  const H=MT+MB+rows.length*ROWH;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const LO=0.45, HI=0.63;
+  const xs=v=>ML+(Math.max(v,LO)-LO)/(HI-LO)*(W-ML-MR);
+  for (const g of [0.45,0.5,0.55,0.6]) {
+    svg.appendChild(el("line",{x1:xs(g),y1:MT,x2:xs(g),y2:H-MB,stroke:HAIR}));
+    svg.appendChild(el("text",{x:xs(g),y:H-MB+14,"font-size":9.5,"text-anchor":"middle",class:"num"},g.toFixed(2)));
+  }
+  rows.forEach((r,i)=>{
+    const y=MT+i*ROWH+7;
+    svg.appendChild(el("text",{x:ML-8,y:y+11,"font-size":10.5,"text-anchor":"end",fill:INK},r.label));
+    const bar=el("rect",{x:xs(LO),y:y,width:Math.max(xs(r.v)-xs(LO),1.5),height:15,fill:r.col,rx:1.5,opacity:r.col===SOFT?.55:.92});
+    tipOn(bar,`${r.label}\nagreement with netdmcts teacher = ${fmt(r.v,3)}`);
+    svg.appendChild(bar);
+    svg.appendChild(el("text",{x:xs(r.v)+5,y:y+11.5,"font-size":10,fill:r.col,class:"num"},fmt(r.v,3)));
+  });
+  svg.appendChild(el("text",{x:(ML+W-MR)/2,y:H-4,"font-size":10,"text-anchor":"middle"},"agreement with the netdmcts teacher (held-out)"));
+}
+
+/* ---------- panel 5: critic outcome AUC ---------- */
+function drawCritic() {
+  const svg = $("svg-critic"); clear(svg);
+  const cells = activeCells(); if (!cells.length) return;
+  const layers = layersFor(cells).filter(l=>l!=="raw");
+  const W=520, H=300, ML=58, MR=16, MT=24, MB=44;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const raw = cells[0].cell.layers.raw.auc;
+  let vals=[raw];
+  cells.forEach(c=>layers.forEach(l=>vals.push(c.cell.layers[l].auc)));
+  const lo=Math.min(...vals)-0.01, hi=Math.max(...vals)+0.01;
+  const ys=v=>H-MB-(v-lo)/(hi-lo)*(H-MT-MB);
+  const xcat=i=>ML+(i+0.5)*(W-ML-MR)/layers.length;
+  const step = (hi-lo)>0.08?0.04:0.02;
+  for(let v=Math.ceil(lo/step)*step; v<=hi; v+=step){
+    svg.appendChild(el("line",{x1:ML,y1:ys(v),x2:W-MR,y2:ys(v),stroke:HAIR}));
+    svg.appendChild(el("text",{x:ML-7,y:ys(v)+3.5,"font-size":9.5,"text-anchor":"end",class:"num"},v.toFixed(2)));
+  }
+  svg.appendChild(el("line",{x1:ML,y1:ys(raw),x2:W-MR,y2:ys(raw),stroke:INK,"stroke-width":1.5}));
+  svg.appendChild(el("text",{x:ML+4,y:ys(raw)-5,"font-size":9.5,fill:INK},`raw obs ${fmt(raw,3)}`));
+  layers.forEach((l,i)=>{
+    svg.appendChild(el("text",{x:xcat(i),y:H-MB+15,"font-size":10,"text-anchor":"middle",fill:INK},l));
+    cells.forEach((c,si)=>{
+      const jitter=(si-(cells.length-1)/2)*8;
+      const v=c.cell.layers[l].auc;
+      const pt=el("circle",{cx:xcat(i)+jitter,cy:ys(v),r:4.5,fill:GCOLOR[GROUP[l]],opacity:.9});
+      tipOn(pt,`${l}  ${c.seed}\noutcome AUC = ${fmt(v,3)}\nΔ vs raw = ${(v-raw>=0?"+":"")+fmt(v-raw,3)}`);
+      svg.appendChild(pt);
+    });
+  });
+  svg.appendChild(el("text",{x:(ML+W-MR)/2,y:H-6,"font-size":10,"text-anchor":"middle"},"outcome AUC by layer"));
+  const note=$("criticNote");
+  if (curDS==="netdmcts") {
+    note.hidden=false;
+    note.textContent="Uninformative on this set: the teacher wins ~everything (outcome majority 0.996). Read this panel on the mcts:100 sets.";
+  } else note.hidden=true;
+}
+
+/* ---------- matrix table ---------- */
+function drawTable() {
+  const tbl=$("matrixTbl");
+  let h = "<tr><th>layer</th><th>w</th><th>PR</th><th>PR/w</th><th>PR/w init</th><th>sat</th><th>outcome AUC</th><th>action acc</th><th>Δ acc vs raw</th></tr>";
+  for (const key in DATA) {
+    const c=DATA[key];
+    h += `<tr class="cellhead"><td colspan="9">${key} &nbsp;·&nbsp; n=${c.n.toLocaleString()} · argmax agreement ${fmt(c.agree,3)} · majority: outcome ${fmt(c.maj_out,3)} / action ${fmt(c.maj_act,3)}</td></tr>`;
+    const raw=c.layers.raw.acc;
+    for (const l of LAYER_ORDER) {
+      const d=c.layers[l]; if(!d) continue;
+      const dAcc = l==="raw" ? null : d.acc-raw;
+      const cls = dAcc==null ? "" : (dAcc>=0.03 ? "better" : (dAcc<-0.005?"worse":""));
+      h += `<tr><td>${l}</td><td>${d.w}</td><td>${fmt(d.pr,1)}</td><td>${fmt(d.pr/d.w,3)}</td>`+
+           `<td>${d.pr_init==null?"–":fmt(d.pr_init/d.w,3)}</td><td>${d.sat==null?"–":fmt(d.sat,2)}</td>`+
+           `<td>${fmt(d.auc,3)}</td><td>${fmt(d.acc,3)}</td>`+
+           `<td class="${cls}">${dAcc==null?"–":(dAcc>=0?"+":"")+fmt(dAcc,3)}</td></tr>`;
+    }
+  }
+  tbl.innerHTML=h;
+}
+
+/* ---------- controls ---------- */
+function buildControls() {
+  const seg=$("dsSeg");
+  for (const key in DS) {
+    const b=document.createElement("button");
+    b.textContent=DS[key].label; b.dataset.ds=key; b.setAttribute("role","tab");
+    b.addEventListener("click",()=>{ curDS=key; syncControls(); redraw(); });
+    seg.appendChild(b);
+  }
+  const box=$("seedBox");
+  for (const s of ["s0","s1","s2"]) {
+    const lab=document.createElement("label");
+    const inp=document.createElement("input");
+    inp.type="checkbox"; inp.checked=true; inp.dataset.seed=s;
+    inp.addEventListener("change",()=>{
+      if (inp.checked) curSeeds.add(s); else curSeeds.delete(s);
+      if (!curSeeds.size) { curSeeds.add(s); inp.checked=true; }
+      syncControls(); redraw();
+    });
+    lab.appendChild(inp); lab.appendChild(document.createTextNode(s));
+    box.appendChild(lab);
+  }
+}
+function syncControls() {
+  document.querySelectorAll("#dsSeg button").forEach(b=>b.classList.toggle("on",b.dataset.ds===curDS));
+  const avail=new Set(DS[curDS].seeds);
+  document.querySelectorAll("#seedBox label").forEach(lab=>{
+    const s=lab.querySelector("input").dataset.seed;
+    lab.classList.toggle("off-limits",!avail.has(s));
+    lab.classList.toggle("on",avail.has(s)&&curSeeds.has(s));
+    lab.querySelector("input").disabled=!avail.has(s);
+  });
+  const cells=activeCells();
+  const n=cells.length?cells[0].cell.n:0;
+  $("metaLine").textContent=`${DS[curDS].model} · ${cells.length} seed${cells.length===1?"":"s"} · n=${n.toLocaleString()} states`;
+}
+function redraw(){ drawCapacity(); drawProbe(); drawCritic(); }
+
+buildControls(); syncControls();
+drawCapacity(); drawSat(); drawProbe(); drawArgmax(); drawCritic(); drawTable();
+</script>
+</body>
+</html>
