@@ -58,6 +58,7 @@ def load_practicum(path: str) -> tuple[dict, dict]:
             )
         with np.load(path) as data:
             arrays = {k: data[k] for k in _TOKEN_ARRAY_KEYS if k in data.files}
+            arrays |= {k: data[k] for k in data.files if k.startswith("concept_")}
     else:
         # "flat" (default for back-compat with old manifests that lack obs_mode)
         if manifest.get("obs_size") != OBS_SIZE or manifest.get("action_size") != ACTION_SIZE:
@@ -68,6 +69,7 @@ def load_practicum(path: str) -> tuple[dict, dict]:
             )
         with np.load(path) as data:
             arrays = {k: data[k] for k in _ARRAY_KEYS if k in data.files}
+            arrays |= {k: data[k] for k in data.files if k.startswith("concept_")}
 
     return arrays, manifest
 

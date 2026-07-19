@@ -10,6 +10,7 @@ Entries live in `docs/worklog/`, split by month.
 
 ## 2026-07
 
+- 2026-07-19 — [E27: concept probes — the net computes exactly ONE concept beyond its input](worklog/2026-07.md) — winner_side is the only concept beating the raw-obs control (+0.04-0.05, vf tower); lethal/threat are ~0.98 linearly decodable from the input and never improved by depth (missed lethals = readout failure, lens guard correct); can_item decays 0.98 raw -> 0.61 towers (item underuse = representation failure, conditioning arm)
 - 2026-07-18 — [Net-probe VERDICT: held-out replication — capacity is NOT the lever](worklog/2026-07.md) — pilot picture replicates on held-out seed-1M data across all 3 b0k seeds; no layer beats raw obs on action decoding (raw-obs linear probe even beats the net's own argmax vs the netdmcts teacher, 0.607 vs 0.52-0.55); arch sweep reduced to conditioning + head arms, width/depth dead
 - 2026-07-18 — [Net-probe instrument: NN-utilization metrics before the arch sweep](worklog/2026-07.md) — PR/erank/saturation/CKA/linear-probe instrument shipped; pilot: no capacity pressure in either net, no layer beats raw obs on teacher-action decoding — conditioning and head, not width, are the sweep candidates
 - 2026-07-09 — [E22: MCTS-depth pilot vs the planner RoR](worklog/2026-07.md) — both cheating MCTS and fair dMCTS cross over and beat the 0.978 planner at a shallow budget (~100-1500 sims); depth, not information, is the driver — vbeam only searches one turn deep

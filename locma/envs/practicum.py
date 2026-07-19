@@ -51,12 +51,14 @@ class _Collector:
     action the semantic action space cannot represent (sem_index is None).
     """
 
-    def __init__(self, teacher_seat: int, obs_mode: str = "flat") -> None:
+    def __init__(self, teacher_seat: int, obs_mode: str = "flat", labeler=None) -> None:
         self.teacher_seat = teacher_seat
         self.obs_mode = obs_mode
+        self.labeler = labeler  # optional: gs -> dict of per-state concept labels
         self.obs: list = []
         self.action: list = []
         self.mask: list = []
+        self.labels: list = []
         self.dropped = 0
 
     def __call__(self, seat: int, action, gs) -> None:
@@ -78,6 +80,8 @@ class _Collector:
             self.obs.append(encode_battle(view))
         self.action.append(idx)
         self.mask.append(action_mask(view, legal))
+        if self.labeler is not None:
+            self.labels.append(self.labeler(gs))
 
 
 def record_practicum(
@@ -87,6 +91,7 @@ def record_practicum(
     out: str = "practicum.npz",
     seed: int = 0,
     obs_mode: str = "flat",
+    labeler=None,
 ) -> dict:
     """Generate a practicum and write ``out`` (.npz) + its manifest.
 
@@ -98,6 +103,10 @@ def record_practicum(
     - ``"flat"`` (default): stores ``obs`` array of shape (n, OBS_SIZE), unchanged.
     - ``"token"``: stores four arrays (obs_tokens, obs_card_ids, obs_token_mask,
       obs_scalars) for the PPO2 tokenized observation; no ``obs`` key written.
+
+    ``labeler``, if given, is called as ``labeler(gs)`` at every captured
+    decision and must return a flat dict of floats; each key is written to the
+    npz as ``concept_<key>`` (float32, one value per example).
     """
     if obs_mode not in {"flat", "token"}:
         raise ValueError(f"obs_mode must be 'flat' or 'token', got {obs_mode!r}")
@@ -110,6 +119,7 @@ def record_practicum(
     seat_all: list = []
     opp_all: list = []
     gid_all: list = []
+    labels_all: list = []
     dropped = 0
     failed_games = 0
     gid = 0
@@ -121,7 +131,7 @@ def record_practicum(
                 teacher_pol = make_policy(teacher)
                 opp_pol = make_policy(opp_spec)
                 p0, p1 = (teacher_pol, opp_pol) if teacher_seat == 0 else (opp_pol, teacher_pol)
-                col = _Collector(teacher_seat, obs_mode)
+                col = _Collector(teacher_seat, obs_mode, labeler=labeler)
                 try:
                     result = run_game(p0, p1, s, on_pre_step=col)
                 except Exception:
@@ -137,6 +147,7 @@ def record_practicum(
                     seat_all.extend([teacher_seat] * k)
                     opp_all.extend([opp_id] * k)
                     gid_all.extend([gid] * k)
+                    labels_all.extend(col.labels)
                 dropped += col.dropped
                 gid += 1
 
@@ -149,6 +160,11 @@ def record_practicum(
         opponent_id=np.asarray(opp_all, dtype=np.int8),
         game_id=np.asarray(gid_all, dtype=np.int32),
     )
+    if labeler is not None and labels_all:
+        for key in labels_all[0]:
+            common_arrays[f"concept_{key}"] = np.asarray(
+                [d[key] for d in labels_all], dtype=np.float32
+            )
     if obs_mode == "token":
         # .reshape(...) gives correct shape even when n==0 (mirrors flat branch).
         obs_arrays = dict(
@@ -195,6 +211,8 @@ def record_practicum(
         manifest["n_tactical"] = N_TACTICAL
     else:
         manifest["obs_size"] = OBS_SIZE
+    if labeler is not None and labels_all:
+        manifest["concepts"] = sorted(labels_all[0])
 
     with open(_manifest_path(out), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
