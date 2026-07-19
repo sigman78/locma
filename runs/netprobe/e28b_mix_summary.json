@@ -1,0 +1,82 @@
+{
+ "config": {
+  "model": "depot:b0k/b0k_s0.zip",
+  "data": "runs/e27-concepts.npz",
+  "epochs": 12,
+  "batch": 512,
+  "lr": 0.0003,
+  "val_frac": 0.2,
+  "seeds": "0,1",
+  "hidden": 128,
+  "arms": "pointer,premix,raw",
+  "out": "runs/netprobe/e28b_mix_summary.json"
+ },
+ "n": 33186,
+ "seeds": {
+  "0": {
+   "pointer": {
+    "trainable_params": 45953,
+    "final": {
+     "agreement": 0.4229,
+     "item_recall": 0.289,
+     "item_rate_pred": 0.1526,
+     "agreement_lethal_states": 0.2214,
+     "agreement_item_states": 0.1792
+    }
+   },
+   "premix": {
+    "trainable_params": 45953,
+    "final": {
+     "agreement": 0.4255,
+     "item_recall": 0.3642,
+     "item_rate_pred": 0.204,
+     "agreement_lethal_states": 0.2255,
+     "agreement_item_states": 0.2659
+    }
+   },
+   "raw": {
+    "trainable_params": 45905,
+    "final": {
+     "agreement": 0.4289,
+     "item_recall": 0.3295,
+     "item_rate_pred": 0.1758,
+     "agreement_lethal_states": 0.2371,
+     "agreement_item_states": 0.2254
+    }
+   }
+  },
+  "1": {
+   "pointer": {
+    "trainable_params": 45953,
+    "final": {
+     "agreement": 0.4355,
+     "item_recall": 0.2765,
+     "item_rate_pred": 0.134,
+     "agreement_lethal_states": 0.2558,
+     "agreement_item_states": 0.1706
+    }
+   },
+   "premix": {
+    "trainable_params": 45953,
+    "final": {
+     "agreement": 0.4315,
+     "item_recall": 0.3588,
+     "item_rate_pred": 0.1859,
+     "agreement_lethal_states": 0.2398,
+     "agreement_item_states": 0.2294
+    }
+   },
+   "raw": {
+    "trainable_params": 45905,
+    "final": {
+     "agreement": 0.4302,
+     "item_recall": 0.3176,
+     "item_rate_pred": 0.1642,
+     "agreement_lethal_states": 0.2282,
+     "agreement_item_states": 0.1941
+    }
+   }
+  }
+ },
+ "verdict": "MIXING_UNNECESSARY (premix within 0.005 of pointer on all seeds)"
+}
