@@ -1,0 +1,1020 @@
+{
+ "config": {
+  "model": "depot:b0k/b0k_s0.zip",
+  "data": "runs/e27-concepts.npz",
+  "epochs": 12,
+  "batch": 512,
+  "lr": 0.0003,
+  "val_frac": 0.2,
+  "seed": 0,
+  "hidden": 128,
+  "out": "runs/e28-gate1-s0.json"
+ },
+ "control": {
+  "trainable_params": 30683,
+  "final": {
+   "epoch": 11,
+   "train_loss": 1.4775,
+   "agreement": 0.3895,
+   "item_recall": 0.2832,
+   "item_precision": 0.5765,
+   "item_rate_pred": 0.141,
+   "item_rate_teacher": 0.2869,
+   "agreement_lethal_states": 0.2197,
+   "agreement_item_states": 0.1965,
+   "family_confusion_rows_teacher": [
+    [
+     0,
+     47,
+     0,
+     208
+    ],
+    [
+     0,
+     1986,
+     22,
+     627
+    ],
+    [
+     0,
+     69,
+     49,
+     55
+    ],
+    [
+     2,
+     640,
+     14,
+     3049
+    ]
+   ]
+  },
+  "history": [
+   {
+    "epoch": 0,
+    "train_loss": 1.694,
+    "agreement": 0.3676,
+    "item_recall": 0.2601,
+    "item_precision": 0.6,
+    "item_rate_pred": 0.1244,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2172,
+    "agreement_item_states": 0.1792,
+    "family_confusion_rows_teacher": [
+     [
+      4,
+      45,
+      0,
+      206
+     ],
+     [
+      3,
+      2007,
+      21,
+      604
+     ],
+     [
+      0,
+      69,
+      45,
+      59
+     ],
+     [
+      20,
+      675,
+      9,
+      3001
+     ]
+    ]
+   },
+   {
+    "epoch": 1,
+    "train_loss": 1.5716,
+    "agreement": 0.3731,
+    "item_recall": 0.2486,
+    "item_precision": 0.6232,
+    "item_rate_pred": 0.1144,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2289,
+    "agreement_item_states": 0.1676,
+    "family_confusion_rows_teacher": [
+     [
+      1,
+      45,
+      0,
+      209
+     ],
+     [
+      2,
+      2037,
+      19,
+      577
+     ],
+     [
+      0,
+      69,
+      43,
+      61
+     ],
+     [
+      3,
+      677,
+      7,
+      3018
+     ]
+    ]
+   },
+   {
+    "epoch": 2,
+    "train_loss": 1.5317,
+    "agreement": 0.3777,
+    "item_recall": 0.237,
+    "item_precision": 0.6406,
+    "item_rate_pred": 0.1061,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2181,
+    "agreement_item_states": 0.1503,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      1,
+      1989,
+      16,
+      629
+     ],
+     [
+      0,
+      67,
+      41,
+      65
+     ],
+     [
+      3,
+      631,
+      7,
+      3064
+     ]
+    ]
+   },
+   {
+    "epoch": 3,
+    "train_loss": 1.5162,
+    "agreement": 0.3845,
+    "item_recall": 0.2486,
+    "item_precision": 0.6324,
+    "item_rate_pred": 0.1128,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.238,
+    "agreement_item_states": 0.1676,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      1,
+      2011,
+      17,
+      606
+     ],
+     [
+      0,
+      69,
+      43,
+      61
+     ],
+     [
+      2,
+      644,
+      8,
+      3051
+     ]
+    ]
+   },
+   {
+    "epoch": 4,
+    "train_loss": 1.5088,
+    "agreement": 0.3808,
+    "item_recall": 0.2543,
+    "item_precision": 0.5714,
+    "item_rate_pred": 0.1277,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2222,
+    "agreement_item_states": 0.1676,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1929,
+      22,
+      684
+     ],
+     [
+      0,
+      64,
+      44,
+      65
+     ],
+     [
+      1,
+      589,
+      11,
+      3104
+     ]
+    ]
+   },
+   {
+    "epoch": 5,
+    "train_loss": 1.5039,
+    "agreement": 0.3834,
+    "item_recall": 0.2543,
+    "item_precision": 0.557,
+    "item_rate_pred": 0.131,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2231,
+    "agreement_item_states": 0.1734,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1922,
+      23,
+      690
+     ],
+     [
+      0,
+      61,
+      44,
+      68
+     ],
+     [
+      1,
+      590,
+      12,
+      3102
+     ]
+    ]
+   },
+   {
+    "epoch": 6,
+    "train_loss": 1.4991,
+    "agreement": 0.3839,
+    "item_recall": 0.2543,
+    "item_precision": 0.5641,
+    "item_rate_pred": 0.1294,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2214,
+    "agreement_item_states": 0.1734,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1962,
+      23,
+      650
+     ],
+     [
+      0,
+      64,
+      44,
+      65
+     ],
+     [
+      1,
+      610,
+      11,
+      3083
+     ]
+    ]
+   },
+   {
+    "epoch": 7,
+    "train_loss": 1.4932,
+    "agreement": 0.385,
+    "item_recall": 0.2428,
+    "item_precision": 0.5385,
+    "item_rate_pred": 0.1294,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2164,
+    "agreement_item_states": 0.1618,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1929,
+      24,
+      682
+     ],
+     [
+      0,
+      66,
+      42,
+      65
+     ],
+     [
+      1,
+      583,
+      12,
+      3109
+     ]
+    ]
+   },
+   {
+    "epoch": 8,
+    "train_loss": 1.4887,
+    "agreement": 0.388,
+    "item_recall": 0.2601,
+    "item_precision": 0.5625,
+    "item_rate_pred": 0.1327,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2189,
+    "agreement_item_states": 0.1734,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1926,
+      23,
+      686
+     ],
+     [
+      0,
+      63,
+      45,
+      65
+     ],
+     [
+      1,
+      577,
+      12,
+      3115
+     ]
+    ]
+   },
+   {
+    "epoch": 9,
+    "train_loss": 1.4845,
+    "agreement": 0.3882,
+    "item_recall": 0.2659,
+    "item_precision": 0.5476,
+    "item_rate_pred": 0.1393,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2206,
+    "agreement_item_states": 0.1792,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1952,
+      25,
+      658
+     ],
+     [
+      0,
+      64,
+      46,
+      63
+     ],
+     [
+      2,
+      602,
+      13,
+      3088
+     ]
+    ]
+   },
+   {
+    "epoch": 10,
+    "train_loss": 1.4802,
+    "agreement": 0.3858,
+    "item_recall": 0.2832,
+    "item_precision": 0.5632,
+    "item_rate_pred": 0.1443,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2139,
+    "agreement_item_states": 0.1965,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      46,
+      0,
+      209
+     ],
+     [
+      0,
+      1914,
+      23,
+      698
+     ],
+     [
+      0,
+      59,
+      49,
+      65
+     ],
+     [
+      2,
+      557,
+      15,
+      3131
+     ]
+    ]
+   },
+   {
+    "epoch": 11,
+    "train_loss": 1.4775,
+    "agreement": 0.3895,
+    "item_recall": 0.2832,
+    "item_precision": 0.5765,
+    "item_rate_pred": 0.141,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2197,
+    "agreement_item_states": 0.1965,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      47,
+      0,
+      208
+     ],
+     [
+      0,
+      1986,
+      22,
+      627
+     ],
+     [
+      0,
+      69,
+      49,
+      55
+     ],
+     [
+      2,
+      640,
+      14,
+      3049
+     ]
+    ]
+   }
+  ]
+ },
+ "pointer": {
+  "trainable_params": 45953,
+  "final": {
+   "epoch": 11,
+   "train_loss": 1.4358,
+   "agreement": 0.4229,
+   "item_recall": 0.289,
+   "item_precision": 0.5435,
+   "item_rate_pred": 0.1526,
+   "item_rate_teacher": 0.2869,
+   "agreement_lethal_states": 0.2214,
+   "agreement_item_states": 0.1792,
+   "family_confusion_rows_teacher": [
+    [
+     0,
+     45,
+     0,
+     210
+    ],
+    [
+     0,
+     1911,
+     20,
+     704
+    ],
+    [
+     0,
+     58,
+     50,
+     65
+    ],
+    [
+     1,
+     510,
+     22,
+     3172
+    ]
+   ]
+  },
+  "history": [
+   {
+    "epoch": 0,
+    "train_loss": 1.6265,
+    "agreement": 0.4003,
+    "item_recall": 0.2428,
+    "item_precision": 0.5753,
+    "item_rate_pred": 0.1211,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2048,
+    "agreement_item_states": 0.1214,
+    "family_confusion_rows_teacher": [
+     [
+      1,
+      46,
+      0,
+      208
+     ],
+     [
+      8,
+      1977,
+      16,
+      634
+     ],
+     [
+      3,
+      56,
+      42,
+      72
+     ],
+     [
+      1,
+      624,
+      15,
+      3065
+     ]
+    ]
+   },
+   {
+    "epoch": 1,
+    "train_loss": 1.5387,
+    "agreement": 0.4093,
+    "item_recall": 0.2197,
+    "item_precision": 0.6129,
+    "item_rate_pred": 0.1028,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2139,
+    "agreement_item_states": 0.1214,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      47,
+      0,
+      208
+     ],
+     [
+      0,
+      2038,
+      15,
+      582
+     ],
+     [
+      1,
+      64,
+      38,
+      70
+     ],
+     [
+      0,
+      659,
+      9,
+      3037
+     ]
+    ]
+   },
+   {
+    "epoch": 2,
+    "train_loss": 1.5058,
+    "agreement": 0.4121,
+    "item_recall": 0.2023,
+    "item_precision": 0.6731,
+    "item_rate_pred": 0.0862,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2123,
+    "agreement_item_states": 0.1329,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      47,
+      0,
+      208
+     ],
+     [
+      0,
+      2047,
+      11,
+      577
+     ],
+     [
+      0,
+      68,
+      35,
+      70
+     ],
+     [
+      0,
+      643,
+      6,
+      3056
+     ]
+    ]
+   },
+   {
+    "epoch": 3,
+    "train_loss": 1.4915,
+    "agreement": 0.4176,
+    "item_recall": 0.2197,
+    "item_precision": 0.7037,
+    "item_rate_pred": 0.0896,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.228,
+    "agreement_item_states": 0.1387,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      47,
+      0,
+      208
+     ],
+     [
+      0,
+      2057,
+      9,
+      569
+     ],
+     [
+      0,
+      66,
+      38,
+      69
+     ],
+     [
+      0,
+      628,
+      7,
+      3070
+     ]
+    ]
+   },
+   {
+    "epoch": 4,
+    "train_loss": 1.4795,
+    "agreement": 0.4196,
+    "item_recall": 0.2139,
+    "item_precision": 0.6607,
+    "item_rate_pred": 0.0929,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2322,
+    "agreement_item_states": 0.1387,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1998,
+      9,
+      628
+     ],
+     [
+      0,
+      66,
+      37,
+      70
+     ],
+     [
+      0,
+      596,
+      10,
+      3099
+     ]
+    ]
+   },
+   {
+    "epoch": 5,
+    "train_loss": 1.471,
+    "agreement": 0.4238,
+    "item_recall": 0.2312,
+    "item_precision": 0.6154,
+    "item_rate_pred": 0.1078,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2355,
+    "agreement_item_states": 0.1503,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1985,
+      9,
+      641
+     ],
+     [
+      0,
+      64,
+      40,
+      69
+     ],
+     [
+      0,
+      564,
+      16,
+      3125
+     ]
+    ]
+   },
+   {
+    "epoch": 6,
+    "train_loss": 1.4643,
+    "agreement": 0.4208,
+    "item_recall": 0.2543,
+    "item_precision": 0.5366,
+    "item_rate_pred": 0.136,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2255,
+    "agreement_item_states": 0.1561,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1962,
+      17,
+      656
+     ],
+     [
+      0,
+      61,
+      44,
+      68
+     ],
+     [
+      0,
+      546,
+      21,
+      3138
+     ]
+    ]
+   },
+   {
+    "epoch": 7,
+    "train_loss": 1.4577,
+    "agreement": 0.4273,
+    "item_recall": 0.2659,
+    "item_precision": 0.5542,
+    "item_rate_pred": 0.1376,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.233,
+    "agreement_item_states": 0.1734,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1961,
+      16,
+      658
+     ],
+     [
+      0,
+      59,
+      46,
+      68
+     ],
+     [
+      1,
+      534,
+      21,
+      3149
+     ]
+    ]
+   },
+   {
+    "epoch": 8,
+    "train_loss": 1.4514,
+    "agreement": 0.4248,
+    "item_recall": 0.2601,
+    "item_precision": 0.6081,
+    "item_rate_pred": 0.1227,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2297,
+    "agreement_item_states": 0.1792,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1945,
+      13,
+      677
+     ],
+     [
+      0,
+      60,
+      45,
+      68
+     ],
+     [
+      1,
+      519,
+      16,
+      3169
+     ]
+    ]
+   },
+   {
+    "epoch": 9,
+    "train_loss": 1.4454,
+    "agreement": 0.4221,
+    "item_recall": 0.2717,
+    "item_precision": 0.5732,
+    "item_rate_pred": 0.136,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2239,
+    "agreement_item_states": 0.1792,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1895,
+      16,
+      724
+     ],
+     [
+      0,
+      57,
+      47,
+      69
+     ],
+     [
+      1,
+      489,
+      19,
+      3196
+     ]
+    ]
+   },
+   {
+    "epoch": 10,
+    "train_loss": 1.4396,
+    "agreement": 0.4255,
+    "item_recall": 0.3006,
+    "item_precision": 0.5714,
+    "item_rate_pred": 0.1509,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.228,
+    "agreement_item_states": 0.2023,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      44,
+      0,
+      211
+     ],
+     [
+      0,
+      1925,
+      18,
+      692
+     ],
+     [
+      0,
+      55,
+      52,
+      66
+     ],
+     [
+      1,
+      509,
+      21,
+      3174
+     ]
+    ]
+   },
+   {
+    "epoch": 11,
+    "train_loss": 1.4358,
+    "agreement": 0.4229,
+    "item_recall": 0.289,
+    "item_precision": 0.5435,
+    "item_rate_pred": 0.1526,
+    "item_rate_teacher": 0.2869,
+    "agreement_lethal_states": 0.2214,
+    "agreement_item_states": 0.1792,
+    "family_confusion_rows_teacher": [
+     [
+      0,
+      45,
+      0,
+      210
+     ],
+     [
+      0,
+      1911,
+      20,
+      704
+     ],
+     [
+      0,
+      58,
+      50,
+      65
+     ],
+     [
+      1,
+      510,
+      22,
+      3172
+     ]
+    ]
+   }
+  ]
+ },
+ "b0k_reference": {
+  "agreement": 0.3703,
+  "item_recall": 0.2486,
+  "item_precision": 0.5811,
+  "item_rate_pred": 0.1227,
+  "item_rate_teacher": 0.2869,
+  "agreement_lethal_states": 0.2189,
+  "agreement_item_states": 0.1618,
+  "family_confusion_rows_teacher": [
+   [
+    0,
+    45,
+    0,
+    210
+   ],
+   [
+    1,
+    1935,
+    22,
+    677
+   ],
+   [
+    0,
+    66,
+    43,
+    64
+   ],
+   [
+    0,
+    610,
+    9,
+    3086
+   ]
+  ]
+ }
+}
