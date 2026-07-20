@@ -180,8 +180,18 @@ is CI-NEGATIVE: conditioned -0.0147 [-0.0245, -0.0053] vs matched control
 not the training handicap the prestudy framing assumed — which weakens the
 "ill-conditioned trunk gates the historical nulls" rationale and the
 ranking-loss-rerun plan below it. The slim/transformer-free extractor arm
-(next bullet) is a SEPARATE hypothesis (cheapness, not conditioning) and
-remains open.
+(next bullet) is a SEPARATE hypothesis (cheapness, not conditioning).
+
+**Slim-extractor VERDICT (2026-07-20, worklog "E29 slim extractor"):
+PROMOTION CANDIDATE — it BEATS e28c, not just matches.** SlimTokenExtractor
+(transformer dropped; per-slot embeddings + pooled context; 56.7k extractor
+params vs 418.5k, 7.4x fewer) at the exact e28c recipe: paired ruler
++0.0259 [+0.0198, +0.0320] @ 58M, confirm +0.0282 [+0.0208, +0.0354] @ 59M
+(0.903 vs 0.877), boardkeep in-band. Removing the transformer improved win
+rate — consistent with E28b (mixing unnecessary) + the encoder-viz nulls
+(near-uniform attention, untrained id embedding): the transformer added
+overfitting capacity, not signal. s2 + stack ladder (vs the 0.914 e28c
+guarded RoR) decides promotion, mirroring the e28c flow.
 - Added after E28b (mixing unnecessary for the pointer gather) + the
   encoder introspection (attention near-uniform, id embedding untrained):
   a **slim/transformer-free extractor arm** — per-slot embedding + pointer
