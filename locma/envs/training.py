@@ -13,10 +13,13 @@ import functools
 def _draft_override_policy(spec: str):
     """Build the both-seats draft for a training-env draft override (E19).
 
-    ``spec`` is either a named heuristic draft (``"balanced"``, ``"random"``,
-    ...) or a learned-draft model path / ``depot:`` ref (E18b nets). Returns a
-    BothSeatsDraftPolicy with an independent child per seat, so stateful
-    drafts track each deck separately (BattleEnv's opponent drafts BOTH seats).
+    ``spec`` is a named heuristic draft (``"balanced"``, ``"random"``, ...),
+    a ``values``-keyed JSON per-card priority table (E31a, loaded as
+    DistilledDraftPolicy — the training-side twin of the registry's
+    ``_draft_param`` convention), or a learned-draft model path / ``depot:``
+    ref (E18b nets). Returns a BothSeatsDraftPolicy with an independent
+    child per seat, so stateful drafts track each deck separately
+    (BattleEnv's opponent drafts BOTH seats).
     """
     from locma.policies.drafts import BothSeatsDraftPolicy  # noqa: PLC0415
 
@@ -24,14 +27,21 @@ def _draft_override_policy(spec: str):
         try:
             return _draft_half(spec)
         except ValueError:
-            if not (spec.startswith("depot:") or spec.endswith(".zip")):
+            if not (spec.startswith("depot:") or spec.endswith((".zip", ".json"))):
                 raise ValueError(
-                    f"draft_override '{spec}' is neither a named draft nor a model path"
+                    f"draft_override '{spec}' is neither a named draft, a values "
+                    "JSON, nor a model path"
                 ) from None
             from locma.depot import resolve_path  # noqa: PLC0415
+
+            path = resolve_path(spec)
+            if path.endswith(".json"):
+                from locma.policies.drafts import DistilledDraftPolicy  # noqa: PLC0415
+
+                return DistilledDraftPolicy.load(path)
             from locma.policies.ppo import MaskablePPODraftPolicy  # noqa: PLC0415
 
-            return MaskablePPODraftPolicy(model_path=resolve_path(spec))
+            return MaskablePPODraftPolicy(model_path=path)
 
     return BothSeatsDraftPolicy(one(), one(), name=f"override:{spec}")
 

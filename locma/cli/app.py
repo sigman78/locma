@@ -487,6 +487,12 @@ def train_zoo_cmd(
         "--pointer-head",
         help="E28 pointer action head over slot tokens (token obs_mode only)",
     ),
+    draft_override: str | None = typer.Option(
+        None,
+        "--draft-override",
+        help="draft BOTH seats' training decks with a named draft, a values-JSON "
+        "priority table (E31a), or a learned-draft model path/depot: ref (E19)",
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -532,6 +538,7 @@ def train_zoo_cmd(
             draft_noise=draft_noise,
             shared_draft=shared_draft,
             pointer_head=pointer_head,
+            draft_override=draft_override,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e
