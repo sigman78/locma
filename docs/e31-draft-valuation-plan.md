@@ -68,14 +68,17 @@ better eyesight — expected delta ~0 (E17, E18c). Execute when the E30
 turn-plan head (or any arm) gives the battle net item-conversion ability,
 or bundle as its prerequisite.
 
-**Weakened further by E28d (2026-07-20).** The E28d arm trained a battle
-net on blue-rich decks (the E31a diet source) and found item/blue
-conversion did NOT rise vs the item-light-trained e28c — a battle net
-saturated in blue training converts blues no better. So even after E31c
-gives ldraft the eyesight to draft blues, today's battle nets would not
-convert the extra blues into wins. E31c is doubly gated on E30: it needs
-both a reason for ldraft to draft blues AND a battle net that can cash
-them. Do not run standalone.
+**Refined by E28d + the blue-value diagnostic (2026-07-20).** Two findings
+retarget E31c. (1) A cheating perfect-information oracle plays blues at
+only 0.220/opportunity — today's blues are contextually WEAK, so giving
+ldraft blue eyesight to draft more of them buys little on the current pool
+(and e28d's item-rich diet was win-rate-negative). (2) BUT the e28d battle
+net has a MONOTONE magnitude-dose response (plays a card more as its effect
+grows), so it CAN cash stronger blues — unlike the flat, magnitude-blind
+e28c RoR. So E31c is not "doubly gated on E30" but rather gated on the CARD
+POOL: run it as `e28d battle net + a stronger blue pool + this draft-obs
+extension` if/when stronger similarly-designed blues are added. On the
+current pool it stays null (blues too weak); do not run standalone.
 
 ## Non-goals
 

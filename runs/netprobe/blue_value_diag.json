@@ -1,0 +1,74 @@
+{
+ "oracle_vs_net": {
+  "oracle_mcts": {
+   "teacher": "mcts:300,1.41,0,3,runs/e31a_diet.json",
+   "n_decisions": 8936,
+   "item_opportunities": 3260,
+   "item_rate_per_opportunity": 0.3015,
+   "blue_opportunities": 574,
+   "blue_rate_per_opportunity": 0.2195
+  },
+  "e28c_s0_diet": {
+   "teacher": "ppo:depot:e28c/e28c_s0.zip,runs/e31a_diet.json",
+   "n_decisions": 8293,
+   "item_opportunities": 3347,
+   "item_rate_per_opportunity": 0.2336,
+   "blue_opportunities": 648,
+   "blue_rate_per_opportunity": 0.1698
+  },
+  "e28d_s0_diet": {
+   "teacher": "ppo:runs/e28d_s0.zip,runs/e31a_diet.json",
+   "n_decisions": 8262,
+   "item_opportunities": 3047,
+   "item_rate_per_opportunity": 0.2419,
+   "blue_opportunities": 445,
+   "blue_rate_per_opportunity": 0.2427
+  }
+ },
+ "magnitude_probe": {
+  "e28c_s0": {
+   "blue": {
+    "n": 648,
+    "use_prob_by_dose": {
+     "k0": 0.2005,
+     "k0.5": 0.203,
+     "k1": 0.2028,
+     "k2": 0.2018,
+     "k3": 0.2012
+    }
+   },
+   "green": {
+    "n": 1741,
+    "use_prob_by_dose": {
+     "k0": 0.2334,
+     "k0.5": 0.2353,
+     "k1": 0.2329,
+     "k2": 0.2298,
+     "k3": 0.2229
+    }
+   }
+  },
+  "e28d_s0": {
+   "blue": {
+    "n": 445,
+    "use_prob_by_dose": {
+     "k0": 0.1844,
+     "k0.5": 0.1926,
+     "k1": 0.2042,
+     "k2": 0.2215,
+     "k3": 0.2339
+    }
+   },
+   "green": {
+    "n": 1805,
+    "use_prob_by_dose": {
+     "k0": 0.2018,
+     "k0.5": 0.2035,
+     "k1": 0.2072,
+     "k2": 0.2128,
+     "k3": 0.214
+    }
+   }
+  }
+ }
+}

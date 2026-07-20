@@ -121,11 +121,24 @@ on them regressed the ruler -0.0260 [-0.0343, -0.0181]. The item-conversion
 gain was already saturated by fx alone at the item-light diet: e28c plays
 blues at 0.202/opportunity on blue-rich decks, e28d (drenched in blues) at
 0.19/0.14 — not higher; deploy-deck item rate unchanged; general play lost
-to distribution shift. Item underuse is consequence valuation (E30), not
-access AND not exposure — this also weakens E31c (draft-side blue eyesight
-won't unlock battle-net item value with today's nets). The E31a table and
-plumbing are correctness keepers (E31 non-goal: any draft-side strength
-claim). Item lever remains E30.
+to distribution shift. The E31a table and plumbing are correctness keepers
+(E31 non-goal: any draft-side strength claim).
+
+**Refinement (blue-value diagnostic, scripts/blue_value_diag.py): the E28d
+null hides a real capability gain, and item underuse on today's blues is
+mostly CORRECT.** A cheating perfect-information oracle plays blues at only
+0.220/opportunity (items 0.302) — an optimal informed player declines ~78%
+of blue chances, so blues are contextually weak (e28c 0.170 is a modest
+underuse gap; e28d 0.243 is at/above oracle). And a magnitude-dose probe
+(scale a blue's fx effect columns, read the fx net's play prob) shows a
+dissociation: e28c is FLAT (plays blues ~0.20 regardless of strength —
+magnitude-blind), e28d is MONOTONE (+0.05 over k0->k3 — plays a card more
+as its effect grows). Item-rich training bought magnitude-conditioned
+valuation that did not pay off on weak cards but WOULD scale with stronger
+item design — retain e28d as that artifact. So the item residual is two
+parts: (a) a small consequence-valuation gap on strong lines (E30), and
+(b) card design — today's blues are too weak for even an oracle to play
+often. Exposure helped the representation, not win rate.
 
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
