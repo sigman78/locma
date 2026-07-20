@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E29 slim — the extractor that won by getting smaller</title>
+<style>
+  :root {
+    --ground: #EEF1EF;
+    --panel: #FBFCFB;
+    --ink: #1A2420;
+    --ink-soft: #46534D;
+    --hair: #D5DCD8;
+    --petrol: #136A6E;
+    --petrol-tint: #DCEAEA;
+    --brass: #9A8F65;
+    --brass-tint: #ECE7D8;
+    --alarm: #B54A32;
+    --alarm-tint: #F4E4DF;
+    --ok: #2E6B46;
+    --ok-tint: #DEEBE2;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body { margin: 0; font-family: var(--sans); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 36px 28px 72px; }
+
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; font-weight: 650; }
+  h1 code, h2 code { font-family: var(--mono); background: #E3E8E5; padding: 2px 8px; border-radius: 4px; }
+  h1 code { font-size: .78em; }
+  .dek { max-width: 74ch; color: var(--ink-soft); margin: 0 0 22px; }
+  .dek code, .panel code, .method code { font-family: var(--mono); font-size: .88em; background: #E3E8E5; padding: 1px 5px; border-radius: 3px; }
+
+  .banner { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+  .stat { flex: 1 1 150px; background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 12px 14px; }
+  .stat .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+  .stat .v { font-size: 23px; font-weight: 650; letter-spacing: -.01em; line-height: 1; }
+  .stat .v small { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+  .stat.win .v { color: var(--ok); }
+  .stat.cut .v { color: var(--alarm); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 16px 18px 16px; min-width: 0; }
+  .panel.wide { grid-column: 1 / -1; }
+  .panel h2 { font-size: 15px; margin: 0 0 3px; font-weight: 650; }
+  .panel h2 code { font-size: .8em; }
+  .panel .sub { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 12px; line-height: 1.45; max-width: 84ch; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .chartbox { overflow-x: auto; }
+
+  .tag { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; display: inline-block; vertical-align: 1px; }
+  .tag.keep { background: var(--petrol-tint); color: var(--petrol); }
+  .tag.cut { background: var(--alarm-tint); color: var(--alarm); }
+  .tag.new { background: var(--ok-tint); color: var(--ok); }
+
+  svg text { font-family: var(--mono); fill: var(--ink-soft); }
+
+  .kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .kv th, .kv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .kv th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; }
+  .kv td.num { font-family: var(--mono); text-align: right; }
+  .kv tr:last-child td { border-bottom: 0; }
+  .kv .row-win td { background: var(--ok-tint); }
+  .kv .row-win td:first-child { font-weight: 600; }
+  .kv .delta { color: var(--ok); font-weight: 600; }
+  .kv .ci { color: var(--ink-soft); font-size: 11.5px; }
+
+  .callout { border-left: 3px solid var(--petrol); background: var(--petrol-tint); padding: 12px 15px; border-radius: 0 6px 6px 0; margin: 0; font-size: 13.5px; }
+  .callout b { color: var(--petrol); }
+  .callout.win { border-left-color: var(--ok); background: var(--ok-tint); }
+  .callout.win b { color: var(--ok); }
+
+  .method { margin-top: 30px; border-top: 1px solid var(--hair); padding-top: 18px; font-size: 12.5px; color: var(--ink-soft); columns: 2; column-gap: 36px; }
+  .method p { margin: 0 0 10px; break-inside: avoid; }
+  .method b { color: var(--ink); }
+  .method h3 { font-size: 12px; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); margin: 0 0 6px; break-after: avoid; }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .method { columns: 1; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Reactive-limits program · E29 arch sweep · promoted 2026-07-20 · depot:e29slim v1</p>
+    <h1>E29 slim: the extractor that won by getting <span style="color:var(--alarm)">smaller</span></h1>
+    <p class="dek">
+      For seven experiments the way to a stronger reactive net looked like <i>more</i> — more critics,
+      more capacity, a transformer to mix cards. E29 asked the opposite question: at the winning
+      <code>e28c</code> pointer-head recipe, what does the self-attention block actually buy?
+      The answer was overfitting. Dropping the transformer entirely — a <b>7.4&times; smaller</b> feature
+      extractor — <b>raised</b> win rate and set new records on both rungs. This page shows what changed and by how much.
+    </p>
+  </header>
+
+  <div class="banner">
+    <div class="stat cut">
+      <p class="k">Extractor params</p>
+      <p class="v">56.7k <small>&larr; 418.5k</small></p>
+    </div>
+    <div class="stat"><p class="k">Fewer params</p><p class="v">7.4&times;</p></div>
+    <div class="stat"><p class="k">Inference speedup</p><p class="v">1.17&times;</p></div>
+    <div class="stat win"><p class="k">Reactive (pure)</p><p class="v">0.903 <small>+0.026</small></p></div>
+    <div class="stat win"><p class="k">Guarded stack</p><p class="v">0.934 <small>+0.021</small></p></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ARCHITECTURE: FULL -->
+    <div class="panel">
+      <h2><code>TokenSetExtractor</code> &mdash; the e28c trunk</h2>
+      <p class="sub">The pointer head reads per-slot embeddings straight off the token stream.
+        Everything the transformer produced only fed the <i>tower context</i> — the single 256-d vector
+        handed to the SB3 policy/value MLPs.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 340 470" role="img" aria-label="Full extractor forward pass">
+        <!-- inputs -->
+        <rect x="14" y="10" width="140" height="34" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="84" y="26" text-anchor="middle" font-size="11" fill="var(--ink)">tokens</text>
+        <text x="84" y="38" text-anchor="middle" font-size="9">(B, 20, 20)</text>
+        <rect x="186" y="10" width="140" height="34" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="256" y="26" text-anchor="middle" font-size="11" fill="var(--ink)">card_ids &rarr; embed</text>
+        <text x="256" y="38" text-anchor="middle" font-size="9">(B, 20, 16)</text>
+        <!-- concat/proj/ln/pos -->
+        <path d="M84 44 V58 M256 44 V58 M84 58 H256 M170 58 V66" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="40" y="66" width="260" height="40" rx="4" fill="var(--brass-tint)" stroke="var(--brass)"/>
+        <text x="170" y="82" text-anchor="middle" font-size="11" fill="var(--ink)">proj &middot; LayerNorm &middot; +pos_embed</text>
+        <text x="170" y="96" text-anchor="middle" font-size="9">per-slot embeddings &rarr; (B, 20, 64)</text>
+        <!-- transformer (dropped) -->
+        <path d="M170 106 V120" fill="none" stroke="var(--alarm)" stroke-width="1.5"/>
+        <rect x="40" y="120" width="260" height="48" rx="4" fill="var(--alarm-tint)" stroke="var(--alarm)" stroke-width="1.5" stroke-dasharray="5 3"/>
+        <text x="170" y="139" text-anchor="middle" font-size="11.5" fill="var(--alarm)" font-weight="600">TransformerEncoder</text>
+        <text x="170" y="153" text-anchor="middle" font-size="9" fill="var(--alarm)">2 layers &middot; 4 heads &middot; cross-card mixing</text>
+        <text x="170" y="163" text-anchor="middle" font-size="8.5" fill="var(--alarm)">~362k params &mdash; the bulk of the cost</text>
+        <!-- split: gather branch + flatten branch -->
+        <path d="M170 168 V182" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <path d="M100 182 H240 M100 182 V196 M240 182 V196" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <!-- gather branch -->
+        <rect x="14" y="196" width="172" height="44" rx="4" fill="var(--petrol-tint)" stroke="var(--petrol)"/>
+        <text x="100" y="213" text-anchor="middle" font-size="10.5" fill="var(--petrol)" font-weight="600">pointer-head gather</text>
+        <text x="100" y="226" text-anchor="middle" font-size="9" fill="var(--petrol)">slot s &rarr; its Summon/Use/Attack logit</text>
+        <text x="100" y="236" text-anchor="middle" font-size="8.5" fill="var(--petrol)">reads per-slot z directly</text>
+        <!-- flatten branch -->
+        <rect x="200" y="196" width="126" height="44" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="263" y="213" text-anchor="middle" font-size="10.5" fill="var(--ink)">flatten</text>
+        <text x="263" y="226" text-anchor="middle" font-size="9">(B, 20&times;64</text>
+        <text x="263" y="236" text-anchor="middle" font-size="9">= 1280)</text>
+        <!-- scalars -->
+        <rect x="200" y="256" width="126" height="38" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="263" y="272" text-anchor="middle" font-size="10" fill="var(--ink)">scalars &rarr; MLP</text>
+        <text x="263" y="285" text-anchor="middle" font-size="9">(B, 64)</text>
+        <!-- head -->
+        <path d="M263 240 V256 M263 294 V308 M200 308 H326 M263 308 V318" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="200" y="318" width="126" height="40" rx="4" fill="var(--brass-tint)" stroke="var(--brass)"/>
+        <text x="263" y="335" text-anchor="middle" font-size="10.5" fill="var(--ink)">head: Linear</text>
+        <text x="263" y="348" text-anchor="middle" font-size="9">1280+64 &rarr; 256</text>
+        <!-- outputs -->
+        <path d="M100 240 V420" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <rect x="14" y="420" width="172" height="38" rx="4" fill="var(--petrol)" />
+        <text x="100" y="437" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">action logits (155)</text>
+        <text x="100" y="450" text-anchor="middle" font-size="9" fill="#D7E6E6">slot-addressed</text>
+        <path d="M263 358 V420" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="200" y="420" width="126" height="38" rx="4" fill="var(--ink)"/>
+        <text x="263" y="437" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">tower context</text>
+        <text x="263" y="450" text-anchor="middle" font-size="9" fill="#C7D0CC">(B, 256)</text>
+      </svg>
+      </div>
+    </div>
+
+    <!-- ARCHITECTURE: SLIM -->
+    <div class="panel">
+      <h2><code>SlimTokenExtractor</code> &mdash; E29 <span class="tag new">new</span></h2>
+      <p class="sub">Same per-slot embeddings, same pointer gather. But the transformer is gone,
+        and the 1280-wide flatten is replaced by cheap <b>masked mean + max pooling</b>. The tower
+        context is now built from 128 pooled dims instead of 1280 flattened ones.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 340 470" role="img" aria-label="Slim extractor forward pass">
+        <!-- inputs -->
+        <rect x="14" y="10" width="140" height="34" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="84" y="26" text-anchor="middle" font-size="11" fill="var(--ink)">tokens</text>
+        <text x="84" y="38" text-anchor="middle" font-size="9">(B, 20, 20)</text>
+        <rect x="186" y="10" width="140" height="34" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="256" y="26" text-anchor="middle" font-size="11" fill="var(--ink)">card_ids &rarr; embed</text>
+        <text x="256" y="38" text-anchor="middle" font-size="9">(B, 20, 16)</text>
+        <!-- SlotEncoder -->
+        <path d="M84 44 V58 M256 44 V58 M84 58 H256 M170 58 V66" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="40" y="66" width="260" height="46" rx="4" fill="var(--brass-tint)" stroke="var(--brass)"/>
+        <text x="170" y="83" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">SlotEncoder</text>
+        <text x="170" y="96" text-anchor="middle" font-size="9">proj &middot; LayerNorm &middot; +pos_embed</text>
+        <text x="170" y="106" text-anchor="middle" font-size="8.5">per-slot embeddings &rarr; (B, 20, 64)</text>
+        <!-- gap where transformer was -->
+        <rect x="40" y="124" width="260" height="34" rx="4" fill="none" stroke="var(--alarm)" stroke-width="1.2" stroke-dasharray="3 4"/>
+        <text x="170" y="141" text-anchor="middle" font-size="10" fill="var(--alarm)" font-weight="600">&times; transformer removed</text>
+        <text x="170" y="152" text-anchor="middle" font-size="8.5" fill="var(--alarm)">no cross-card attention</text>
+        <!-- split -->
+        <path d="M170 112 V120" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <path d="M100 170 H240 M100 170 V184 M240 170 V184 M170 158 V170" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <!-- gather branch -->
+        <rect x="14" y="184" width="172" height="44" rx="4" fill="var(--petrol-tint)" stroke="var(--petrol)"/>
+        <text x="100" y="201" text-anchor="middle" font-size="10.5" fill="var(--petrol)" font-weight="600">pointer-head gather</text>
+        <text x="100" y="214" text-anchor="middle" font-size="9" fill="var(--petrol)">slot s &rarr; its Summon/Use/Attack logit</text>
+        <text x="100" y="224" text-anchor="middle" font-size="8.5" fill="var(--petrol)">reads per-slot z directly &mdash; unchanged</text>
+        <!-- pooling branch -->
+        <rect x="200" y="184" width="126" height="44" rx="4" fill="var(--ok-tint)" stroke="var(--ok)"/>
+        <text x="263" y="200" text-anchor="middle" font-size="10" fill="var(--ok)" font-weight="600">masked pool</text>
+        <text x="263" y="213" text-anchor="middle" font-size="9" fill="var(--ok)">mean | max</text>
+        <text x="263" y="223" text-anchor="middle" font-size="9" fill="var(--ok)">(B, 128)</text>
+        <!-- scalars -->
+        <rect x="200" y="244" width="126" height="38" rx="4" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="263" y="260" text-anchor="middle" font-size="10" fill="var(--ink)">scalars &rarr; MLP</text>
+        <text x="263" y="273" text-anchor="middle" font-size="9">(B, 64)</text>
+        <!-- head -->
+        <path d="M263 228 V244 M263 282 V296 M200 296 H326 M263 296 V306" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="200" y="306" width="126" height="40" rx="4" fill="var(--brass-tint)" stroke="var(--brass)"/>
+        <text x="263" y="323" text-anchor="middle" font-size="10.5" fill="var(--ink)">head: Linear</text>
+        <text x="263" y="336" text-anchor="middle" font-size="9">128+64 &rarr; 256</text>
+        <!-- outputs -->
+        <path d="M100 228 V420" fill="none" stroke="var(--petrol)" stroke-width="1.3"/>
+        <rect x="14" y="420" width="172" height="38" rx="4" fill="var(--petrol)"/>
+        <text x="100" y="437" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">action logits (155)</text>
+        <text x="100" y="450" text-anchor="middle" font-size="9" fill="#D7E6E6">slot-addressed</text>
+        <path d="M263 346 V420" fill="none" stroke="var(--brass)" stroke-width="1.3"/>
+        <rect x="200" y="420" width="126" height="38" rx="4" fill="var(--ink)"/>
+        <text x="263" y="437" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">tower context</text>
+        <text x="263" y="450" text-anchor="middle" font-size="9" fill="#C7D0CC">(B, 256)</text>
+      </svg>
+      </div>
+    </div>
+
+    <!-- WHAT CHANGED -->
+    <div class="panel wide">
+      <h2>What actually changed &mdash; three edits</h2>
+      <p class="sub">The pointer head (E28) already broke the trunk's dependence on cross-card mixing:
+        it gathers each action's logit from that card's own slot embedding. E28b then proved the gather
+        works just as well on the <i>pre</i>-attention embeddings. That left the transformer feeding only
+        one thing — the pooled tower context — so E29 tested removing it.</p>
+      <table class="kv">
+        <thead><tr><th>Stage</th><th>e28c (full)</th><th>E29 slim</th><th>Why it&rsquo;s safe to cut</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Per-slot encode</td>
+            <td>proj &middot; LN &middot; +pos <span class="tag keep">kept</span></td>
+            <td>same, as <code>SlotEncoder</code></td>
+            <td>This is what the pointer head reads; identical either way.</td>
+          </tr>
+          <tr>
+            <td>Cross-card mixing</td>
+            <td>2-layer, 4-head transformer</td>
+            <td>&mdash; <span class="tag cut">removed</span></td>
+            <td>E28b: the gather needs no mixing. Only fed the tower context.</td>
+          </tr>
+          <tr>
+            <td>Tower context</td>
+            <td>flatten 20&times;64 = 1280-d</td>
+            <td>mean+max pool = 128-d <span class="tag new">new</span></td>
+            <td>Order-free summary of the same slots; 10&times; narrower.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin:12px 0 0"><span class="callout">The transformer was <b>~362k of the extractor&rsquo;s 418k parameters</b>. Cutting it and narrowing the head is the entire 7.4&times; reduction. Nothing on the policy side moved — same pointer head, same recipe, same <code>token-fx</code> observation, seeds 0/1/2.</span></p>
+    </div>
+
+    <!-- RESULTS LADDER -->
+    <div class="panel wide">
+      <h2>Results &mdash; avg-hard3 win rate, both rungs</h2>
+      <p class="sub">Reactive rung = pure net, no play-time search. Guarded rung = the <code>lppo:</code> lens
+        stack (lethal-guard DFS + policy-head ensemble) on top. Bars are 3-seed trio averages; the dashed
+        line is the 0.926 three-critic <b>ensemble planner</b> — the play-time-search recipe of record that
+        the reactive program set out to catch. The guarded slim stack passes it.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 940 250" role="img" aria-label="Win-rate ladder">
+        <!-- axis -->
+        <line x1="230" y1="20" x2="230" y2="212" stroke="var(--hair)"/>
+        <!-- scale 0.85 .. 0.95 mapped x 230..900 -->
+        <g font-size="9.5">
+          <line x1="230" y1="212" x2="900" y2="212" stroke="var(--hair)"/>
+          <line x1="230" y1="20" x2="230" y2="212" stroke="var(--hair)"/>
+          <!-- gridlines every .02 -->
+          <line x1="364" y1="20" x2="364" y2="212" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="498" y1="20" x2="498" y2="212" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="632" y1="20" x2="632" y2="212" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="766" y1="20" x2="766" y2="212" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="900" y1="20" x2="900" y2="212" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <text x="230" y="228" text-anchor="middle">0.85</text>
+          <text x="364" y="228" text-anchor="middle">0.87</text>
+          <text x="498" y="228" text-anchor="middle">0.89</text>
+          <text x="632" y="228" text-anchor="middle">0.91</text>
+          <text x="766" y="228" text-anchor="middle">0.93</text>
+          <text x="900" y="228" text-anchor="middle">0.95</text>
+          <text x="565" y="245" text-anchor="middle" fill="var(--ink-soft)">avg-hard3 win rate &rarr;</text>
+        </g>
+        <!-- ensemble planner reference line at 0.926 -> x = 230 + (0.926-0.85)/0.1*670 = 230+509.2=739 -->
+        <line x1="739" y1="14" x2="739" y2="200" stroke="var(--brass)" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="739" y="12" text-anchor="middle" font-size="9.5" fill="var(--brass)">0.926 ensemble planner (target)</text>
+
+        <!-- rows: y positions -->
+        <!-- e28c reactive 0.877 -> x=230+(0.027/0.1*670)=230+180.9=411 -->
+        <g>
+          <rect x="230" y="34" width="181" height="20" rx="2" fill="var(--brass)" opacity="0.55"/>
+          <text x="224" y="48" text-anchor="end" font-size="10.5" fill="var(--ink)">e28c reactive</text>
+          <text x="418" y="48" font-size="10" fill="var(--ink-soft)">0.877</text>
+        </g>
+        <!-- e29 slim reactive 0.903 -> 230+(0.053/0.1*670)=230+355.1=585 -->
+        <g>
+          <rect x="230" y="60" width="355" height="20" rx="2" fill="var(--ok)"/>
+          <text x="224" y="74" text-anchor="end" font-size="10.5" fill="var(--ink)" font-weight="600">slim reactive (pure)</text>
+          <text x="592" y="74" font-size="10" fill="var(--ok)" font-weight="600">0.903</text>
+          <text x="655" y="74" font-size="9.5" fill="var(--ink-soft)">+0.026 [.020, .032]</text>
+        </g>
+        <!-- gap -->
+        <line x1="230" y1="92" x2="900" y2="92" stroke="var(--hair)"/>
+        <!-- e28c guarded 0.914 -> 230+(0.064/0.1*670)=230+428.8=659 -->
+        <g>
+          <rect x="230" y="102" width="429" height="20" rx="2" fill="var(--brass)" opacity="0.55"/>
+          <text x="224" y="116" text-anchor="end" font-size="10.5" fill="var(--ink)">e28c guarded (RoR)</text>
+          <text x="666" y="116" font-size="10" fill="var(--ink-soft)">0.914</text>
+        </g>
+        <!-- slim guarded 0.934 -> 230+(0.084/0.1*670)=230+562.8=793 -->
+        <g>
+          <rect x="230" y="128" width="563" height="20" rx="2" fill="var(--petrol)"/>
+          <text x="224" y="142" text-anchor="end" font-size="10.5" fill="var(--ink)" font-weight="600">slim guarded stack</text>
+          <text x="800" y="142" font-size="10" fill="var(--petrol)" font-weight="600">0.934</text>
+          <text x="847" y="142" font-size="9.5" fill="var(--ink-soft)">+0.021</text>
+        </g>
+        <!-- boardkeep exploit note -->
+        <g>
+          <text x="230" y="176" font-size="10.5" fill="var(--ink)">Boardkeep exploit floor (lower = harder to farm):</text>
+          <text x="640" y="176" font-size="10.5" fill="var(--ok)" font-weight="600">0.189</text>
+          <text x="690" y="176" font-size="10" fill="var(--ink-soft)">vs e28c 0.219 &mdash; the guard hole keeps shrinking</text>
+        </g>
+        <g font-size="9.5">
+          <rect x="230" y="190" width="11" height="11" fill="var(--ok)"/><text x="246" y="199">slim / new record</text>
+          <rect x="360" y="190" width="11" height="11" fill="var(--petrol)"/><text x="376" y="199">slim guarded</text>
+          <rect x="486" y="190" width="11" height="11" fill="var(--brass)" opacity="0.55"/><text x="502" y="199">e28c baseline</text>
+        </g>
+      </svg>
+      </div>
+    </div>
+
+    <!-- BENCH TABLE -->
+    <div class="panel">
+      <h2>Bench detail</h2>
+      <p class="sub">Ladder driver <code>scripts/e29_slim_bench.py</code>; anchors trained 58M/59M steps,
+        3-seed stack at 61M/62M. Paired vs the <code>e28c</code> recipe on the same held-out states.</p>
+      <table class="kv">
+        <thead><tr><th>Comparison</th><th class="num">delta</th><th class="num">95% CI</th></tr></thead>
+        <tbody>
+          <tr><td>Pure 2-seed vs e28c @58M</td><td class="num delta">+0.0259</td><td class="num ci">[.0198, .0320]</td></tr>
+          <tr><td>Fresh-anchor confirm @59M</td><td class="num delta">+0.0282</td><td class="num ci">[.0208, .0354]</td></tr>
+          <tr class="row-win"><td>Pure 3-seed trio</td><td class="num delta">+0.0224</td><td class="num ci">stack ladder</td></tr>
+          <tr class="row-win"><td>Guarded stack vs 0.914 RoR</td><td class="num delta">+0.0207</td><td class="num ci">confirm +0.0210</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0">
+        Every interval excludes zero. Boardkeep in-band on both anchors (0.236 / 0.247 singles, 0.189 stack).</p>
+    </div>
+
+    <!-- COMPUTE TABLE -->
+    <div class="panel">
+      <h2>Compute</h2>
+      <p class="sub">The reactive rung sells on inference cost — that is what the whole slim arm is for.
+        The transformer was the bulk of the extractor&rsquo;s FLOPs.</p>
+      <table class="kv">
+        <thead><tr><th>Metric</th><th class="num">full</th><th class="num">slim</th><th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><td>Extractor params</td><td class="num">418,538</td><td class="num">56,682</td><td class="num delta">7.4&times;</td></tr>
+          <tr><td>Sec / game</td><td class="num">0.0933</td><td class="num">0.0795</td><td class="num delta">1.17&times;</td></tr>
+          <tr><td>Cross-card mixing</td><td class="num">2&times;4-head</td><td class="num">none</td><td class="num">&mdash;</td></tr>
+          <tr><td>Tower context width</td><td class="num">1280</td><td class="num">128</td><td class="num delta">10&times;</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0">
+        Cheaper <i>and</i> stronger — the rare case where the two objectives don&rsquo;t trade off.</p>
+    </div>
+
+    <!-- WHY IT WORKED -->
+    <div class="panel wide">
+      <h2>Why removing capacity <i>helped</i></h2>
+      <p class="sub" style="max-width:100ch">Two prior probes explain the result rather than leaving it a surprise.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <p class="callout"><b>E28b (mixing ablation).</b> The pointer gather over the pre-attention slot
+          embeddings — or even raw 33-d features — matched the gather over the post-transformer output within
+          0.005 on both seeds. Whatever the attention block computed, the action head never needed it.</p>
+        <p class="callout"><b>Encoder introspection.</b> The trained attention was near-uniform pooling and the
+          card-id embedding never left its init (0.997 cross-net correlation, probes at chance). The
+          transformer was carrying almost no learned signal — only extra parameters to overfit through.</p>
+      </div>
+      <p style="margin:14px 0 0"><span class="callout win"><b>Verdict.</b> Dropping the transformer removed
+        overfitting capacity, not information. Both pre-registered rungs came back headroom-positive with
+        fresh-anchor confirms. New recipes of record: reactive <b>0.903</b>, guarded <b>0.934</b> —
+        published as <code>depot:e29slim</code> v1 (parent <code>e28c@1</code>).</span></p>
+    </div>
+
+    <!-- MILESTONES -->
+    <div class="panel wide">
+      <h2>Where this lands the program</h2>
+      <p class="sub">The reactive-limits goal (since 2026-07-19): improve the reactive net itself — architecture
+        and training — to close the gap to fair play-time search, without more guard patches as ends.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 940 96" role="img" aria-label="Milestones">
+        <!-- three milestone chips -->
+        <g>
+          <rect x="10" y="18" width="296" height="60" rx="6" fill="var(--ok-tint)" stroke="var(--ok)"/>
+          <text x="26" y="40" font-size="11.5" fill="var(--ok)" font-weight="600">Milestone 1 &mdash; cleared</text>
+          <text x="26" y="57" font-size="10.5" fill="var(--ink)">pure net &gt; 0.85</text>
+          <text x="26" y="71" font-size="9.5" fill="var(--ink-soft)">E28 pointer head (0.865)</text>
+        </g>
+        <g>
+          <rect x="322" y="18" width="296" height="60" rx="6" fill="var(--ok-tint)" stroke="var(--ok)"/>
+          <text x="338" y="40" font-size="11.5" fill="var(--ok)" font-weight="600">Milestone 2 &mdash; cleared</text>
+          <text x="338" y="57" font-size="10.5" fill="var(--ink)">pure net &gt; 0.890</text>
+          <text x="338" y="71" font-size="9.5" fill="var(--ink-soft)">E29 slim pure 0.903</text>
+        </g>
+        <g>
+          <rect x="634" y="18" width="296" height="60" rx="6" fill="var(--ok-tint)" stroke="var(--ok)"/>
+          <text x="650" y="40" font-size="11.5" fill="var(--ok)" font-weight="600">Milestone 3 &mdash; cleared</text>
+          <text x="650" y="57" font-size="10.5" fill="var(--ink)">beat 0.926 ensemble planner</text>
+          <text x="650" y="71" font-size="9.5" fill="var(--ink-soft)">E29 slim guarded 0.934</text>
+        </g>
+      </svg>
+      </div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:14px 0 0">
+        The companion arms closed clean, which is what makes the slim win a <i>simplification</i> rather than a
+        lucky draw: <b>E29a</b> (conditioned trunk / <code>feature_ln</code>) halved first-Tanh saturation but
+        left <code>can_item</code> retention flat and came back CI-negative — saturation was cosmetic. <b>E30</b>
+        (autoregressive turn-plan head) confirmed the ~0.37 BC-agreement cap is <i>representational</i>, not a
+        factorization artifact — plan-so-far is redundant with the state. Both arch-sweep training levers are now
+        exhausted; the remaining lookahead gap is filled by play-time search (rbeam / netdmcts), not the trunk.</p>
+    </div>
+
+  </div>
+
+  <div class="method">
+    <h3>Method &amp; provenance</h3>
+    <p><b>Net.</b> Pointer-head PPO (<code>PointerMaskablePolicy</code>) at the exact <code>e28c</code>
+      recipe — <code>locma train-zoo --pointer-head --obs-mode token-fx --slim-extractor</code>, seeds 0/1/2,
+      <code>ldraft</code> learned draft. The only diff from <code>e28c</code> is the feature extractor class.</p>
+    <p><b>Slim extractor.</b> <code>SlimTokenExtractor</code> in <code>locma/envs/extractor.py</code>:
+      <code>SlotEncoder</code> (proj &middot; LayerNorm &middot; learned per-slot pos_embed, no attention) feeds
+      the pointer gather; tower context = masked mean-pool &oplus; max-pool &oplus; scalar-MLP &rarr;
+      <code>Linear(2d+d &rarr; 256)</code>. All-pad rows guarded on both pools. <code>d_model</code> 64,
+      <code>id_dim</code> 16.</p>
+    <p><b>Eval.</b> avg-hard3 = mean win rate vs the three hardest scripted opponents, paired against the
+      <code>e28c</code> net on identical held-out states. CIs are seed-paired bootstrap. Reactive = pure argmax;
+      guarded = <code>lppo:</code> lens stack (lethal-guard DFS + policy-head ensemble, zero extra training).</p>
+    <p><b>Numbers.</b> <code>runs/netprobe/e29_slim_summary.json</code> (anchors) and
+      <code>depot/index/e29slim.json</code> meta (3-seed stack). Delta signs are slim &minus; e28c; higher is
+      better except the boardkeep exploit floor, where lower is better.</p>
+    <p><b>Artifact.</b> <code>depot:e29slim</code> v1, published <code>gh:depot/e29slim-v1</code>, parent
+      <code>e28c@1</code>, git <code>b314567</code>. Supersedes the <code>e28c</code> recipes of record on both
+      rungs. PR #93 (branch <code>feat/e29-cond-trunk</code>).</p>
+    <p><b>Prior context.</b> E28 pointer head (PR #87), E28b mixing ablation + encoder-viz (PR #88),
+      E28c token-fx (PR #90). The pointer head and <code>token-fx</code> observation are prerequisites — slim
+      only works because the gather already made cross-card mixing optional.</p>
+  </div>
+</div>
+
+</body>
+</html>
