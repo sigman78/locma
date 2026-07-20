@@ -78,6 +78,25 @@ def test_forward_shape_and_finite():
     assert torch.isfinite(out).all(), "output contains non-finite values"
 
 
+def test_feature_ln_optin(monkeypatch):
+    """E29 conditioned-trunk lever: feature_ln adds a LayerNorm on the tower
+    input (default OFF = no such module, byte-identical to e28c/e28p), and the
+    conditioned output is per-sample zero-mean/unit-var before the affine."""
+    space = token_obs_space()
+    obs = _make_batch(B=8, n_real=10)
+
+    off = TokenSetExtractor(space)
+    assert off.out_ln is None  # default OFF: no extra module -> old artifacts load
+
+    on = TokenSetExtractor(space, feature_ln=True)
+    assert isinstance(on.out_ln, torch.nn.LayerNorm)
+    out = on(obs)
+    assert out.shape == (8, 256)
+    assert torch.isfinite(out).all()
+    # LayerNorm affine starts at gamma=1/beta=0, so the raw output is normalized.
+    assert out.mean(dim=-1).abs().max() < 1e-4
+
+
 # ---------------------------------------------------------------------------
 # (b) Gradients flow
 # ---------------------------------------------------------------------------

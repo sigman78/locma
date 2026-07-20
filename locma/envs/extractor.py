@@ -33,7 +33,8 @@ class TokenSetExtractor(BaseFeaturesExtractor):
     7. scalar_mlp(scalars): LayerNorm(n_scalar) → Linear(n_scalar, d_model) → ReLU
        normalizes raw scalar magnitudes (health≈30, turn≈50, board totals≈60).
        n_scalar is read from the obs space so any variant (v0=13, v1=18) is drop-in.
-    8. head(cat([flat, s], dim=-1)) → (B, features_dim)
+    8. head(cat([flat, s], dim=-1)) → (B, features_dim); if ``feature_ln``,
+       a final LayerNorm(features_dim) conditions the tower input (E29).
 
     Why slot-addressable (NOT permutation-invariant):
     The 155-action space indexes actions by slot position: Summon→1+s, Use→9+s*13+tc,
@@ -63,6 +64,15 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # dominates that cost. Change only with a paired ceiling-eval.
         dropout: float = 0.1,
         features_dim: int = 256,
+        # E29 conditioned-trunk lever (opt-in; default OFF = byte-identical to
+        # the e28c/e28p extractor). LayerNorm on the fused head output — i.e.
+        # the input to the SB3 policy/value towers — so the towers' first Tanh
+        # layer stops saturating (net-probe prestudy PR #83: ~94% first-layer
+        # saturation, the mechanism behind the E27 can_item info-loss 0.98 raw
+        # -> 0.61 towers). The extractor already LayerNorms its token/scalar
+        # INPUTS; this normalizes the features handed downstream. Gated so the
+        # 3 published pointer artifacts (e28p/e28c) load unchanged.
+        feature_ln: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim)
 
@@ -118,6 +128,9 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             nn.ReLU(),
         )
 
+        # E29: normalize the tower input (see feature_ln above). None = off.
+        self.out_ln = nn.LayerNorm(features_dim) if feature_ln else None
+
     def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
         # 1. Embed card IDs (cast float32 → long; SB3 batches Box obs as float32).
         ids = obs["card_ids"].long()  # (B, 20)
@@ -152,5 +165,7 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # 7. Scalar branch.
         s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
 
-        # 8. Head: fuse and project to features_dim.
-        return self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)
+        # 8. Head: fuse and project to features_dim; optionally condition the
+        #    tower input with LayerNorm (E29, opt-in).
+        out = self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)
+        return self.out_ln(out) if self.out_ln is not None else out
