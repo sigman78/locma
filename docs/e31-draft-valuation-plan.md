@@ -30,7 +30,7 @@ draft override (e.g. `dmcts:15,30,,,-4` = balanced with item bonus,
 
 ## Steps
 
-### E31a — per-card value table (data-only)
+### E31a — per-card value table (data-only) — DONE (2026-07-20)
 
 A `DistilledDraftPolicy` JSON (registry already loads `values`-keyed JSON
 via the 5th spec param) with hand-computed true values including hidden
@@ -38,6 +38,14 @@ effects: `|atk| + |def| + player_hp + |enemy_hp| + 2*card_draw + kw`
 (clamped like `_STAT_CAP`). No code change. Gives a correct reference
 heuristic for diagnostics and teacher-side deck generation. Acceptance:
 blues draftable at sane rates; spot-check top-value items.
+
+Shipped: `scripts/e31a_value_table.py` -> `runs/e31a_values.json`
+(reference, 0.3 blues/deck) + `runs/e31a_diet.json` (+4 item bonus, the
+training-deck source: 6.28 items / 1.13 blues / 72% of decks carry blue).
+Decimate tops the item list; all 8 blues price 4-6 (were ~0/negative).
+Also landed the training-side plumbing this needed:
+`_draft_override_policy` loads values-JSON tables and `train-zoo` exposes
+`--draft-override`. Consumed by the E28d arm (worklog 2026-07-20).
 
 ### E31b — CardView hidden fields + spell-aware heuristic variant
 
@@ -59,6 +67,18 @@ access), so with today's battle nets it re-learns item avoidance with
 better eyesight — expected delta ~0 (E17, E18c). Execute when the E30
 turn-plan head (or any arm) gives the battle net item-conversion ability,
 or bundle as its prerequisite.
+
+**Refined by E28d + the blue-value diagnostic (2026-07-20).** Two findings
+retarget E31c. (1) A cheating perfect-information oracle plays blues at
+only 0.220/opportunity — today's blues are contextually WEAK, so giving
+ldraft blue eyesight to draft more of them buys little on the current pool
+(and e28d's item-rich diet was win-rate-negative). (2) BUT the e28d battle
+net has a MONOTONE magnitude-dose response (plays a card more as its effect
+grows), so it CAN cash stronger blues — unlike the flat, magnitude-blind
+e28c RoR. So E31c is not "doubly gated on E30" but rather gated on the CARD
+POOL: run it as `e28d battle net + a stronger blue pool + this draft-obs
+extension` if/when stronger similarly-designed blues are added. On the
+current pool it stays null (blues too weak); do not run standalone.
 
 ## Non-goals
 

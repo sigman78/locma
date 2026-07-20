@@ -1,0 +1,63 @@
+{
+ "full_vs_e28c": {
+  "mean_delta": -0.026,
+  "ci_lo": -0.0343,
+  "ci_hi": -0.0181,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.8445,
+  "b0_avg": 0.8705,
+  "minutes": 24.1
+ },
+ "confirm_skipped": "full ci_lo <= 0",
+ "item_read_e28d_s0_ldraft": {
+  "teacher": "ppo:runs/e28d_s0.zip,depot:ldraft/ldraft_s0.zip",
+  "n_decisions": 13795,
+  "item_opportunities": 2943,
+  "item_rate_per_opportunity": 0.2239,
+  "blue_opportunities": 537,
+  "blue_rate_per_opportunity": 0.1974
+ },
+ "item_read_e28d_s0_diet": {
+  "teacher": "ppo:runs/e28d_s0.zip,runs/e31a_diet.json",
+  "n_decisions": 12533,
+  "item_opportunities": 4610,
+  "item_rate_per_opportunity": 0.2597,
+  "blue_opportunities": 1394,
+  "blue_rate_per_opportunity": 0.1923
+ },
+ "item_read_e28d_s1_ldraft": {
+  "teacher": "ppo:runs/e28d_s1.zip,depot:ldraft/ldraft_s1.zip",
+  "n_decisions": 12940,
+  "item_opportunities": 3957,
+  "item_rate_per_opportunity": 0.2391,
+  "blue_opportunities": 505,
+  "blue_rate_per_opportunity": 0.0812
+ },
+ "item_read_e28d_s1_diet": {
+  "teacher": "ppo:runs/e28d_s1.zip,runs/e31a_diet.json",
+  "n_decisions": 11977,
+  "item_opportunities": 4589,
+  "item_rate_per_opportunity": 0.2399,
+  "blue_opportunities": 1614,
+  "blue_rate_per_opportunity": 0.1351
+ },
+ "item_read_e28c_s0_diet": {
+  "teacher": "ppo:depot:e28c/e28c_s0.zip,runs/e31a_diet.json",
+  "n_decisions": 13067,
+  "item_opportunities": 4879,
+  "item_rate_per_opportunity": 0.2595,
+  "blue_opportunities": 1406,
+  "blue_rate_per_opportunity": 0.202
+ },
+ "gates": {
+  "full_delta": -0.026,
+  "full_ci": [
+   -0.0343,
+   -0.0181
+  ],
+  "confirm_ci": null,
+  "diet_pass": false,
+  "headroom": false,
+  "regression": true
+ }
+}

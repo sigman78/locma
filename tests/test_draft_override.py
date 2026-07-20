@@ -108,6 +108,21 @@ def test_draft_override_policy_resolution():
         _draft_override_policy("no-such-draft.txt")  # neither named nor a model path
 
 
+def test_draft_override_policy_values_json(tmp_path):
+    """E31a: a values-keyed JSON table loads as a per-seat DistilledDraftPolicy."""
+    import json  # noqa: PLC0415
+
+    from locma.envs.training import _draft_override_policy  # noqa: PLC0415
+    from locma.policies.drafts import DistilledDraftPolicy  # noqa: PLC0415
+
+    p = tmp_path / "table.json"
+    p.write_text(json.dumps({"values": {"1": 5.0, "2": 1.0}, "w_need": 3.0, "w_creature": 2.0}))
+    over = _draft_override_policy(str(p))
+    assert isinstance(over.first, DistilledDraftPolicy)
+    assert over.first is not over.second  # independent per-seat state
+    assert over.first.values == {1: 5.0, 2: 1.0}
+
+
 def test_battle_env_draft_override_changes_decks():
     pytest.importorskip("gymnasium")  # ML-only (BattleEnv)
     from locma.envs.training import _make_battle_env  # noqa: PLC0415
