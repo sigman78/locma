@@ -22,7 +22,13 @@ import numpy as np
 from locma.core import battle as battlemod
 from locma.core.engine import make_battle_view
 from locma.data.cards_db import load_cards
-from locma.envs.encode import action_mask, encode_battle, encode_battle_tokens, sem_index
+from locma.envs.encode import (
+    action_mask,
+    encode_battle,
+    encode_battle_tokens,
+    sem_index,
+    token_variant_for_space,
+)
 from locma.policies.mcts import determinize
 from locma.policies.puct import puct_search
 
@@ -94,7 +100,7 @@ class NetOracle:
         import torch  # noqa: PLC0415 — lazy [ml] dep
 
         self._ensure()
-        obs = encode_battle_tokens(view)
+        obs = encode_battle_tokens(view, token_variant_for_space(self._model.observation_space))
         obs_t, _ = self._model.policy.obs_to_tensor(obs)
 
         with torch.no_grad():

@@ -12,10 +12,12 @@ import numpy as np
 import pytest
 
 from locma.core.views import BattleView, CardView  # noqa: E402
+from locma.data.cards_db import load_cards  # noqa: E402
 from locma.envs.encode import (  # noqa: E402
     MAX_TOKENS,
     N_TACTICAL,
     TOKEN_FEATS,
+    TOKEN_FEATS_FX,
     encode_battle_tokens,
     token_obs_space,
 )
@@ -316,3 +318,63 @@ def test_token_obs_space_shapes_and_dtypes_match_encoder():
         assert encoded[key].dtype == space.spaces[key].dtype, (
             f"{key}: encoder dtype {encoded[key].dtype} != space dtype {space.spaces[key].dtype}"
         )
+
+
+# ---------------------------------------------------------------------------
+# (g) "fx" variant — play-effect columns (E28c feature completion)
+# ---------------------------------------------------------------------------
+
+
+def _effect_card():
+    """A real card whose play effects are nonzero (from the cards DB)."""
+    card = next(c for c in load_cards() if c.player_hp or c.enemy_hp or c.card_draw)
+    return card, _make_card(card_id=card.id, type=int(card.type), cost=card.cost)
+
+
+def test_fx_shapes_and_scalars():
+    """fx tokens are (20, TOKEN_FEATS_FX); scalars stay at the v0 width."""
+    obs = encode_battle_tokens(_make_view(my_hand=(_make_card(),)), variant="fx")
+    assert obs["tokens"].shape == (MAX_TOKENS, TOKEN_FEATS_FX)
+    assert obs["scalars"].shape == (N_TACTICAL,)
+    assert obs["tokens"].dtype == np.float32
+
+
+def test_fx_hand_effect_columns():
+    """Hand cards carry (player_hp, enemy_hp, card_draw) in the 3 fx columns."""
+    db_card, cv = _effect_card()
+    obs = encode_battle_tokens(_make_view(my_hand=(cv,)), variant="fx")
+    np.testing.assert_array_equal(
+        obs["tokens"][0, TOKEN_FEATS:],
+        np.array([db_card.player_hp, db_card.enemy_hp, db_card.card_draw], dtype=np.float32),
+    )
+
+
+def test_fx_board_effect_columns_zero():
+    """Board slots keep zero fx columns — effects are spent on play."""
+    _, cv = _effect_card()
+    obs = encode_battle_tokens(_make_view(my_board=(cv,), op_board=(cv,)), variant="fx")
+    assert not obs["tokens"][8, TOKEN_FEATS:].any()
+    assert not obs["tokens"][14, TOKEN_FEATS:].any()
+
+
+def test_fx_v0_prefix_byte_identical():
+    """fx is purely additive: the first 17 columns and all other keys match v0."""
+    _, cv = _effect_card()
+    view = _make_view(
+        my_hand=(cv, _make_card(instance_id=2, card_id=2)),
+        my_board=(_make_card(instance_id=3, card_id=3, can_attack=True),),
+        op_board=(_make_card(instance_id=4, card_id=4, abilities="---G--"),),
+    )
+    v0 = encode_battle_tokens(view, variant="v0")
+    fx = encode_battle_tokens(view, variant="fx")
+    np.testing.assert_array_equal(fx["tokens"][:, :TOKEN_FEATS], v0["tokens"])
+    for key in ("card_ids", "token_mask", "scalars"):
+        np.testing.assert_array_equal(fx[key], v0[key])
+
+
+def test_fx_obs_space():
+    """token_obs_space('fx') widens tokens only; scalars stay v0."""
+    gym = pytest.importorskip("gymnasium")  # noqa: F841 — CI without [ml] skips
+    space = token_obs_space("fx")
+    assert space["tokens"].shape == (MAX_TOKENS, TOKEN_FEATS_FX)
+    assert space["scalars"].shape == (N_TACTICAL,)

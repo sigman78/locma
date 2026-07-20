@@ -5,9 +5,9 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record**: the reactive and guarded-reactive
-recipes are in the 2026-07-19 E28 section below (pointer action head,
-superseding the 2026-07-13 E26 recipes, which had superseded the 2026-07-07
-reactive recipe); the planner recipe is in the 2026-07-07 section; the strongest
+recipes are in the 2026-07-19 E28c section below (pointer head on token-fx
+obs, superseding the same-day E28 recipes, which superseded the 2026-07-13
+E26 recipes); the planner recipe is in the 2026-07-07 section; the strongest
 **play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
 beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
 in the 2026-07-10 E24 section below (it supersedes the 2026-07-09 E23
@@ -39,7 +39,68 @@ not just the ordinal.
 
 ---
 
-# Recipes of record — 2026-07-19: E28 pointer action head — promoted on BOTH reactive rungs (0.865 / 0.908)
+# Recipes of record — 2026-07-19: E28c token-fx obs — promoted on BOTH reactive rungs (0.878 / 0.914)
+
+E28c (branch feat/e28c-token-fx, worklog "E28c" + "E28c stack", program doc
+`docs/reactive-limits-program.md`): the pointer-head net retrained at the
+EXACT e28p recipe with `obs_mode=token-fx` — the opt-in token variant that
+appends the 3 play-effect columns (player_hp / enemy_hp / card_draw) for
+hand cards (`encode.py` variant "fx", TOKEN_FEATS_FX=20). 44/160 cards —
+7 of 8 blue items — carry effects reachable only through the card-id
+embedding, which never trains; the fx columns make them visible. Three
+seeds (`locma train-zoo --pointer-head --obs-mode token-fx`), published as
+`depot:e28c` v1 (parent e28p@1). Feature completion, not architecture:
+only the observation changed.
+
+| role | recipe of record since 2026-07-19 | avg-hard3 |
+|---|---|---|
+| **guarded-reactive (recipe of record)** | `lppo:depot:e28c/e28c_s0.zip\|depot:e28c/e28c_s1.zip\|depot:e28c/e28c_s2.zip,depot:ldraft/ldraft_sX.zip` | **0.914** (confirm 0.916) |
+| **reactive (recipe of record)** | `ppo:depot:e28c/e28c_sX.zip,depot:ldraft/ldraft_sX.zip` | **0.878** |
+| prior guarded-reactive record (E28 lens over e28p) | `lppo:depot:e28p trio,depot:ldraft/ldraft_sX.zip` | 0.908 |
+| prior reactive record (E28) | `ppo:depot:e28p/e28p_sX.zip,depot:ldraft/ldraft_sX.zip` | 0.865 |
+
+**Why promoted.** Sub-headroom (+0.012-0.021) but every promotion-relevant
+CI excludes zero with a fresh-anchor replication — the E7 precedent,
+satisfied on both the pair bench and the stack ladder (standard paired
+40x25 ruler):
+
+| verdict | delta | 95% CI |
+|---|---:|---|
+| pair bench: e28c pair vs e28p RoR pair @ 45M | +0.0212 | [+0.0140, +0.0282] |
+| pair bench confirm @ 46M (fresh) | +0.0215 | [+0.0157, +0.0273] |
+| pure trio vs e28p trio @ 48M (3-seed artifact) | +0.0170 | [+0.0108, +0.0233] |
+| **stack: `lppo:e28c trio` vs guarded RoR @ 48M** | **+0.0124** | [+0.0089, +0.0159] |
+| stack confirm @ 49M (fresh) | +0.0128 | [+0.0079, +0.0177] |
+| lens increment ON fx nets @ 48M | +0.0352 | [+0.0311, +0.0393] |
+
+0.914 extends the reactive summit — the gap to the 0.926 ensemble planner
+RoR is down to ~0.012 at ~3x lower cost. **Mechanism:** item rate per
+opportunity 0.142 -> 0.19-0.23 (~1.5x) — the first instrument to move item
+behavior in the program after E27 probes, gate-1 BC, and gate-2 PPO all
+failed to; the "consequence valuation" residual was partly plain feature
+incompleteness. This happened despite item-light zoo training decks (~7k
+green-item hand appearances sufficed to teach the columns' meaning,
+generalizing to the item-rich ldraft deploy decks). Boardkeep guard-rail
+(2000 mirrored @ 5M CRN): 0.2185 vs the stack (e28p band: 0.221), 0.25-0.30
+vs single fx nets (per-seed 0.303/0.279/0.2525) — no adversarial hole.
+
+**Caveats.** E26's labeling caveat carries over (exact own-turn lethal
+solve inside `lppo:`); for strictly-1x-inference deployments the single-net
+`ppo:e28c_sX,ldraft_sX` is the record at 0.878. The three seeds become one
+deployment artifact in the guarded recipe (E8 caveat). Milestone 2 (0.890
+pure) remains open — E29 arms (conditioned trunk, slim extractor) now build
+on token-fx.
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e28c_bench.py        # pair ruler + mechanism; runs/e28c-bench-summary.json
+uv run --extra ml python scripts/e28c_stack_bench.py  # trio + stack ladder; runs/e28c-stack-summary.json
+```
+
+---
+
+# Recipes of record — 2026-07-19: E28 pointer action head — promoted on BOTH reactive rungs (0.865 / 0.908) — superseded same day by E28c above
 
 E28 (branch feat/e28-pointer-head, worklog "E28" gates 1-2 + stack, program
 doc `docs/reactive-limits-program.md`): the dense action head (`action_net`,
