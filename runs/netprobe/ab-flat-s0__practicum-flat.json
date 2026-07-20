@@ -1,0 +1,276 @@
+{
+  "model": "runs/ab-flat-s0.zip",
+  "data": "runs/practicum-flat.npz",
+  "obs_mode": "flat",
+  "teacher": "mcts:100",
+  "n_examples": 35150,
+  "seed": 0,
+  "l2": 1.0,
+  "val_frac": 0.2,
+  "notes": "raw_obs token baseline = tokens+scalars+token_mask (card_ids omitted)",
+  "model_teacher_agreement": 0.34071550255536626,
+  "raw_obs": {
+    "spectrum": {
+      "width": 308,
+      "participation_ratio": 9.160404791400564,
+      "pr_frac": 0.02974157399805378,
+      "effective_rank": 85.70750980200691,
+      "stable_rank": 3.9664794162694066,
+      "n90": 21,
+      "n99": 74,
+      "total_var": 574.1157503579458
+    },
+    "probes": {
+      "outcome": {
+        "accuracy": 0.8877058489494606,
+        "majority_accuracy": 0.8840147643384441,
+        "n_train": 28106,
+        "n_test": 7044,
+        "auc": 0.8860700400730502
+      },
+      "teacher_action": {
+        "accuracy": 0.3368824531516184,
+        "majority_accuracy": 0.30607609312890405,
+        "n_train": 28106,
+        "n_test": 7044
+      }
+    }
+  },
+  "layers": {
+    "pi_a1": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 14.141045861712627,
+        "pr_frac": 0.2209538415892598,
+        "effective_rank": 51.59465232097765,
+        "stable_rank": 5.217536755513222,
+        "n90": 36,
+        "n99": 56,
+        "total_var": 36.247620067266716
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.03125,
+        "saturated_unit_frac": 0.96875,
+        "saturation_rate": 0.67843216571835
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.8865701306076094,
+          "majority_accuracy": 0.8840147643384441,
+          "n_train": 28106,
+          "n_test": 7044,
+          "auc": 0.8418422634953913
+        },
+        "teacher_action": {
+          "accuracy": 0.2999716070414537,
+          "majority_accuracy": 0.30607609312890405,
+          "n_train": 28106,
+          "n_test": 7044
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 8.10564080589344,
+        "pr_frac": 0.126650637592085,
+        "effective_rank": 45.11448101512576,
+        "stable_rank": 3.537455471767326,
+        "n90": 22,
+        "n99": 50,
+        "total_var": 9.037545554307643
+      },
+      "cka_vs_reinit": 0.6320410119255069
+    },
+    "pi_a2": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 14.443099418613675,
+        "pr_frac": 0.22567342841583868,
+        "effective_rank": 52.668750931049914,
+        "stable_rank": 5.674833952892608,
+        "n90": 35,
+        "n99": 59,
+        "total_var": 30.45989128895089
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.046875,
+        "saturation_rate": 0.24909228307254622
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.8879897785349233,
+          "majority_accuracy": 0.8840147643384441,
+          "n_train": 28106,
+          "n_test": 7044,
+          "auc": 0.8451779169129422
+        },
+        "teacher_action": {
+          "accuracy": 0.2932992617830778,
+          "majority_accuracy": 0.30607609312890405,
+          "n_train": 28106,
+          "n_test": 7044
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 6.922599077015742,
+        "pr_frac": 0.10816561057837097,
+        "effective_rank": 38.79657486596964,
+        "stable_rank": 3.0973902981156085,
+        "n90": 17,
+        "n99": 39,
+        "total_var": 2.058060329859575
+      },
+      "cka_vs_reinit": 0.5283448547999162
+    },
+    "vf_a1": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 8.172829782601246,
+        "pr_frac": 0.12770046535314447,
+        "effective_rank": 40.562127378904634,
+        "stable_rank": 3.3536282287225845,
+        "n90": 24,
+        "n99": 42,
+        "total_var": 18.827075223146863
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0625,
+        "saturated_unit_frac": 0.671875,
+        "saturation_rate": 0.6867665362731152
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9172345258375922,
+          "majority_accuracy": 0.8840147643384441,
+          "n_train": 28106,
+          "n_test": 7044,
+          "auc": 0.9089164158374544
+        },
+        "teacher_action": {
+          "accuracy": 0.2981260647359455,
+          "majority_accuracy": 0.30607609312890405,
+          "n_train": 28106,
+          "n_test": 7044
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 7.986973391026681,
+        "pr_frac": 0.12479645923479189,
+        "effective_rank": 42.45036645092902,
+        "stable_rank": 3.50478262122036,
+        "n90": 20,
+        "n99": 46,
+        "total_var": 10.063593526261268
+      },
+      "cka_vs_reinit": 0.6762472736940432
+    },
+    "vf_a2": {
+      "spectrum": {
+        "width": 64,
+        "participation_ratio": 2.250826350615602,
+        "pr_frac": 0.03516916172836878,
+        "effective_rank": 39.539916833708816,
+        "stable_rank": 1.5162344695829821,
+        "n90": 13,
+        "n99": 48,
+        "total_var": 27.913839436759748
+      },
+      "unit_health": {
+        "width": 64,
+        "kind": "tanh",
+        "dead_frac": 0.0,
+        "saturated_unit_frac": 0.109375,
+        "saturation_rate": 0.25181765647226173
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.9186541737649063,
+          "majority_accuracy": 0.8840147643384441,
+          "n_train": 28106,
+          "n_test": 7044,
+          "auc": 0.917314124791964
+        },
+        "teacher_action": {
+          "accuracy": 0.3026689381033504,
+          "majority_accuracy": 0.30607609312890405,
+          "n_train": 28106,
+          "n_test": 7044
+        }
+      },
+      "spectrum_reinit": {
+        "width": 64,
+        "participation_ratio": 8.346161183639852,
+        "pr_frac": 0.1304087684943727,
+        "effective_rank": 38.32472041251476,
+        "stable_rank": 3.573439815634171,
+        "n90": 17,
+        "n99": 38,
+        "total_var": 2.3150232979112584
+      },
+      "cka_vs_reinit": 0.4734370922757554
+    },
+    "logits": {
+      "spectrum": {
+        "width": 155,
+        "participation_ratio": 5.475840344236351,
+        "pr_frac": 0.03532800222087969,
+        "effective_rank": 32.55915499995687,
+        "stable_rank": 2.726086753259625,
+        "n90": 10,
+        "n99": 33,
+        "total_var": 240.47014526977546
+      },
+      "unit_health": {
+        "width": 155,
+        "kind": "linear",
+        "dead_frac": 0.0
+      },
+      "probes": {
+        "outcome": {
+          "accuracy": 0.8879897785349233,
+          "majority_accuracy": 0.8840147643384441,
+          "n_train": 28106,
+          "n_test": 7044,
+          "auc": 0.8451741822391099
+        },
+        "teacher_action": {
+          "accuracy": 0.2934412265758092,
+          "majority_accuracy": 0.30607609312890405,
+          "n_train": 28106,
+          "n_test": 7044
+        }
+      },
+      "spectrum_reinit": {
+        "width": 155,
+        "participation_ratio": 6.796652482241883,
+        "pr_frac": 0.04384937085317344,
+        "effective_rank": 36.90846594176605,
+        "stable_rank": 3.0679731369067773,
+        "n90": 16,
+        "n99": 36,
+        "total_var": 1.595378324565163
+      },
+      "cka_vs_reinit": 0.5630344941675766
+    }
+  },
+  "cka_pairs": {
+    "pi_a1|pi_a2": 0.8721134008161536,
+    "pi_a1|vf_a1": 0.5313768859259128,
+    "pi_a1|vf_a2": 0.3139909837192943,
+    "pi_a1|logits": 0.7102865120029395,
+    "pi_a2|vf_a1": 0.5242515458610455,
+    "pi_a2|vf_a2": 0.34276720884811274,
+    "pi_a2|logits": 0.8696254450018752,
+    "vf_a1|vf_a2": 0.8331503246903126,
+    "vf_a1|logits": 0.5946063633918259,
+    "vf_a2|logits": 0.428352800205329
+  }
+}
