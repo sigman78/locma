@@ -191,7 +191,7 @@ def test_collector_token_mode_appends_dict(monkeypatch):
 
     monkeypatch.setattr(P, "battle_legal", lambda gs: [Attack(1, -1), Pass()])
     monkeypatch.setattr(P, "make_battle_view", lambda gs: object())
-    monkeypatch.setattr(P, "encode_battle_tokens", lambda view: fake_dict)
+    monkeypatch.setattr(P, "encode_battle_tokens", lambda view, variant="v0": fake_dict)
     monkeypatch.setattr(P, "action_mask", lambda view, legal: np.zeros(ACTION_SIZE, dtype=bool))
     monkeypatch.setattr(P, "sem_index", lambda view, a: 0)
 
