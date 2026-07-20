@@ -101,9 +101,18 @@ finding). PPO at the exact recipe: **+0.0212 [+0.0140, +0.0282]** vs the
 e28p pair, confirm +0.0215 [+0.0157, +0.0273] — sub-headroom but
 zero-excluding twice; item rate per opportunity **0.142 -> 0.19-0.23**, the
 first instrument to move item behavior in the program; boardkeep stays
-closed (0.28-0.30). E29 arms build on token-fx. Open follow-ups: s2 +
-stack bench for the promotion decision; fx + item-rich training decks
-(draft_override) as the motivated escalation.
+closed (0.28-0.30). E29 arms build on token-fx.
+
+**PROMOTED on both rungs (2026-07-19, worklog E28c stack; artifact
+`depot:e28c` v1).** 3-seed ladder (scripts/e28c_stack_bench.py), every CI
+zero-excluding: pure trio +0.0170 [+0.0108, +0.0233] vs the e28p trio;
+`lppo:e28c trio` **0.914** beats the 0.908 guarded RoR +0.0124 [+0.0089,
++0.0159], fresh confirm +0.0128 [+0.0079, +0.0177]; lens increment on fx
+nets +0.0352 (headroom — still disjoint); boardkeep 0.2185 vs the stack,
+matching e28p's 0.221. Sub-headroom promotion on the E7 precedent
+(zero-excluding CI + fresh replication, three times over). New records:
+reactive 0.878, guarded 0.914. Open follow-up: fx + item-rich training
+decks (draft_override) as the motivated escalation.
 
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
