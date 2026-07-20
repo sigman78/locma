@@ -1,0 +1,62 @@
+{
+  "model": "depot:b0k/b0k_s0.zip",
+  "data": "runs/practicum-dmcts.npz",
+  "n_examples": 28035,
+  "teacher": "dmcts",
+  "seed": 0,
+  "l2": 1.0,
+  "val_frac": 0.2,
+  "notes": "teacher-action ridge probes on the fuse's exact input/output vs a random-init Linear+ReLU of the same shape; trained ~= random -> structural compression, trained << random -> learned discarding",
+  "probes": {
+    "raw_obs": {
+      "accuracy": 0.377023768515329,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 373
+    },
+    "slots": {
+      "accuracy": 0.38167413021012747,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 1280
+    },
+    "fuse_in": {
+      "accuracy": 0.3856355494316225,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 1344
+    },
+    "features_trained": {
+      "accuracy": 0.3489493627282122,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 256
+    },
+    "rand_fuse_s0": {
+      "accuracy": 0.34050981743024455,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 256
+    },
+    "rand_fuse_s1": {
+      "accuracy": 0.3535997244230107,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 256
+    },
+    "rand_fuse_s2": {
+      "accuracy": 0.34171546675852565,
+      "majority_accuracy": 0.35446090251464,
+      "n_train": 22229,
+      "n_test": 5806,
+      "width": 256
+    }
+  },
+  "rand_fuse_mean_accuracy": 0.3452750028705936
+}
