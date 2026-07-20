@@ -140,6 +140,20 @@ parts: (a) a small consequence-valuation gap on strong lines (E30), and
 (b) card design — today's blues are too weak for even an oracle to play
 often. Exposure helped the representation, not win rate.
 
+**Oracle caveat (scripts/blue_oracle_horizon.py): "blues weak" splits by
+effect type — the oracle undervalues card-draw blues.** The oracle's leaf
+value (health + board-power lead) has no card-advantage term, so it is
+blind by construction to the 2 draw blues (154, 157). A rollout-horizon
+sweep confirms it: draw-blue play rate rises 0.133 -> 0.143 -> 0.258 as the
+rollout extends to terminal (real win/loss), overtaking non-draw blues,
+while non-draw blues stay flat (~0.18-0.21, already priced). So (b) holds
+for the 6 removal/heal/burn blues but is OVERTURNED for card-draw blues —
+and the fx net playing draw-blues at ~0.30 (which it can see via the
+card_draw column) looks correct, not a mispricing. Don't treat the
+cheating-MCTS oracle as ground truth for draw/tempo items. (Terminal
+draw-n=31, so the crossover is suggestive; the monotone rise is the robust
+part.)
+
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
 Fixes the measured pathology (first-layer saturation with LOW PR), likely a

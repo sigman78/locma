@@ -1,0 +1,29 @@
+{
+ "heur3": {
+  "spec": "mcts:300,1.41,0,3,runs/e31a_diet.json",
+  "n_decisions": 2725,
+  "draw_blue_rate": 0.133,
+  "draw_blue_n": 60,
+  "nondraw_blue_rate": 0.184,
+  "nondraw_blue_n": 255,
+  "minutes": 0.8
+ },
+ "heur8": {
+  "spec": "mcts:300,1.41,0,8,runs/e31a_diet.json",
+  "n_decisions": 2676,
+  "draw_blue_rate": 0.143,
+  "draw_blue_n": 56,
+  "nondraw_blue_rate": 0.207,
+  "nondraw_blue_n": 246,
+  "minutes": 1.4
+ },
+ "terminal": {
+  "spec": "mcts:300,1.41,0,0,runs/e31a_diet.json",
+  "n_decisions": 3269,
+  "draw_blue_rate": 0.258,
+  "draw_blue_n": 31,
+  "nondraw_blue_rate": 0.201,
+  "nondraw_blue_n": 289,
+  "minutes": 3.3
+ }
+}
