@@ -212,6 +212,17 @@ machinery from E27 records everything needed).
   clears the 0.37 cap decisively, open a training arm (EXIT-style with the
   plan head); if not, the cap is representational and this closes cleanly.
 
+**VERDICT (2026-07-20, worklog "E30"): CLOSED — the cap is REPRESENTATIONAL.**
+Controlled BC diagnostic (scripts/e30_plan_bc.py, mcts:100 practicum, turns
+split by round counter): a factored head reproduces the cap (multi-action
+agreement 0.373) and an autoregressive head that also sees the plan so far
+does NOT clear it (0.366; autoreg-factored = -0.008/-0.005/-0.004 across
+seeds 0/1/2, vs the +0.10 open-arm bar). Explicit plan-so-far conditioning is
+redundant with the state (the board already reflects actions taken this
+turn), so factorization is NOT the bottleneck. The reactive obs does not
+separably encode which action a lookahead teacher picks — play-time search
+fills that. No training arm opened.
+
 ## Explicitly out of scope
 
 Wider/deeper trunks (no capacity pressure, twice confirmed); more diversity

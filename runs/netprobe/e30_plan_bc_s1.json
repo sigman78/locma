@@ -1,0 +1,22 @@
+{
+ "factored": {
+  "agreement_overall": 0.4143,
+  "agreement_multi_action": 0.3879,
+  "n_test": 6903,
+  "n_test_multi": 6308,
+  "whole_turn_exact": 0.243
+ },
+ "autoreg": {
+  "agreement_overall": 0.4107,
+  "agreement_multi_action": 0.3825,
+  "n_test": 6903,
+  "n_test_multi": 6308,
+  "whole_turn_exact": 0.2499
+ },
+ "gate": {
+  "data": "runs/practicum-token.npz",
+  "delta_multi_action": -0.0054,
+  "delta_overall": -0.0036,
+  "verdict": "representational (close E30)"
+ }
+}
