@@ -60,6 +60,14 @@ net +0.073 headroom (0.856/0.858, milestone 1 cleared with no guard);
 neutralized to 0.221. Items unmoved by slot access even under PPO — three
 instruments agree it is consequence valuation (E30's question).
 
+**E28b addendum (2026-07-19, worklog E28b): the gather does not need the
+transformer.** Gate-1 protocol, one variable: a pointer head gathering
+pre-attention slot embeddings — or even raw unprojected 33-d features —
+matches pointer-over-z on both seeds (premix within 0.005, pre-registered
+MIXING_UNNECESSARY). The BC-cap break is pure structural slot access.
+Scope: the context path (latent_pi) still used the full trunk; a
+transformer-free TRUNK is a retrain question, folded into E29 below.
+
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
 Fixes the measured pathology (first-layer saturation with LOW PR), likely a
@@ -72,6 +80,13 @@ the handicapped trunk.
   mechanism — full-net ranking loss (E15's wall was explicitly
   frozen-extractor; E13 concluded the critic ceiling needs ranking-type
   signal). Target: single-net critic past the 0.890 single-critic ceiling.
+- Added after E28b (mixing unnecessary for the pointer gather) + the
+  encoder introspection (attention near-uniform, id embedding untrained):
+  a **slim/transformer-free extractor arm** — per-slot embedding + pointer
+  head + cheap context (scalars + pooled slots), retrained at the e28p
+  recipe. Watch the critic: the vf tower is the one place the trunk
+  genuinely computes (winner_side). Prize: the extractor was ~4x the flat
+  net's compute; the reactive rung sells on cheapness.
 
 ### E30 — autoregressive turn-plan head (BC diagnostic first)
 
