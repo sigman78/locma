@@ -168,6 +168,20 @@ the handicapped trunk.
   mechanism — full-net ranking loss (E15's wall was explicitly
   frozen-extractor; E13 concluded the critic ceiling needs ranking-type
   signal). Target: single-net critic past the 0.890 single-critic ceiling.
+
+**E29a VERDICT (2026-07-20, worklog "E29a"): CLOSED (negative).** The
+`feature_ln` lever (LayerNorm on the tower input; opt-in, default-off,
+`train-zoo --feature-ln`) HALVES first-layer saturation (pi_a1 0.566 ->
+0.258) — gate 1 passes — but can_item tower-retention does NOT move (0.745
+-> 0.741; gate 2 fails). So saturation is DECOUPLED from the item info-loss
+it was hypothesized to cause. A tiebreaker paired ruler (proxy-independent)
+is CI-NEGATIVE: conditioned -0.0147 [-0.0245, -0.0053] vs matched control
+(seed 0, 500k). First-layer saturation is apparently a COSMETIC pathology,
+not the training handicap the prestudy framing assumed — which weakens the
+"ill-conditioned trunk gates the historical nulls" rationale and the
+ranking-loss-rerun plan below it. The slim/transformer-free extractor arm
+(next bullet) is a SEPARATE hypothesis (cheapness, not conditioning) and
+remains open.
 - Added after E28b (mixing unnecessary for the pointer gather) + the
   encoder introspection (attention near-uniform, id embedding untrained):
   a **slim/transformer-free extractor arm** — per-slot embedding + pointer

@@ -1,0 +1,53 @@
+{
+ "control": {
+  "saturation": {
+   "pi_a1": 0.5657,
+   "vf_a1": 0.7869
+  },
+  "can_item_acc": {
+   "raw": 0.9012,
+   "features": 0.7841,
+   "pi_a1": 0.7431,
+   "pi_a2": 0.7446,
+   "vf_a1": 0.736,
+   "vf_a2": 0.736
+  },
+  "base_rate": 0.2681
+ },
+ "conditioned": {
+  "saturation": {
+   "pi_a1": 0.2583,
+   "vf_a1": 0.6581
+  },
+  "can_item_acc": {
+   "raw": 0.9012,
+   "features": 0.7886,
+   "pi_a1": 0.7394,
+   "pi_a2": 0.7412,
+   "vf_a1": 0.7342,
+   "vf_a2": 0.7327
+  },
+  "base_rate": 0.2681
+ },
+ "gate": {
+  "sat_pi_a1_ctrl": 0.5657,
+  "sat_pi_a1_cond": 0.2583,
+  "sat_vf_a1_ctrl": 0.7869,
+  "sat_vf_a1_cond": 0.6581,
+  "can_item_tower_ctrl": 0.7446,
+  "can_item_tower_cond": 0.7412,
+  "can_item_raw": 0.9012,
+  "gate1_saturation_drops": true,
+  "gate2_can_item_improves": false,
+  "PASS": false
+ },
+ "winrate_ln_vs_ctrl_500k": {
+  "mean_delta": -0.0147,
+  "ci_lo": -0.0245,
+  "ci_hi": -0.0053,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.8718,
+  "b0_avg": 0.8865,
+  "minutes": 12.3
+ }
+}
