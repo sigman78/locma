@@ -168,6 +168,33 @@ the handicapped trunk.
   mechanism — full-net ranking loss (E15's wall was explicitly
   frozen-extractor; E13 concluded the critic ceiling needs ranking-type
   signal). Target: single-net critic past the 0.890 single-critic ceiling.
+
+**E29a VERDICT (2026-07-20, worklog "E29a"): CLOSED (negative).** The
+`feature_ln` lever (LayerNorm on the tower input; opt-in, default-off,
+`train-zoo --feature-ln`) HALVES first-layer saturation (pi_a1 0.566 ->
+0.258) — gate 1 passes — but can_item tower-retention does NOT move (0.745
+-> 0.741; gate 2 fails). So saturation is DECOUPLED from the item info-loss
+it was hypothesized to cause. A tiebreaker paired ruler (proxy-independent)
+is CI-NEGATIVE: conditioned -0.0147 [-0.0245, -0.0053] vs matched control
+(seed 0, 500k). First-layer saturation is apparently a COSMETIC pathology,
+not the training handicap the prestudy framing assumed — which weakens the
+"ill-conditioned trunk gates the historical nulls" rationale and the
+ranking-loss-rerun plan below it. The slim/transformer-free extractor arm
+(next bullet) is a SEPARATE hypothesis (cheapness, not conditioning).
+
+**Slim-extractor VERDICT (2026-07-20, worklog "E29 slim extractor" +
+"E29 slim stack"): PROMOTED on BOTH rungs — `depot:e29slim` v1.**
+SlimTokenExtractor (transformer dropped; per-slot embeddings + pooled
+context; 56.7k extractor params vs 418.5k, 7.4x fewer) at the exact e28c
+recipe. Pair ruler +0.0259/+0.0282; 3-seed ladder: pure trio +0.0224
+[+0.0158, +0.0294], `lppo:slim trio` **0.934** beats the 0.914 guarded RoR
++0.0207 [+0.0163, +0.0251], confirm +0.0210 [+0.0159, +0.0262], lens
+increment +0.032 (disjoint), boardkeep **0.189** (beats e28c's 0.2185). New
+records: reactive **0.903**, guarded **0.934**. Removing the transformer
+improved win rate — E28b (mixing unnecessary) + encoder-viz nulls: it added
+overfitting capacity, not signal. **Milestone 2 cleared (pure 0.903 > 0.890)
+and milestone 3's 0.926 ensemble-planner target SURPASSED by the guarded
+stack (0.934).**
 - Added after E28b (mixing unnecessary for the pointer gather) + the
   encoder introspection (attention near-uniform, id embedding untrained):
   a **slim/transformer-free extractor arm** — per-slot embedding + pointer
@@ -188,6 +215,17 @@ machinery from E27 records everything needed).
   clears the 0.37 cap decisively, open a training arm (EXIT-style with the
   plan head); if not, the cap is representational and this closes cleanly.
 
+**VERDICT (2026-07-20, worklog "E30"): CLOSED — the cap is REPRESENTATIONAL.**
+Controlled BC diagnostic (scripts/e30_plan_bc.py, mcts:100 practicum, turns
+split by round counter): a factored head reproduces the cap (multi-action
+agreement 0.373) and an autoregressive head that also sees the plan so far
+does NOT clear it (0.366; autoreg-factored = -0.008/-0.005/-0.004 across
+seeds 0/1/2, vs the +0.10 open-arm bar). Explicit plan-so-far conditioning is
+redundant with the state (the board already reflects actions taken this
+turn), so factorization is NOT the bottleneck. The reactive obs does not
+separably encode which action a lookahead teacher picks — play-time search
+fills that. No training arm opened.
+
 ## Explicitly out of scope
 
 Wider/deeper trunks (no capacity pressure, twice confirmed); more diversity
@@ -201,7 +239,11 @@ play-time guards as ends (E26 stands as-is).
    readout + item routing that guards currently patch. **REACHED 2026-07-19**
    (E28 pointer trio 0.865, no guards).
 2. Pure net ~ 0.890 (single-critic vbeam ceiling) — the net has absorbed
-   what one beam ply adds. 0.025 away after E28; E29/E30 are the remaining
-   levers.
-3. Stretch: approach 0.926 (ensemble planner RoR). (The GUARDED stack is
-   already 0.908.)
+   what one beam ply adds. **REACHED 2026-07-20** (E29 slim pure 0.903, no
+   guards — the transformer-drop simplification, not conditioning/plan-head).
+3. Stretch: approach 0.926 (ensemble planner RoR). **SURPASSED (guarded)
+   2026-07-20** — the E29 slim guarded stack is 0.934, above the ensemble
+   planner, at a fraction of its cost. A PURE net at 0.926 remains open, but
+   the arch-sweep training levers are exhausted (E29a/E30 closed); the
+   remaining pure-vs-0.926 gap is lookahead depth, which play-time search
+   supplies.

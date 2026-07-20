@@ -181,6 +181,7 @@ def _make_model(
     extractor_kwargs: dict | None = None,
     tensorboard_log: str | None = None,
     pointer_head: bool = False,
+    slim: bool = False,
 ):
     """Construct a MaskablePPO model, selecting the policy class by obs_mode.
 
@@ -190,6 +191,8 @@ def _make_model(
     ``pointer_head`` (token obs_mode only): swap the dense ``action_net`` for
     the E28 pointer action head (``PointerMaskablePolicy``) — each action logit
     computed from the slot tokens of the cards that action involves.
+    ``slim`` (E29): use the transformer-free ``SlimTokenExtractor`` instead of
+    ``TokenSetExtractor`` (per-slot embeddings + pooled context, ~4x cheaper).
     """
     from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
@@ -212,9 +215,9 @@ def _make_model(
     )
 
     if obs_mode.startswith("token"):
-        from locma.envs.extractor import TokenSetExtractor  # noqa: PLC0415
+        from locma.envs.extractor import SlimTokenExtractor, TokenSetExtractor  # noqa: PLC0415
 
-        pk = dict(features_extractor_class=TokenSetExtractor)
+        pk = dict(features_extractor_class=SlimTokenExtractor if slim else TokenSetExtractor)
         if extractor_kwargs:
             pk["features_extractor_kwargs"] = dict(extractor_kwargs)
         if pointer_head:
@@ -528,6 +531,7 @@ def train_zoo(
     shared_draft: bool = False,
     draft_override: str | None = None,
     pointer_head: bool = False,
+    slim: bool = False,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -598,6 +602,7 @@ def train_zoo(
         extractor_kwargs=extractor_kwargs,
         tensorboard_log=tensorboard_log,
         pointer_head=pointer_head,
+        slim=slim,
     )
     try:
         for i, opp in enumerate(opps):

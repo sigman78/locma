@@ -117,14 +117,23 @@ class PointerMaskablePolicy(MaskableMultiInputActorCriticPolicy):
         super()._build(lr_schedule)
         self._slot_cache: list = [None]
         fe = self.features_extractor
-        if not hasattr(fe, "transformer"):
-            raise ValueError("PointerMaskablePolicy needs a TokenSetExtractor-style extractor")
-        d_model = fe.pos_embed.shape[-1]
+        # The slot source is the transformer (TokenSetExtractor) or, for the
+        # E29 transformer-free SlimTokenExtractor, its slot_encoder — both emit
+        # (B, MAX_TOKENS, d_model), which is all the pointer gather needs.
+        slot_mod = getattr(fe, "transformer", None) or getattr(fe, "slot_encoder", None)
+        if slot_mod is None:
+            raise ValueError(
+                "PointerMaskablePolicy needs an extractor exposing `transformer` or `slot_encoder`"
+            )
+        pos = getattr(fe, "pos_embed", None)
+        if pos is None:  # slim extractor holds pos_embed inside slot_encoder
+            pos = fe.slot_encoder.pos_embed
+        d_model = pos.shape[-1]
 
         def _hook(mod, inp, out):
             self._slot_cache[0] = out
 
-        fe.transformer.register_forward_hook(_hook)
+        slot_mod.register_forward_hook(_hook)
         self.action_net = PointerActionNet(
             lambda: self._slot_cache[0],
             d_model=d_model,

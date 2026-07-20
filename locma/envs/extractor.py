@@ -33,7 +33,8 @@ class TokenSetExtractor(BaseFeaturesExtractor):
     7. scalar_mlp(scalars): LayerNorm(n_scalar) → Linear(n_scalar, d_model) → ReLU
        normalizes raw scalar magnitudes (health≈30, turn≈50, board totals≈60).
        n_scalar is read from the obs space so any variant (v0=13, v1=18) is drop-in.
-    8. head(cat([flat, s], dim=-1)) → (B, features_dim)
+    8. head(cat([flat, s], dim=-1)) → (B, features_dim); if ``feature_ln``,
+       a final LayerNorm(features_dim) conditions the tower input (E29).
 
     Why slot-addressable (NOT permutation-invariant):
     The 155-action space indexes actions by slot position: Summon→1+s, Use→9+s*13+tc,
@@ -63,6 +64,15 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # dominates that cost. Change only with a paired ceiling-eval.
         dropout: float = 0.1,
         features_dim: int = 256,
+        # E29 conditioned-trunk lever (opt-in; default OFF = byte-identical to
+        # the e28c/e28p extractor). LayerNorm on the fused head output — i.e.
+        # the input to the SB3 policy/value towers — so the towers' first Tanh
+        # layer stops saturating (net-probe prestudy PR #83: ~94% first-layer
+        # saturation, the mechanism behind the E27 can_item info-loss 0.98 raw
+        # -> 0.61 towers). The extractor already LayerNorms its token/scalar
+        # INPUTS; this normalizes the features handed downstream. Gated so the
+        # 3 published pointer artifacts (e28p/e28c) load unchanged.
+        feature_ln: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim)
 
@@ -118,6 +128,9 @@ class TokenSetExtractor(BaseFeaturesExtractor):
             nn.ReLU(),
         )
 
+        # E29: normalize the tower input (see feature_ln above). None = off.
+        self.out_ln = nn.LayerNorm(features_dim) if feature_ln else None
+
     def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
         # 1. Embed card IDs (cast float32 → long; SB3 batches Box obs as float32).
         ids = obs["card_ids"].long()  # (B, 20)
@@ -152,5 +165,89 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # 7. Scalar branch.
         s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
 
-        # 8. Head: fuse and project to features_dim.
-        return self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)
+        # 8. Head: fuse and project to features_dim; optionally condition the
+        #    tower input with LayerNorm (E29, opt-in).
+        out = self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)
+        return self.out_ln(out) if self.out_ln is not None else out
+
+
+class SlotEncoder(nn.Module):
+    """Per-slot token embedding, NO cross-card mixing (E29 slim arm).
+
+    Reproduces TokenSetExtractor steps 1-3 (project [tokens|id_embed] to
+    d_model, per-token LayerNorm, add learned per-slot positional embedding)
+    and stops there — the "premix x0" the E28b ablation found the pointer
+    head gathers just as well as the post-transformer z (mixing unnecessary).
+    Kept a standalone nn.Module so ``PointerMaskablePolicy`` can hook it for
+    the slot cache exactly as it hooks ``TokenSetExtractor.transformer``.
+    """
+
+    def __init__(self, in_dim: int, d_model: int) -> None:
+        super().__init__()
+        self.proj = nn.Linear(in_dim, d_model)
+        self.token_ln = nn.LayerNorm(d_model)
+        self.pos_embed = nn.Parameter(torch.zeros(1, MAX_TOKENS, d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.token_ln(self.proj(x)) + self.pos_embed  # (B, MAX_TOKENS, d_model)
+
+
+class SlimTokenExtractor(BaseFeaturesExtractor):
+    """Transformer-free slot extractor (E29 slim arm): per-slot embeddings +
+    cheap pooled context, ~4x cheaper than TokenSetExtractor.
+
+    The pointer head gathers per-slot embeddings from ``slot_encoder`` (no
+    attention — E28b: mixing unnecessary for the gather). The tower context
+    (``features_dim`` output feeding the SB3 mlp_extractor) is built from
+    masked mean+max pooling of the same per-slot embeddings plus the scalar
+    branch — no 20*d_model flatten, no transformer. ``pos_embed`` is exposed
+    (mirrors TokenSetExtractor) so PointerMaskablePolicy reads ``d_model``.
+
+    Motivation is CHEAPNESS, not a higher ceiling: the reactive rung sells on
+    inference cost, and the transformer was the bulk of TokenSetExtractor's
+    compute. Win = matches e28c avg-hard3 at materially less compute.
+    """
+
+    def __init__(
+        self,
+        observation_space,
+        *,
+        d_model: int = 64,
+        id_dim: int = 16,
+        features_dim: int = 256,
+    ) -> None:
+        super().__init__(observation_space, features_dim)
+        self.id_embed = nn.Embedding(NUM_CARDS + 1, id_dim, padding_idx=0)
+        tok_feats = int(observation_space["tokens"].shape[1])
+        self.slot_encoder = SlotEncoder(tok_feats + id_dim, d_model)
+
+        n_scalar = int(observation_space["scalars"].shape[0])
+        self.scalar_mlp = nn.Sequential(
+            nn.LayerNorm(n_scalar),
+            nn.Linear(n_scalar, d_model),
+            nn.ReLU(),
+        )
+        # Context = [mean-pool | max-pool | scalar branch] -> features_dim.
+        self.head = nn.Sequential(
+            nn.Linear(2 * d_model + d_model, features_dim),
+            nn.ReLU(),
+        )
+
+    def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
+        ids = obs["card_ids"].long()  # (B, 20)
+        id_embed = self.id_embed(ids)  # (B, 20, id_dim)
+        x = torch.cat([obs["tokens"], id_embed], dim=-1)
+        z = self.slot_encoder(x)  # (B, 20, d_model) — hooked by the pointer head
+
+        m = obs["token_mask"].unsqueeze(-1)  # (B, 20, 1) 1=real, 0=pad
+        denom = m.sum(dim=1).clamp(min=1.0)  # (B, 1)
+        mean_pool = (z * m).sum(dim=1) / denom  # (B, d_model)
+        neg = torch.finfo(z.dtype).min
+        max_pool = z.masked_fill(m == 0, neg).max(dim=1).values  # (B, d_model)
+        # All-pad guard: a fully-padded row maxes to `neg` — zero it (those
+        # action slots are masked at the head anyway).
+        all_pad = obs["token_mask"].sum(dim=1, keepdim=True) == 0  # (B, 1)
+        max_pool = torch.where(all_pad, torch.zeros_like(max_pool), max_pool)
+
+        s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
+        return self.head(torch.cat([mean_pool, max_pool, s], dim=-1))  # (B, features_dim)

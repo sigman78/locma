@@ -1,0 +1,66 @@
+{
+ "pure3_reactive": {
+  "mean_delta": 0.0224,
+  "ci_lo": 0.0158,
+  "ci_hi": 0.0294,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9026,
+  "b0_avg": 0.8801,
+  "minutes": 34.3
+ },
+ "stack_vs_ror": {
+  "mean_delta": 0.0207,
+  "ci_lo": 0.0163,
+  "ci_hi": 0.0251,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9344,
+  "b0_avg": 0.9137,
+  "minutes": 70.2
+ },
+ "lens_increment": {
+  "mean_delta": 0.0318,
+  "ci_lo": 0.0263,
+  "ci_hi": 0.0374,
+  "verdict": "headroom",
+  "cand_avg": 0.9344,
+  "b0_avg": 0.9026,
+  "minutes": 48.1
+ },
+ "guardrail_stack": {
+  "spec": "lppo:runs/e29slim_s0.zip|runs/e29slim_s1.zip|runs/e29slim_s2.zip,depot:ldraft/ldraft_s0.zip",
+  "boardkeep_wr": 0.189,
+  "games": 2000,
+  "minutes": 11.1
+ },
+ "confirm_stack_62M": {
+  "mean_delta": 0.021,
+  "ci_lo": 0.0159,
+  "ci_hi": 0.0262,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9382,
+  "b0_avg": 0.9172,
+  "minutes": 70.1
+ },
+ "gates": {
+  "pure3_delta": 0.0224,
+  "pure3_ci": [
+   0.0158,
+   0.0294
+  ],
+  "stack_delta": 0.0207,
+  "stack_ci": [
+   0.0163,
+   0.0251
+  ],
+  "lens_increment_delta": 0.0318,
+  "lens_increment_ci": [
+   0.0263,
+   0.0374
+  ],
+  "confirm_ci": [
+   0.0159,
+   0.0262
+  ],
+  "stack_beats_ror": true
+ }
+}

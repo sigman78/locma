@@ -1,0 +1,59 @@
+{
+ "full_vs_e28c": {
+  "mean_delta": 0.0259,
+  "ci_lo": 0.0198,
+  "ci_hi": 0.032,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9031,
+  "b0_avg": 0.8772,
+  "minutes": 23.1
+ },
+ "confirm_vs_e28c_59M": {
+  "mean_delta": 0.0282,
+  "ci_lo": 0.0208,
+  "ci_hi": 0.0354,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9017,
+  "b0_avg": 0.8735,
+  "minutes": 22.9
+ },
+ "compute": {
+  "params": {
+   "slim_extractor": 56682,
+   "full_extractor": 418538,
+   "ratio": 7.38
+  },
+  "s_per_game": {
+   "slim": 0.0795,
+   "e28c": 0.0933,
+   "speedup": 1.17
+  }
+ },
+ "guardrail_slim_s0": {
+  "spec": "ppo:runs/e29slim_s0.zip,depot:ldraft/ldraft_s0.zip",
+  "boardkeep_wr": 0.2355,
+  "games": 2000,
+  "minutes": 3.0
+ },
+ "guardrail_slim_s1": {
+  "spec": "ppo:runs/e29slim_s1.zip,depot:ldraft/ldraft_s1.zip",
+  "boardkeep_wr": 0.247,
+  "games": 2000,
+  "minutes": 3.0
+ },
+ "gates": {
+  "full_delta": 0.0259,
+  "full_ci": [
+   0.0198,
+   0.032
+  ],
+  "confirm_ci": [
+   0.0208,
+   0.0354
+  ],
+  "matches_e28c": true,
+  "regression": false,
+  "param_ratio": 7.38,
+  "speedup": 1.17
+ }
+}
