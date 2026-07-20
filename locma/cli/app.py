@@ -499,12 +499,20 @@ def train_zoo_cmd(
         help="E29 conditioned trunk: LayerNorm the extractor output (tower input) "
         "to fix first-layer Tanh saturation (token obs_mode only)",
     ),
+    slim: bool = typer.Option(
+        False,
+        "--slim-extractor",
+        help="E29 slim arm: transformer-free SlimTokenExtractor (per-slot embeddings "
+        "+ pooled context, ~4x cheaper); pointer head recommended (token obs_mode only)",
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
     [ml] extra."""
     if feature_ln and not obs_mode.startswith("token"):
         raise typer.BadParameter("--feature-ln requires a token obs_mode")
+    if slim and not obs_mode.startswith("token"):
+        raise typer.BadParameter("--slim-extractor requires a token obs_mode")
     if pointer_head and not obs_mode.startswith("token"):
         raise typer.BadParameter("--pointer-head requires a token obs_mode")
     if steps_per_opponent < 1:
@@ -548,6 +556,7 @@ def train_zoo_cmd(
             pointer_head=pointer_head,
             draft_override=draft_override,
             extractor_kwargs={"feature_ln": True} if feature_ln else None,
+            slim=slim,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

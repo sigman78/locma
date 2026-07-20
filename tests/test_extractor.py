@@ -19,7 +19,7 @@ from locma.envs.encode import (  # noqa: E402
     TOKEN_FEATS,
     token_obs_space,
 )
-from locma.envs.extractor import TokenSetExtractor  # noqa: E402
+from locma.envs.extractor import SlimTokenExtractor, TokenSetExtractor  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -76,6 +76,32 @@ def test_forward_shape_and_finite():
 
     assert out.shape == (4, 256), f"expected (4, 256), got {out.shape}"
     assert torch.isfinite(out).all(), "output contains non-finite values"
+
+
+def test_slim_extractor_forward_and_slots():
+    """E29 slim arm: SlimTokenExtractor forwards to (B, features_dim) and its
+    slot_encoder emits (B, MAX_TOKENS, d_model) — the pointer gather source,
+    transformer-free."""
+    space = token_obs_space()
+    ex = SlimTokenExtractor(space, d_model=64)
+    assert not hasattr(ex, "transformer")  # transformer-free by construction
+    obs = _make_batch(B=6, n_real=9)
+
+    slots = ex.slot_encoder(torch.cat([obs["tokens"], ex.id_embed(obs["card_ids"].long())], dim=-1))
+    assert slots.shape == (6, MAX_TOKENS, 64)
+
+    out = ex(obs)
+    assert out.shape == (6, 256)
+    assert torch.isfinite(out).all()
+
+
+def test_slim_extractor_all_pad_row_finite():
+    """A fully-padded row (n_real=0) must not NaN via the max-pool guard."""
+    space = token_obs_space()
+    ex = SlimTokenExtractor(space)
+    obs = _make_batch(B=3, n_real=0)  # every slot is pad
+    out = ex(obs)
+    assert torch.isfinite(out).all()
 
 
 def test_feature_ln_optin(monkeypatch):

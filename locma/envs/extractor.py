@@ -169,3 +169,85 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         #    tower input with LayerNorm (E29, opt-in).
         out = self.head(torch.cat([flat, s], dim=-1))  # (B, features_dim)
         return self.out_ln(out) if self.out_ln is not None else out
+
+
+class SlotEncoder(nn.Module):
+    """Per-slot token embedding, NO cross-card mixing (E29 slim arm).
+
+    Reproduces TokenSetExtractor steps 1-3 (project [tokens|id_embed] to
+    d_model, per-token LayerNorm, add learned per-slot positional embedding)
+    and stops there — the "premix x0" the E28b ablation found the pointer
+    head gathers just as well as the post-transformer z (mixing unnecessary).
+    Kept a standalone nn.Module so ``PointerMaskablePolicy`` can hook it for
+    the slot cache exactly as it hooks ``TokenSetExtractor.transformer``.
+    """
+
+    def __init__(self, in_dim: int, d_model: int) -> None:
+        super().__init__()
+        self.proj = nn.Linear(in_dim, d_model)
+        self.token_ln = nn.LayerNorm(d_model)
+        self.pos_embed = nn.Parameter(torch.zeros(1, MAX_TOKENS, d_model))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.token_ln(self.proj(x)) + self.pos_embed  # (B, MAX_TOKENS, d_model)
+
+
+class SlimTokenExtractor(BaseFeaturesExtractor):
+    """Transformer-free slot extractor (E29 slim arm): per-slot embeddings +
+    cheap pooled context, ~4x cheaper than TokenSetExtractor.
+
+    The pointer head gathers per-slot embeddings from ``slot_encoder`` (no
+    attention — E28b: mixing unnecessary for the gather). The tower context
+    (``features_dim`` output feeding the SB3 mlp_extractor) is built from
+    masked mean+max pooling of the same per-slot embeddings plus the scalar
+    branch — no 20*d_model flatten, no transformer. ``pos_embed`` is exposed
+    (mirrors TokenSetExtractor) so PointerMaskablePolicy reads ``d_model``.
+
+    Motivation is CHEAPNESS, not a higher ceiling: the reactive rung sells on
+    inference cost, and the transformer was the bulk of TokenSetExtractor's
+    compute. Win = matches e28c avg-hard3 at materially less compute.
+    """
+
+    def __init__(
+        self,
+        observation_space,
+        *,
+        d_model: int = 64,
+        id_dim: int = 16,
+        features_dim: int = 256,
+    ) -> None:
+        super().__init__(observation_space, features_dim)
+        self.id_embed = nn.Embedding(NUM_CARDS + 1, id_dim, padding_idx=0)
+        tok_feats = int(observation_space["tokens"].shape[1])
+        self.slot_encoder = SlotEncoder(tok_feats + id_dim, d_model)
+
+        n_scalar = int(observation_space["scalars"].shape[0])
+        self.scalar_mlp = nn.Sequential(
+            nn.LayerNorm(n_scalar),
+            nn.Linear(n_scalar, d_model),
+            nn.ReLU(),
+        )
+        # Context = [mean-pool | max-pool | scalar branch] -> features_dim.
+        self.head = nn.Sequential(
+            nn.Linear(2 * d_model + d_model, features_dim),
+            nn.ReLU(),
+        )
+
+    def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
+        ids = obs["card_ids"].long()  # (B, 20)
+        id_embed = self.id_embed(ids)  # (B, 20, id_dim)
+        x = torch.cat([obs["tokens"], id_embed], dim=-1)
+        z = self.slot_encoder(x)  # (B, 20, d_model) — hooked by the pointer head
+
+        m = obs["token_mask"].unsqueeze(-1)  # (B, 20, 1) 1=real, 0=pad
+        denom = m.sum(dim=1).clamp(min=1.0)  # (B, 1)
+        mean_pool = (z * m).sum(dim=1) / denom  # (B, d_model)
+        neg = torch.finfo(z.dtype).min
+        max_pool = z.masked_fill(m == 0, neg).max(dim=1).values  # (B, d_model)
+        # All-pad guard: a fully-padded row maxes to `neg` — zero it (those
+        # action slots are masked at the head anyway).
+        all_pad = obs["token_mask"].sum(dim=1, keepdim=True) == 0  # (B, 1)
+        max_pool = torch.where(all_pad, torch.zeros_like(max_pool), max_pool)
+
+        s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
+        return self.head(torch.cat([mean_pool, max_pool, s], dim=-1))  # (B, features_dim)
