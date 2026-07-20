@@ -5,9 +5,9 @@ win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
 snapshots. The current **recipes of record**: the reactive and guarded-reactive
-recipes are in the 2026-07-19 E28c section below (pointer head on token-fx
-obs, superseding the same-day E28 recipes, which superseded the 2026-07-13
-E26 recipes); the planner recipe is in the 2026-07-07 section; the strongest
+recipes are in the 2026-07-20 E29-slim section below (transformer-free slim
+extractor, superseding the 2026-07-19 E28c token-fx recipes); the planner
+recipe is in the 2026-07-07 section; the strongest
 **play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
 beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
 in the 2026-07-10 E24 section below (it supersedes the 2026-07-09 E23
@@ -39,7 +39,67 @@ not just the ordinal.
 
 ---
 
-# Recipes of record — 2026-07-19: E28c token-fx obs — promoted on BOTH reactive rungs (0.878 / 0.914)
+# Recipes of record — 2026-07-20: E29 slim extractor — promoted on BOTH reactive rungs (0.903 / 0.934)
+
+E29 slim (branch feat/e29-cond-trunk, worklog "E29 slim extractor" + "E29
+slim stack", program doc `docs/reactive-limits-program.md`): the pointer-head
+net retrained at the EXACT e28c recipe (token-fx, lr=1e-4, target_kl=0.025,
+n_envs=16, 5-phase zoo) with the transformer-free `SlimTokenExtractor` in
+place of `TokenSetExtractor` — per-slot embeddings (proj + LayerNorm +
+positional, gathered by the pointer head) + masked mean/max pooled context +
+scalar branch, NO cross-card attention. 56.7k extractor params vs 418.5k
+(7.4x fewer). Motivated by E28b (transformer mixing unnecessary for the
+gather) + the encoder-viz nulls (near-uniform attention, untrained id
+embedding). Three seeds (`locma train-zoo --pointer-head --obs-mode token-fx
+--slim-extractor`), published as `depot:e29slim` v1 (parent e28c@1). Removing
+capacity IMPROVED win rate — a regularizing simplification.
+
+| role | recipe of record since 2026-07-20 | avg-hard3 |
+|---|---|---|
+| **guarded-reactive (recipe of record)** | `lppo:depot:e29slim/e29slim_s0.zip\|depot:e29slim/e29slim_s1.zip\|depot:e29slim/e29slim_s2.zip,depot:ldraft/ldraft_sX.zip` | **0.934** (confirm 0.938) |
+| **reactive (recipe of record)** | `ppo:depot:e29slim/e29slim_sX.zip,depot:ldraft/ldraft_sX.zip` | **0.903** |
+| prior guarded-reactive record (E28c) | `lppo:depot:e28c trio,depot:ldraft/ldraft_sX.zip` | 0.914 |
+| prior reactive record (E28c) | `ppo:depot:e28c/e28c_sX.zip,depot:ldraft/ldraft_sX.zip` | 0.878 |
+
+**Why promoted.** Sub-headroom (+0.021-0.028) but every promotion-relevant CI
+excludes zero with a fresh-anchor replication (E7 precedent), across pair
+bench AND stack ladder (standard paired 40x25 ruler):
+
+| verdict | delta | 95% CI |
+|---|---:|---|
+| pair bench: slim pair vs e28c RoR pair @ 58M | +0.0259 | [+0.0198, +0.0320] |
+| pair bench confirm @ 59M (fresh) | +0.0282 | [+0.0208, +0.0354] |
+| pure trio vs e28c trio @ 61M (3-seed artifact) | +0.0224 | [+0.0158, +0.0294] |
+| **stack: `lppo:slim trio` vs guarded RoR @ 61M** | **+0.0207** | [+0.0163, +0.0251] |
+| stack confirm @ 62M (fresh) | +0.0210 | [+0.0159, +0.0262] |
+| lens increment ON slim nets @ 61M | +0.0318 | [+0.0263, +0.0374] |
+
+0.934 is a new summit — the guarded reactive stack now BEATS the 0.926
+ensemble-planner RoR outright (milestone 3 target surpassed), and pure 0.903
+clears the 0.890 single-critic ceiling (milestone 2), all with a 7.4x-cheaper
+extractor (1.17x faster end-to-end s/game; engine + towers dominate wall
+clock). Lens mechanisms stay disjoint (+0.032 increment). Boardkeep
+guard-rail (2000 mirrored @ 5M CRN): **0.189** vs the stack — beats e28c's
+0.2185 and every prior config; most exploit-robust reactive recipe measured.
+
+**Caveats.** E26's labeling caveat carries over (exact own-turn lethal solve
+inside `lppo:`); for strictly-1x-inference deployments the single-net
+`ppo:e29slim_sX,ldraft_sX` is the record at 0.903. The three seeds become one
+deployment artifact in the guarded recipe (E8 caveat). The E29/E30 arch-sweep
+training levers are now exhausted (E29a conditioning closed-negative, E30
+factorization closed); a PURE net at 0.926 remains open but the remaining gap
+is lookahead depth (play-time search).
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e29_slim_bench.py        # pair ruler + compute; runs/e29-slim-summary.json
+uv run --extra ml python scripts/e29_slim_stack_bench.py  # trio + stack ladder; runs/e29-slim-stack-summary.json
+```
+
+---
+
+# Recipes of record — 2026-07-19: E28c token-fx obs — promoted on BOTH reactive rungs (0.878 / 0.914) — superseded 2026-07-20 by E29 slim above
 
 E28c (branch feat/e28c-token-fx, worklog "E28c" + "E28c stack", program doc
 `docs/reactive-limits-program.md`): the pointer-head net retrained at the

@@ -182,16 +182,19 @@ not the training handicap the prestudy framing assumed — which weakens the
 ranking-loss-rerun plan below it. The slim/transformer-free extractor arm
 (next bullet) is a SEPARATE hypothesis (cheapness, not conditioning).
 
-**Slim-extractor VERDICT (2026-07-20, worklog "E29 slim extractor"):
-PROMOTION CANDIDATE — it BEATS e28c, not just matches.** SlimTokenExtractor
-(transformer dropped; per-slot embeddings + pooled context; 56.7k extractor
-params vs 418.5k, 7.4x fewer) at the exact e28c recipe: paired ruler
-+0.0259 [+0.0198, +0.0320] @ 58M, confirm +0.0282 [+0.0208, +0.0354] @ 59M
-(0.903 vs 0.877), boardkeep in-band. Removing the transformer improved win
-rate — consistent with E28b (mixing unnecessary) + the encoder-viz nulls
-(near-uniform attention, untrained id embedding): the transformer added
-overfitting capacity, not signal. s2 + stack ladder (vs the 0.914 e28c
-guarded RoR) decides promotion, mirroring the e28c flow.
+**Slim-extractor VERDICT (2026-07-20, worklog "E29 slim extractor" +
+"E29 slim stack"): PROMOTED on BOTH rungs — `depot:e29slim` v1.**
+SlimTokenExtractor (transformer dropped; per-slot embeddings + pooled
+context; 56.7k extractor params vs 418.5k, 7.4x fewer) at the exact e28c
+recipe. Pair ruler +0.0259/+0.0282; 3-seed ladder: pure trio +0.0224
+[+0.0158, +0.0294], `lppo:slim trio` **0.934** beats the 0.914 guarded RoR
++0.0207 [+0.0163, +0.0251], confirm +0.0210 [+0.0159, +0.0262], lens
+increment +0.032 (disjoint), boardkeep **0.189** (beats e28c's 0.2185). New
+records: reactive **0.903**, guarded **0.934**. Removing the transformer
+improved win rate — E28b (mixing unnecessary) + encoder-viz nulls: it added
+overfitting capacity, not signal. **Milestone 2 cleared (pure 0.903 > 0.890)
+and milestone 3's 0.926 ensemble-planner target SURPASSED by the guarded
+stack (0.934).**
 - Added after E28b (mixing unnecessary for the pointer gather) + the
   encoder introspection (attention near-uniform, id embedding untrained):
   a **slim/transformer-free extractor arm** — per-slot embedding + pointer
@@ -236,7 +239,11 @@ play-time guards as ends (E26 stands as-is).
    readout + item routing that guards currently patch. **REACHED 2026-07-19**
    (E28 pointer trio 0.865, no guards).
 2. Pure net ~ 0.890 (single-critic vbeam ceiling) — the net has absorbed
-   what one beam ply adds. 0.025 away after E28; E29/E30 are the remaining
-   levers.
-3. Stretch: approach 0.926 (ensemble planner RoR). (The GUARDED stack is
-   already 0.908.)
+   what one beam ply adds. **REACHED 2026-07-20** (E29 slim pure 0.903, no
+   guards — the transformer-drop simplification, not conditioning/plan-head).
+3. Stretch: approach 0.926 (ensemble planner RoR). **SURPASSED (guarded)
+   2026-07-20** — the E29 slim guarded stack is 0.934, above the ensemble
+   planner, at a fraction of its cost. A PURE net at 0.926 remains open, but
+   the arch-sweep training levers are exhausted (E29a/E30 closed); the
+   remaining pure-vs-0.926 gap is lookahead depth, which play-time search
+   supplies.
