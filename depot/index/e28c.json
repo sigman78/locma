@@ -1,0 +1,45 @@
+{
+  "name": "e28c",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-20T06:01:24+00:00",
+      "git_commit": "d455f0b",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish e28c runs/e28c_s0.zip runs/e28c_s1.zip runs/e28c_s2.zip --kind model --note E28c token-fx obs - reactive recipe of record. Pointer head retrained at the exact e28p recipe with obs_mode=token-fx: 3 play-effect columns (player_hp/enemy_hp/card_draw) for hand cards, encode.py variant 'fx', TOKEN_FEATS_FX=20. Feature completion only - the obs is the single changed variable. First lever to move item behavior (rate/opportunity 0.142 -> 0.19-0.23). Trained via 'locma train-zoo --pointer-head --obs-mode token-fx', seeds 0/1/2. --meta {\"avg_hard3_reactive_pair\": 0.8784, \"avg_hard3_lens_stack\": 0.9141, \"pure3_delta_vs_e28p\": 0.017, \"stack_vs_ror_delta\": 0.0124, \"stack_confirm_delta\": 0.0128, \"boardkeep_wr_vs_stack\": 0.2185, \"item_rate_per_opportunity\": [0.2261, 0.1944]} --parent e28p@1",
+      "parents": [
+        "e28p@1"
+      ],
+      "note": "E28c token-fx obs - reactive recipe of record. Pointer head retrained at the exact e28p recipe with obs_mode=token-fx: 3 play-effect columns (player_hp/enemy_hp/card_draw) for hand cards, encode.py variant 'fx', TOKEN_FEATS_FX=20. Feature completion only - the obs is the single changed variable. First lever to move item behavior (rate/opportunity 0.142 -> 0.19-0.23). Trained via 'locma train-zoo --pointer-head --obs-mode token-fx', seeds 0/1/2.",
+      "meta": {
+        "avg_hard3_reactive_pair": 0.8784,
+        "avg_hard3_lens_stack": 0.9141,
+        "pure3_delta_vs_e28p": 0.017,
+        "stack_vs_ror_delta": 0.0124,
+        "stack_confirm_delta": 0.0128,
+        "boardkeep_wr_vs_stack": 0.2185,
+        "item_rate_per_opportunity": [
+          0.2261,
+          0.1944
+        ]
+      },
+      "files": {
+        "e28c_s0.zip": {
+          "sha256": "7531e972e87204a85519219e1251dec02d9b4b357845daf53f1ae387556c7e35",
+          "size": 5964170
+        },
+        "e28c_s1.zip": {
+          "sha256": "7599b2763a8c8135c02f5b4a230effabe9d552c5c1d20fdb2b995581251a38c3",
+          "size": 5963958
+        },
+        "e28c_s2.zip": {
+          "sha256": "b9fd3739182b1bd5968ee0f0fac807623dfeb1ec7302dfffdc5fa6a443a8c40c",
+          "size": 5963954
+        }
+      },
+      "published": "gh:depot/e28c-v1"
+    }
+  ]
+}
