@@ -1,0 +1,64 @@
+{
+ "full_vs_e28p": {
+  "mean_delta": 0.0212,
+  "ci_lo": 0.014,
+  "ci_hi": 0.0282,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.8784,
+  "b0_avg": 0.8572,
+  "minutes": 23.9
+ },
+ "confirm_vs_e28p_46M": {
+  "mean_delta": 0.0215,
+  "ci_lo": 0.0157,
+  "ci_hi": 0.0273,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.8738,
+  "b0_avg": 0.8523,
+  "minutes": 23.9
+ },
+ "item_read_e28c_s0": {
+  "teacher": "ppo:runs/e28c_s0.zip,depot:ldraft/ldraft_s0.zip",
+  "n_decisions": 13995,
+  "item_opportunities": 3565,
+  "item_rate_per_opportunity": 0.2261
+ },
+ "item_read_e28c_s1": {
+  "teacher": "ppo:runs/e28c_s1.zip,depot:ldraft/ldraft_s1.zip",
+  "n_decisions": 14111,
+  "item_opportunities": 4311,
+  "item_rate_per_opportunity": 0.1944
+ },
+ "item_read_e28p_s0": {
+  "teacher": "ppo:depot:e28p/e28p_s0.zip,depot:ldraft/ldraft_s0.zip",
+  "n_decisions": 14064,
+  "item_opportunities": 4774,
+  "item_rate_per_opportunity": 0.1418
+ },
+ "guardrail_e28c_s0": {
+  "spec": "ppo:runs/e28c_s0.zip,depot:ldraft/ldraft_s0.zip",
+  "boardkeep_wr": 0.303,
+  "games": 2000,
+  "minutes": 3.8
+ },
+ "guardrail_e28c_s1": {
+  "spec": "ppo:runs/e28c_s1.zip,depot:ldraft/ldraft_s1.zip",
+  "boardkeep_wr": 0.279,
+  "games": 2000,
+  "minutes": 3.6
+ },
+ "gates": {
+  "full_delta": 0.0212,
+  "full_ci": [
+   0.014,
+   0.0282
+  ],
+  "confirm_ci": [
+   0.0157,
+   0.0273
+  ],
+  "fx_pass": true,
+  "headroom": false,
+  "regression": false
+ }
+}

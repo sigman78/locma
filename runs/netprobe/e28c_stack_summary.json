@@ -1,0 +1,72 @@
+{
+ "pure3_reactive": {
+  "mean_delta": 0.017,
+  "ci_lo": 0.0108,
+  "ci_hi": 0.0233,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.8784,
+  "b0_avg": 0.8614,
+  "minutes": 35.9
+ },
+ "stack_vs_ror": {
+  "mean_delta": 0.0124,
+  "ci_lo": 0.0089,
+  "ci_hi": 0.0159,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9141,
+  "b0_avg": 0.9016,
+  "minutes": 76.2
+ },
+ "lens_increment": {
+  "mean_delta": 0.0352,
+  "ci_lo": 0.0311,
+  "ci_hi": 0.0393,
+  "verdict": "headroom",
+  "cand_avg": 0.9136,
+  "b0_avg": 0.8784,
+  "minutes": 56.2
+ },
+ "guardrail_stack": {
+  "spec": "lppo:runs/e28c_s0.zip|runs/e28c_s1.zip|runs/e28c_s2.zip,depot:ldraft/ldraft_s0.zip",
+  "boardkeep_wr": 0.2185,
+  "games": 2000,
+  "minutes": 14.5
+ },
+ "confirm_stack_49M": {
+  "mean_delta": 0.0128,
+  "ci_lo": 0.0079,
+  "ci_hi": 0.0177,
+  "verdict": "ceiling-confirmed",
+  "cand_avg": 0.9164,
+  "b0_avg": 0.9036,
+  "minutes": 76.4
+ },
+ "gates": {
+  "pure3_delta": 0.017,
+  "pure3_ci": [
+   0.0108,
+   0.0233
+  ],
+  "stack_delta": 0.0124,
+  "stack_ci": [
+   0.0089,
+   0.0159
+  ],
+  "lens_increment_delta": 0.0352,
+  "lens_increment_ci": [
+   0.0311,
+   0.0393
+  ],
+  "confirm_ci": [
+   0.0079,
+   0.0177
+  ],
+  "stack_beats_ror": true
+ },
+ "guardrail_pure_s2": {
+  "spec": "ppo:runs/e28c_s2.zip,depot:ldraft/ldraft_s2.zip",
+  "boardkeep_wr": 0.2525,
+  "games": 2000,
+  "minutes": 3.8
+ }
+}

@@ -36,7 +36,7 @@ from locma.core import battle as battlemod
 from locma.core.actions import Pass
 from locma.core.engine import make_battle_view
 from locma.core.state import Phase
-from locma.envs.encode import N_TACTICAL_V1, action_mask, encode_battle_tokens
+from locma.envs.encode import action_mask, encode_battle_tokens, token_variant_for_space
 from locma.policies.mcts import _clone_battle
 
 # Scores outside the critic's [-1, 1] clip range: a real win/loss always
@@ -257,8 +257,7 @@ class NetValueEvaluator:
                     "NetValueEvaluator requires a token (Dict-obs) model; "
                     f"got {type(self._model.observation_space).__name__}"
                 )
-            n_scalar = int(self._model.observation_space["scalars"].shape[0])
-            self._variant = "v1" if n_scalar == N_TACTICAL_V1 else "v0"
+            self._variant = token_variant_for_space(self._model.observation_space)
 
     def _forward(self, views: list, masks: list | None):
         """One batched trunk pass; returns (raw_values, probs_or_None)."""

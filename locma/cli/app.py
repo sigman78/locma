@@ -374,7 +374,8 @@ def train(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default), 'token', or 'token-v1' (tokenized)"
+        "flat",
+        help="obs encoding: 'flat' (default), 'token', 'token-v1', or 'token-fx' (tokenized)",
     ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
@@ -405,8 +406,8 @@ def train(
         raise typer.BadParameter("n_envs must be >= 1")
     if not 0 <= draft_noise <= 30:
         raise typer.BadParameter("draft-noise must be in [0, 30]")
-    if obs_mode not in ("flat", "token", "token-v1"):
-        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
+    if obs_mode not in ("flat", "token", "token-v1", "token-fx"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', 'token-v1', or 'token-fx'")
     marks = None
     if checkpoints:
         try:
@@ -456,7 +457,8 @@ def train_zoo_cmd(
     ent_coef: float = typer.Option(0.02, help="entropy coefficient for MaskablePPO"),
     both_seat: bool = typer.Option(True, help="train as both first AND second player"),
     obs_mode: str = typer.Option(
-        "flat", help="obs encoding: 'flat' (default), 'token', or 'token-v1' (tokenized)"
+        "flat",
+        help="obs encoding: 'flat' (default), 'token', 'token-v1', or 'token-fx' (tokenized)",
     ),
     learning_rate: float = typer.Option(3e-4, help="PPO learning rate"),
     target_kl: float | None = typer.Option(None, help="PPO target KL early-stop (None = off)"),
@@ -497,8 +499,8 @@ def train_zoo_cmd(
         raise typer.BadParameter("n_envs must be >= 1")
     if not 0 <= draft_noise <= 30:
         raise typer.BadParameter("draft-noise must be in [0, 30]")
-    if obs_mode not in ("flat", "token", "token-v1"):
-        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
+    if obs_mode not in ("flat", "token", "token-v1", "token-fx"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', 'token-v1', or 'token-fx'")
     from locma.envs.training import ZOO_OPPONENTS  # noqa: PLC0415 — constant, no [ml] needed
 
     for o in ZOO_OPPONENTS:
@@ -553,8 +555,8 @@ def record_practicum_cmd(
     """Record a practicum of teacher battle decisions for distillation."""
     if games < 1:
         raise typer.BadParameter("games must be >= 1")
-    if obs_mode not in ("flat", "token", "token-v1"):
-        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
+    if obs_mode not in ("flat", "token", "token-v1", "token-fx"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', 'token-v1', or 'token-fx'")
     make_policy(teacher)  # validate up front for a friendly error
     for o in opponents:
         make_policy(o)
@@ -592,8 +594,8 @@ def distill(
         raise typer.BadParameter("epochs must be >= 1")
     if not 0.0 <= val_frac < 1.0:
         raise typer.BadParameter("val-frac must be in [0, 1)")
-    if obs_mode is not None and obs_mode not in ("flat", "token", "token-v1"):
-        raise typer.BadParameter("obs_mode must be 'flat', 'token', or 'token-v1'")
+    if obs_mode is not None and obs_mode not in ("flat", "token", "token-v1", "token-fx"):
+        raise typer.BadParameter("obs_mode must be 'flat', 'token', 'token-v1', or 'token-fx'")
     try:
         from locma.envs.distill import behavior_clone  # noqa: PLC0415 — optional [ml] dep
 

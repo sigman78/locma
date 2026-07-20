@@ -9,6 +9,7 @@ from locma.envs.encode import (
     encode_battle_tokens,
     encode_draft,
     index_to_action,
+    token_variant_for_space,
 )
 
 
@@ -22,9 +23,7 @@ def _encode_for(model, view):
     from gymnasium import spaces  # noqa: PLC0415 — lazy, only reached after model load
 
     if isinstance(model.observation_space, spaces.Dict):
-        n_scalar = int(model.observation_space["scalars"].shape[0])
-        variant = "v1" if n_scalar == 18 else "v0"
-        return encode_battle_tokens(view, variant)
+        return encode_battle_tokens(view, token_variant_for_space(model.observation_space))
     return encode_battle(view)
 
 

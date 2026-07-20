@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from locma.envs.encode import MAX_TOKENS, NUM_CARDS, TOKEN_FEATS
+from locma.envs.encode import MAX_TOKENS, NUM_CARDS
 
 
 class TokenSetExtractor(BaseFeaturesExtractor):
@@ -69,8 +69,10 @@ class TokenSetExtractor(BaseFeaturesExtractor):
         # Card-id embedding: index 0 is PAD (padding_idx → zero, no gradient).
         self.id_embed = nn.Embedding(NUM_CARDS + 1, id_dim, padding_idx=0)
 
-        # Project token features + id embedding to d_model.
-        self.proj = nn.Linear(TOKEN_FEATS + id_dim, d_model)
+        # Project token features + id embedding to d_model. The token width is
+        # read from the obs space so variants (v0/v1 17, fx 20) are drop-in.
+        tok_feats = int(observation_space["tokens"].shape[1])
+        self.proj = nn.Linear(tok_feats + id_dim, d_model)
 
         # Normalize projected token vectors before adding positional embedding.
         # Per-token LayerNorm tames raw magnitudes (cost/attack/defense O(1–12)).

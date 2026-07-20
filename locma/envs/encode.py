@@ -35,6 +35,13 @@ MAX_TOKENS: int = MAX_HAND + MAX_BOARD + MAX_BOARD  # 20
 # Per-token numeric features (zone 3 + type 4 + cost/atk/def 3 + abilities 6 + ready 1)
 TOKEN_FEATS: int = 3 + 4 + 3 + N_ABILITY + 1  # 17
 
+# "fx" token variant: v0 row + 3 play-effect columns (player_hp, enemy_hp,
+# card_draw) for HAND cards. 44/160 cards (7/8 blue items) carry effects that
+# are otherwise invisible to the numeric features — reachable only through the
+# card-id embedding, which measurably never trains (E28b / encoder-viz nulls).
+# Board slots keep zeros: effects fire on play and are spent by then.
+TOKEN_FEATS_FX: int = TOKEN_FEATS + 3  # 20
+
 # Card-id vocabulary: 0 = PAD, 1..160 = real card ids
 NUM_CARDS: int = 160
 
@@ -224,6 +231,21 @@ def draft_action_mask(legal) -> np.ndarray:
 # Guard ability sits at index 3 in the BCDGLW ability string.
 _GUARD_IDX: int = 3
 
+# Lazy card_id -> (player_hp, enemy_hp, card_draw) table for the "fx" token
+# variant. Built on first use so the default paths never touch the cards DB.
+_FX_BY_ID: dict[int, tuple[float, float, float]] | None = None
+
+
+def _fx_table() -> dict[int, tuple[float, float, float]]:
+    global _FX_BY_ID
+    if _FX_BY_ID is None:
+        from locma.data.cards_db import load_cards  # noqa: PLC0415 — lazy, fx path only
+
+        _FX_BY_ID = {
+            c.id: (float(c.player_hp), float(c.enemy_hp), float(c.card_draw)) for c in load_cards()
+        }
+    return _FX_BY_ID
+
 
 def _token_row(card, zone_idx: int, *, on_board: bool) -> list:
     """Build a single 17-element feature row for one card token.
@@ -249,10 +271,13 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
     """Encode a BattleView into the tokenized PPO2 observation dict.
 
     Returns a dict with four float32 numpy arrays:
-      - ``tokens``     shape (20, 17): per-card numeric features; zeros for pads
+      - ``tokens``     shape (20, 17) — or (20, 20) for variant="fx": per-card
+                       numeric features; zeros for pads. The fx variant appends
+                       [player_hp, enemy_hp, card_draw] play-effect columns for
+                       HAND cards (board slots zero: effects are spent on play).
       - ``card_ids``   shape (20,):    card_id (1..160); 0 for pads
       - ``token_mask`` shape (20,):    1 for real cards, 0 for pads
-      - ``scalars``    shape (13,) for variant="v0", (18,) for variant="v1":
+      - ``scalars``    shape (13,) for variant="v0"/"fx", (18,) for variant="v1":
                        tactical scalars (see below)
 
     Slot order: 0..7 my_hand / 8..13 my_board / 14..19 op_board.
@@ -284,7 +309,8 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
       16 exposed_to_lethal (1.0 if op_reachable >= me_health else 0.0)
       17 card_advantage    ((my_hand+my_board) - (op_hand+op_board) card counts)
     """
-    tokens = np.zeros((MAX_TOKENS, TOKEN_FEATS), dtype=np.float32)
+    fx = variant == "fx"
+    tokens = np.zeros((MAX_TOKENS, TOKEN_FEATS_FX if fx else TOKEN_FEATS), dtype=np.float32)
     card_ids = np.zeros(MAX_TOKENS, dtype=np.float32)
     token_mask = np.zeros(MAX_TOKENS, dtype=np.float32)
 
@@ -292,7 +318,9 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
     for i, card in enumerate(view.my_hand):
         if i >= MAX_HAND:
             break
-        tokens[i] = _token_row(card, 0, on_board=False)
+        tokens[i, :TOKEN_FEATS] = _token_row(card, 0, on_board=False)
+        if fx:
+            tokens[i, TOKEN_FEATS:] = _fx_table()[card.card_id]
         card_ids[i] = float(card.card_id)
         token_mask[i] = 1.0
 
@@ -301,7 +329,7 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
         if i >= MAX_BOARD:
             break
         slot = MAX_HAND + i  # 8..13
-        tokens[slot] = _token_row(card, 1, on_board=True)
+        tokens[slot, :TOKEN_FEATS] = _token_row(card, 1, on_board=True)
         card_ids[slot] = float(card.card_id)
         token_mask[slot] = 1.0
 
@@ -310,7 +338,7 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
         if i >= MAX_BOARD:
             break
         slot = MAX_HAND + MAX_BOARD + i  # 14..19
-        tokens[slot] = _token_row(card, 2, on_board=True)
+        tokens[slot, :TOKEN_FEATS] = _token_row(card, 2, on_board=True)
         card_ids[slot] = float(card.card_id)
         token_mask[slot] = 1.0
 
@@ -385,6 +413,19 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
     }
 
 
+def token_variant_for_space(space) -> str:
+    """Detect the token-encoder variant ("v0"/"v1"/"fx") from a Dict obs space.
+
+    Works on any object with ["scalars"]/["tokens"] entries exposing .shape —
+    no gymnasium import needed. v1 is distinguished by scalar width, fx by
+    token width; plain v0 otherwise. Play-time consumers must use THIS (not
+    scalar width alone) or fx checkpoints would be fed 17-wide tokens.
+    """
+    if int(space["scalars"].shape[0]) == N_TACTICAL_V1:
+        return "v1"
+    return "fx" if int(space["tokens"].shape[1]) == TOKEN_FEATS_FX else "v0"
+
+
 def token_obs_space(variant: str = "v0"):
     """Return the gymnasium spaces.Dict for the tokenized PPO2 observation.
 
@@ -393,13 +434,14 @@ def token_obs_space(variant: str = "v0"):
     from gymnasium import spaces  # noqa: PLC0415
 
     n_scalar = N_TACTICAL_V1 if variant == "v1" else N_TACTICAL
+    tok_feats = TOKEN_FEATS_FX if variant == "fx" else TOKEN_FEATS
 
     return spaces.Dict(
         {
             "tokens": spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(MAX_TOKENS, TOKEN_FEATS),
+                shape=(MAX_TOKENS, tok_feats),
                 dtype=np.float32,
             ),
             "card_ids": spaces.Box(
