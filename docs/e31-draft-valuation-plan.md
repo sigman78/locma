@@ -30,7 +30,7 @@ draft override (e.g. `dmcts:15,30,,,-4` = balanced with item bonus,
 
 ## Steps
 
-### E31a — per-card value table (data-only)
+### E31a — per-card value table (data-only) — DONE (2026-07-20)
 
 A `DistilledDraftPolicy` JSON (registry already loads `values`-keyed JSON
 via the 5th spec param) with hand-computed true values including hidden
@@ -38,6 +38,14 @@ effects: `|atk| + |def| + player_hp + |enemy_hp| + 2*card_draw + kw`
 (clamped like `_STAT_CAP`). No code change. Gives a correct reference
 heuristic for diagnostics and teacher-side deck generation. Acceptance:
 blues draftable at sane rates; spot-check top-value items.
+
+Shipped: `scripts/e31a_value_table.py` -> `runs/e31a_values.json`
+(reference, 0.3 blues/deck) + `runs/e31a_diet.json` (+4 item bonus, the
+training-deck source: 6.28 items / 1.13 blues / 72% of decks carry blue).
+Decimate tops the item list; all 8 blues price 4-6 (were ~0/negative).
+Also landed the training-side plumbing this needed:
+`_draft_override_policy` loads values-JSON tables and `train-zoo` exposes
+`--draft-override`. Consumed by the E28d arm (worklog 2026-07-20).
 
 ### E31b — CardView hidden fields + spell-aware heuristic variant
 
@@ -59,6 +67,15 @@ access), so with today's battle nets it re-learns item avoidance with
 better eyesight — expected delta ~0 (E17, E18c). Execute when the E30
 turn-plan head (or any arm) gives the battle net item-conversion ability,
 or bundle as its prerequisite.
+
+**Weakened further by E28d (2026-07-20).** The E28d arm trained a battle
+net on blue-rich decks (the E31a diet source) and found item/blue
+conversion did NOT rise vs the item-light-trained e28c — a battle net
+saturated in blue training converts blues no better. So even after E31c
+gives ldraft the eyesight to draft blues, today's battle nets would not
+convert the extra blues into wins. E31c is doubly gated on E30: it needs
+both a reason for ldraft to draft blues AND a battle net that can cash
+them. Do not run standalone.
 
 ## Non-goals
 

@@ -111,8 +111,21 @@ zero-excluding: pure trio +0.0170 [+0.0108, +0.0233] vs the e28p trio;
 nets +0.0352 (headroom — still disjoint); boardkeep 0.2185 vs the stack,
 matching e28p's 0.221. Sub-headroom promotion on the E7 precedent
 (zero-excluding CI + fresh replication, three times over). New records:
-reactive 0.878, guarded 0.914. Open follow-up: fx + item-rich training
-decks (draft_override) as the motivated escalation.
+reactive 0.878, guarded 0.914.
+
+**Escalation CLOSED (2026-07-20, worklog E28d): fx + item-rich training
+decks is CI-NEGATIVE.** After closing the training-data hole (E31a: correct
+per-card values incl. hidden effects + values-JSON `--draft-override`; diet
+decks 6.28 items / 1.13 blues vs ~0 before), retraining e28c's exact recipe
+on them regressed the ruler -0.0260 [-0.0343, -0.0181]. The item-conversion
+gain was already saturated by fx alone at the item-light diet: e28c plays
+blues at 0.202/opportunity on blue-rich decks, e28d (drenched in blues) at
+0.19/0.14 — not higher; deploy-deck item rate unchanged; general play lost
+to distribution shift. Item underuse is consequence valuation (E30), not
+access AND not exposure — this also weakens E31c (draft-side blue eyesight
+won't unlock battle-net item value with today's nets). The E31a table and
+plumbing are correctness keepers (E31 non-goal: any draft-side strength
+claim). Item lever remains E30.
 
 ### E29 — conditioned trunk (LayerNorm / input normalization)
 
