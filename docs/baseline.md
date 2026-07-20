@@ -91,11 +91,36 @@ deployment artifact in the guarded recipe (E8 caveat). Milestone 2 (0.890
 pure) remains open — E29 arms (conditioned trunk, slim extractor) now build
 on token-fx.
 
+### E28d escalation — NOT promoted (PR #91, worklog "E28d", 2026-07-20)
+
+The motivated follow-up to e28c — same recipe + item-rich training decks
+(`--draft-override runs/e31a_diet.json`, the E31a corrected value table:
+6.28 items / 1.13 blues per deck vs ~0 in the zoo diet) — is **CI-NEGATIVE
+and is NOT a recipe of record.** Do not deploy `e28d`; the RoR stays e28c
+above. Paired ruler vs the e28c pair: **-0.0260 [-0.0343, -0.0181]** @ 50M,
+regression. `e28d` seeds are NOT published to the depot (kept local only).
+
+Retained finding (why the arm still mattered): the item-rich diet bought
+magnitude-conditioned item valuation e28c lacks — a dose probe shows e28d's
+play-probability rises monotonically with a card's effect size (+0.05 over
+k0->k3) while e28c is flat. So `e28d` is the artifact that would SCALE with
+a stronger item pool, even though it loses on today's weak items. And the
+blue-value diagnostic split "items are weak" by effect type: a cheating
+perfect-info oracle plays items at only ~0.30/opportunity and blues at
+~0.22 (declining is mostly correct), BUT that oracle undervalues the 2
+card-draw blues by construction (its leaf value has no card-advantage
+term) — verified by a rollout-horizon sweep (draw-blue play +0.083
+[0.021, 0.143] when the rollout runs to terminal). Practical note: don't
+treat the cheating-MCTS oracle as ground truth for draw/tempo items.
+
 ## Reproduce
 
 ```bash
 uv run --extra ml python scripts/e28c_bench.py        # pair ruler + mechanism; runs/e28c-bench-summary.json
 uv run --extra ml python scripts/e28c_stack_bench.py  # trio + stack ladder; runs/e28c-stack-summary.json
+uv run --extra ml python scripts/e31a_value_table.py           # E31a value table + item-rich diet decks
+uv run --extra ml python scripts/e28d_bench.py                 # E28d escalation (CI-negative); runs/e28d-bench-summary.json
+uv run --extra ml python scripts/blue_oracle_horizon_verify.py # oracle draw-blue blind spot (verified)
 ```
 
 ---
