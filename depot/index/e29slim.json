@@ -1,0 +1,43 @@
+{
+  "name": "e29slim",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-20T16:10:19+00:00",
+      "git_commit": "b314567",
+      "git_dirty": false,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish e29slim runs/e29slim_s0.zip runs/e29slim_s1.zip runs/e29slim_s2.zip --kind model --note E29 slim extractor - reactive recipe of record (both rungs). Pointer-head net at the exact e28c recipe with the transformer-free SlimTokenExtractor (per-slot embeddings + masked mean/max pooled context + scalar branch, NO cross-card attention; 56.7k extractor params vs 418.5k, 7.4x fewer). Removing the transformer IMPROVED win rate. Trained via 'locma train-zoo --pointer-head --obs-mode token-fx --slim-extractor', seeds 0/1/2. --meta {\"avg_hard3_reactive_pure\": 0.9026, \"avg_hard3_lens_stack\": 0.9344, \"stack_confirm\": 0.9382, \"pure3_delta_vs_e28c\": 0.0224, \"stack_vs_ror_delta\": 0.0207, \"boardkeep_wr_vs_stack\": 0.189, \"extractor_params\": 56682, \"extractor_param_ratio\": 7.38} --parent e28c@1",
+      "parents": [
+        "e28c@1"
+      ],
+      "note": "E29 slim extractor - reactive recipe of record (both rungs). Pointer-head net at the exact e28c recipe with the transformer-free SlimTokenExtractor (per-slot embeddings + masked mean/max pooled context + scalar branch, NO cross-card attention; 56.7k extractor params vs 418.5k, 7.4x fewer). Removing the transformer IMPROVED win rate. Trained via 'locma train-zoo --pointer-head --obs-mode token-fx --slim-extractor', seeds 0/1/2.",
+      "meta": {
+        "avg_hard3_reactive_pure": 0.9026,
+        "avg_hard3_lens_stack": 0.9344,
+        "stack_confirm": 0.9382,
+        "pure3_delta_vs_e28c": 0.0224,
+        "stack_vs_ror_delta": 0.0207,
+        "boardkeep_wr_vs_stack": 0.189,
+        "extractor_params": 56682,
+        "extractor_param_ratio": 7.38
+      },
+      "files": {
+        "e29slim_s0.zip": {
+          "sha256": "3b1bab54a0364560d5f397715a9de20afced9b182281255323736292abf60b57",
+          "size": 1582781
+        },
+        "e29slim_s1.zip": {
+          "sha256": "9c7afa26d4b3feb4b1edb28f943cdbc23862e9a34c3a283d4a9a4278d17e3239",
+          "size": 1582569
+        },
+        "e29slim_s2.zip": {
+          "sha256": "74c01310d413ccebbf7d4f9df2923700fbcddd9757f4f275aeeb1b492829e334",
+          "size": 1582565
+        }
+      },
+      "published": "gh:depot/e29slim-v1"
+    }
+  ]
+}
