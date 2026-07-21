@@ -53,8 +53,13 @@ SHARED = "depot:shared/shared_s0.zip|depot:shared/shared_s1.zip|depot:shared/sha
 LDRAFT = "depot:ldraft/ldraft_s0.zip"
 SEED0 = 30_000_000  # the E22/E23/E24 head-to-head ruler seed base
 
-# arm -> (candidate_spec [e29slim eval], baseline_spec [shared eval])
+# The fair play-time-search recipe of record (evaluator = shared, per Phase 1).
+RBEAM_SHARED = f"rbeam:{SHARED},8,20,4,4,{LDRAFT}"
+
+# arm -> (candidate_spec, baseline_spec). candidate_wr is the candidate's
+# head-to-head win rate; >0.5 (CI-ahead) means the candidate wins.
 ARMS = {
+    # Phase 1 — evaluator swap: candidate = e29slim eval, baseline = shared eval.
     "rbeam": (
         f"rbeam:{E29},8,20,4,4,{LDRAFT}",
         f"rbeam:{SHARED},8,20,4,4,{LDRAFT}",
@@ -63,7 +68,19 @@ ARMS = {
         f"netdmcts:1,320,1.5,depot:e29slim/e29slim_s0.zip,{LDRAFT}",
         f"netdmcts:1,320,1.5,depot:shared/shared_s0.zip,{LDRAFT}",
     ),
+    # Phase 3 — has the reactive net caught fair search? candidate = fair search
+    # RoR, baseline = the reactive rung. candidate-ahead => search STILL wins;
+    # tie/behind => the reactive net has caught (or beats) fair search.
+    "phase3_guarded": (RBEAM_SHARED, f"lppo:{E29},{LDRAFT}"),
+    "phase3_pure": (RBEAM_SHARED, f"ppo:{E29},{LDRAFT}"),
 }
+ARM_LABELS = {
+    "rbeam": "e29slim-eval vs shared-eval",
+    "netdmcts": "e29slim-eval vs shared-eval",
+    "phase3_guarded": "rbeam:shared (fair search) vs lppo:e29slim (guarded 0.934)",
+    "phase3_pure": "rbeam:shared (fair search) vs ppo:e29slim (pure trio)",
+}
+ARM_GROUPS = {"both": ["rbeam", "netdmcts"], "phase3": ["phase3_guarded", "phase3_pure"]}
 STAGE_PAIRS = {"pilot": 100, "confirm": 250}
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
@@ -211,16 +228,17 @@ def run_arm(arm: str, stage: str, pairs: int, block_pairs: int, workers: int, lo
         else ("BEHIND" if summary["candidate_behind"] else "TIE")
     )
     log(
-        f"[{arm}/{stage}] e29slim vs shared: {summary['candidate_wr']:.3f} "
-        f"CI{summary['wilson_ci']} -> {verdict}  (seat0 {summary['seat0_wr']} / "
-        f"seat1 {summary['seat1_wr']}, {summary['s_per_game']}s/game)"
+        f"[{arm}/{stage}] {ARM_LABELS.get(arm, 'candidate vs baseline')}: "
+        f"{summary['candidate_wr']:.3f} CI{summary['wilson_ci']} -> {verdict}  "
+        f"(seat0 {summary['seat0_wr']} / seat1 {summary['seat1_wr']}, "
+        f"{summary['s_per_game']}s/game)"
     )
     return summary
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--arm", choices=[*ARMS, "both"], default="both")
+    ap.add_argument("--arm", choices=[*ARMS, *ARM_GROUPS], default="both")
     ap.add_argument("--stage", choices=[*STAGE_PAIRS], default="pilot")
     ap.add_argument("--pairs", type=int, default=None, help="override seed pairs for the stage")
     ap.add_argument("--block-pairs", type=int, default=10)
@@ -230,7 +248,7 @@ def main() -> None:
     ap.add_argument("--out", default="runs/e32-search-rebaseline.json")
     args = ap.parse_args()
 
-    arms = list(ARMS) if args.arm == "both" else [args.arm]
+    arms = ARM_GROUPS.get(args.arm, [args.arm])
     pairs = 2 if args.smoke else (args.pairs or STAGE_PAIRS[args.stage])
     workers = 1 if args.smoke else args.workers
     stage = "smoke" if args.smoke else args.stage
@@ -259,13 +277,14 @@ def main() -> None:
     }
     atomic_json(Path(args.out), payload)
     print(f"\nwrote {args.out}")
-    print("\n================ E32 PHASE 1 SUMMARY ================")
+    print("\n================ E32 SUMMARY ================")
     for arm, s in results.items():
         verdict = (
             "AHEAD" if s["candidate_ahead"] else ("BEHIND" if s["candidate_behind"] else "TIE")
         )
         print(
-            f"{arm:9s} e29slim vs shared  {s['candidate_wr']:.3f}  CI{s['wilson_ci']}  "
+            f"  {arm:15s} {ARM_LABELS.get(arm, arm)}\n"
+            f"  {'':15s} candidate {s['candidate_wr']:.3f}  CI{s['wilson_ci']}  "
             f"{verdict:6s}  {s['s_per_game']}s/game  (n={s['games']})"
         )
 
