@@ -11,11 +11,14 @@ plus "the per-step rewards actually differ from the w=0 run" pins the wiring.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from locma.core.instance import CardInstance
-from locma.data.cards_db import load_cards
-from locma.envs.battle_env import BattleEnv
-from locma.policies.registry import make_policy
+pytest.importorskip("gymnasium")  # locma.envs.battle_env needs the [ml] extra
+
+from locma.core.instance import CardInstance  # noqa: E402
+from locma.data.cards_db import load_cards  # noqa: E402
+from locma.envs.battle_env import BattleEnv  # noqa: E402
+from locma.policies.registry import make_policy  # noqa: E402
 
 
 def _rollout(weight: float, gamma: float = 1.0, seed: int = 7):
