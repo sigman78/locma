@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E36 PFSP — the training regime that dented the search gap</title>
+<style>
+  :root {
+    --ground: #EEF1EF;
+    --panel: #FBFCFB;
+    --ink: #1A2420;
+    --ink-soft: #46534D;
+    --hair: #D5DCD8;
+    --petrol: #136A6E;
+    --petrol-tint: #DCEAEA;
+    --brass: #9A8F65;
+    --brass-tint: #ECE7D8;
+    --alarm: #B54A32;
+    --alarm-tint: #F4E4DF;
+    --ok: #2E6B46;
+    --ok-tint: #DEEBE2;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body { margin: 0; font-family: var(--sans); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 36px 28px 72px; }
+
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 10px; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; font-weight: 650; }
+  h1 code, h2 code { font-family: var(--mono); background: #E3E8E5; padding: 2px 8px; border-radius: 4px; }
+  h1 code { font-size: .78em; }
+  .dek { max-width: 74ch; color: var(--ink-soft); margin: 0 0 22px; }
+  .dek code, .panel code, .method code { font-family: var(--mono); font-size: .88em; background: #E3E8E5; padding: 1px 5px; border-radius: 3px; }
+
+  .banner { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+  .stat { flex: 1 1 150px; background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 12px 14px; }
+  .stat .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 4px; }
+  .stat .v { font-size: 23px; font-weight: 650; letter-spacing: -.01em; line-height: 1; }
+  .stat .v small { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+  .stat.win .v { color: var(--ok); }
+  .stat.cut .v { color: var(--alarm); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 16px 18px 16px; min-width: 0; }
+  .panel.wide { grid-column: 1 / -1; }
+  .panel h2 { font-size: 15px; margin: 0 0 3px; font-weight: 650; }
+  .panel h2 code { font-size: .8em; }
+  .panel .sub { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 12px; line-height: 1.45; max-width: 84ch; }
+  .panel svg { display: block; width: 100%; height: auto; }
+  .chartbox { overflow-x: auto; }
+
+  .tag { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; display: inline-block; vertical-align: 1px; }
+  .tag.keep { background: var(--petrol-tint); color: var(--petrol); }
+  .tag.cut { background: var(--alarm-tint); color: var(--alarm); }
+  .tag.new { background: var(--ok-tint); color: var(--ok); }
+
+  svg text { font-family: var(--mono); fill: var(--ink-soft); }
+
+  .kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .kv th, .kv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .kv th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; }
+  .kv td.num { font-family: var(--mono); text-align: right; }
+  .kv tr:last-child td { border-bottom: 0; }
+  .kv .row-win td { background: var(--ok-tint); }
+  .kv .row-win td:first-child { font-weight: 600; }
+  .kv .delta { color: var(--ok); font-weight: 600; }
+  .kv .delta.down { color: var(--alarm); }
+  .kv .ci { color: var(--ink-soft); font-size: 11.5px; }
+
+  .callout { border-left: 3px solid var(--petrol); background: var(--petrol-tint); padding: 12px 15px; border-radius: 0 6px 6px 0; margin: 0; font-size: 13.5px; }
+  .callout b { color: var(--petrol); }
+  .callout.win { border-left-color: var(--ok); background: var(--ok-tint); }
+  .callout.win b { color: var(--ok); }
+  .callout.warn { border-left-color: var(--brass); background: var(--brass-tint); }
+  .callout.warn b { color: #7c6f42; }
+
+  .method { margin-top: 30px; border-top: 1px solid var(--hair); padding-top: 18px; font-size: 12.5px; color: var(--ink-soft); columns: 2; column-gap: 36px; }
+  .method p { margin: 0 0 10px; break-inside: avoid; }
+  .method b { color: var(--ink); }
+  .method h3 { font-size: 12px; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); margin: 0 0 6px; break-after: avoid; }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .method { columns: 1; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Reactive-limits program · E36 PFSP · Gate 0 · 2026-07-21 · branch feat/e36-pfsp · PR #101</p>
+    <h1>E36 PFSP: the first <span style="color:var(--petrol)">training regime</span> that dented the search gap</h1>
+    <p class="dek">
+      Every prior lever changed the net or its loss — a bigger trunk (E28/E29), a denser reward (E34),
+      an imitation target (E9/E15). All of them either won small or closed. E36 changes none of that.
+      It keeps the exact <code>e29slim</code> arch and asks a different question: <i>what if the opponent
+      is the lever?</i> Following ByteRL (<a href="https://arxiv.org/abs/2303.04096" style="color:var(--petrol)">arXiv&nbsp;2303.04096</a>),
+      the net best-responds to a growing <b>population of frozen past selves</b>, resampled per game and
+      prioritised toward the matchups it is losing. Two generations, ~3M steps. The pure net went up on
+      both rulers — and for the first time <b>fair play-time search lost ground against it</b>.
+    </p>
+  </header>
+
+  <div class="banner">
+    <div class="stat win">
+      <p class="k">avg-hard3 (pure net)</p>
+      <p class="v">0.956 <small>+0.037</small></p>
+    </div>
+    <div class="stat cut">
+      <p class="k">Fair-search WR vs it</p>
+      <p class="v">0.703 <small>&larr; 0.807</small></p>
+    </div>
+    <div class="stat"><p class="k">Search dent (held-out)</p><p class="v">&minus;0.104</p></div>
+    <div class="stat"><p class="k">Generations</p><p class="v">2 <small>~3M steps</small></p></div>
+    <div class="stat"><p class="k">Compute</p><p class="v">~3 h <small>1 GPU</small></p></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- THE LOOP -->
+    <div class="panel wide">
+      <h2>The loop &mdash; prioritized fictitious self-play</h2>
+      <p class="sub">One generation is a full best-response cycle. The net warm-starts from the previous
+        champion, trains against a mixture that samples a frozen pool member <i>per game</i>, then the pool
+        is re-weighted toward whatever beat it. The new net is admitted as a member; the loop repeats.
+        Nothing in the net changes &mdash; the <b>opponent distribution</b> is what moves.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 940 226" role="img" aria-label="PFSP generational loop">
+        <!-- warm-start -->
+        <rect x="14" y="70" width="150" height="86" rx="6" fill="var(--petrol-tint)" stroke="var(--petrol)"/>
+        <text x="89" y="94" text-anchor="middle" font-size="11.5" fill="var(--petrol)" font-weight="600">1 · warm-start</text>
+        <text x="89" y="112" text-anchor="middle" font-size="9.5" fill="var(--ink)">load prev champion</text>
+        <text x="89" y="126" text-anchor="middle" font-size="9.5" fill="var(--ink)">(gen 0 = e29slim)</text>
+        <text x="89" y="144" text-anchor="middle" font-size="9" fill="var(--ink-soft)">e29 slim + pointer + ldraft</text>
+        <!-- arrow -->
+        <path d="M164 113 H196" fill="none" stroke="var(--brass)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <!-- best-respond -->
+        <rect x="200" y="70" width="176" height="86" rx="6" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="288" y="94" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-weight="600">2 · best-respond</text>
+        <text x="288" y="112" text-anchor="middle" font-size="9.5" fill="var(--ink-soft)">PPO vs <tspan fill="var(--petrol)">pfsp:pool</tspan></text>
+        <text x="288" y="126" text-anchor="middle" font-size="9.5" fill="var(--ink-soft)">~1.5M steps / gen</text>
+        <text x="288" y="144" text-anchor="middle" font-size="9" fill="var(--ink-soft)">opponent resampled per game</text>
+        <!-- arrow -->
+        <path d="M376 113 H408" fill="none" stroke="var(--brass)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <!-- eval -->
+        <rect x="412" y="70" width="150" height="86" rx="6" fill="var(--panel)" stroke="var(--hair)"/>
+        <text x="487" y="94" text-anchor="middle" font-size="11.5" fill="var(--ink)" font-weight="600">3 · eval vs pool</text>
+        <text x="487" y="112" text-anchor="middle" font-size="9.5" fill="var(--ink-soft)">win rate vs each</text>
+        <text x="487" y="126" text-anchor="middle" font-size="9.5" fill="var(--ink-soft)">frozen member</text>
+        <text x="487" y="144" text-anchor="middle" font-size="9" fill="var(--ink-soft)">100 pairs / member</text>
+        <!-- arrow -->
+        <path d="M562 113 H594" fill="none" stroke="var(--brass)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <!-- reweight + admit -->
+        <rect x="598" y="70" width="176" height="86" rx="6" fill="var(--ok-tint)" stroke="var(--ok)"/>
+        <text x="686" y="94" text-anchor="middle" font-size="11.5" fill="var(--ok)" font-weight="600">4 · reweight + admit</text>
+        <text x="686" y="112" text-anchor="middle" font-size="9.5" fill="var(--ink)">weight &larr; max(.1, 1&minus;WR)</text>
+        <text x="686" y="126" text-anchor="middle" font-size="9.5" fill="var(--ink)">add new net as self</text>
+        <text x="686" y="144" text-anchor="middle" font-size="9" fill="var(--ink-soft)">cap 4 selves, evict oldest</text>
+        <!-- champion out -->
+        <path d="M774 113 H812" fill="none" stroke="var(--petrol)" stroke-width="1.5" marker-end="url(#ap)"/>
+        <rect x="816" y="78" width="110" height="70" rx="6" fill="var(--petrol)"/>
+        <text x="871" y="104" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">next</text>
+        <text x="871" y="119" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="600">champion</text>
+        <text x="871" y="136" text-anchor="middle" font-size="9" fill="#D7E6E6">gen g+1 warm</text>
+        <!-- feedback loop arrow: champion back to warm-start -->
+        <path d="M871 78 V36 H89 V70" fill="none" stroke="var(--petrol)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ap)"/>
+        <text x="480" y="28" text-anchor="middle" font-size="9.5" fill="var(--petrol)">warm-start next generation &mdash; continued best-response</text>
+        <!-- pool feeds member into training + eval -->
+        <rect x="360" y="182" width="230" height="34" rx="5" fill="var(--brass-tint)" stroke="var(--brass)"/>
+        <text x="475" y="197" text-anchor="middle" font-size="9.5" fill="var(--ink)" font-weight="600">pool.json &mdash; frozen self ckpts + scripted anchors</text>
+        <text x="475" y="209" text-anchor="middle" font-size="8.5" fill="var(--ink-soft)">sampled per game, weight-prioritised toward losers</text>
+        <path d="M420 182 V162" fill="none" stroke="var(--brass)" stroke-width="1.2"/>
+        <path d="M475 182 V162" fill="none" stroke="var(--brass)" stroke-width="1.2"/>
+        <path d="M686 156 V172 H540 V182" fill="none" stroke="var(--ok)" stroke-width="1.2" stroke-dasharray="3 3"/>
+        <defs>
+          <marker id="ar" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--brass)"/></marker>
+          <marker id="ap" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="var(--petrol)"/></marker>
+        </defs>
+      </svg>
+      </div>
+    </div>
+
+    <!-- THE POOL -->
+    <div class="panel">
+      <h2>The pool &mdash; who the net fights</h2>
+      <p class="sub">Any registry spec can be a pool member. The seed pool mixes a frozen strong self with
+        the scripted zoo <i>and</i> the known <code>boardkeep</code> exploiter &mdash; so self-play never
+        forgets the guard hole it already patched. Weights are re-set each generation to
+        <code>max(0.1, 1&minus;WR)</code>: the more the net wins, the less that opponent is drawn.</p>
+      <table class="kv">
+        <thead><tr><th>Member</th><th>Kind</th><th class="num">Seed w</th></tr></thead>
+        <tbody>
+          <tr><td><code>ppo:e29slim</code></td><td>self <span class="tag keep">strong</span></td><td class="num">2.0</td></tr>
+          <tr><td><code>boardkeep</code></td><td>exploiter</td><td class="num">1.0</td></tr>
+          <tr><td><code>scripted</code></td><td>anchor</td><td class="num">1.0</td></tr>
+          <tr><td><code>max-guard</code></td><td>anchor</td><td class="num">1.0</td></tr>
+          <tr><td><code>max-attack</code></td><td>anchor</td><td class="num">1.0</td></tr>
+          <tr class="row-win"><td>+ each new self</td><td>self <span class="tag new">admitted</span></td><td class="num">1&minus;WR</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0">
+        One member fixed per game, resampled between games &mdash; deterministic from the episode seed.
+        At most 4 selves kept; the oldest is evicted.</p>
+    </div>
+
+    <!-- WHY IT'S THE UNTRIED CLASS -->
+    <div class="panel">
+      <h2>Why this lever, now</h2>
+      <p class="sub">The reactive-limits program has swept the obvious axes. Three whole classes closed or
+        saturated. The <b>training regime</b> &mdash; who you play and how the schedule adapts &mdash; was the
+        one class never varied: every net so far learned against the <i>same fixed scripted zoo</i>.</p>
+      <table class="kv">
+        <thead><tr><th>Lever class</th><th>Best result</th><th class="num">Verdict</th></tr></thead>
+        <tbody>
+          <tr><td>Architecture</td><td>E28/E29 pointer + slim</td><td class="num">won, saturated</td></tr>
+          <tr><td>Reward shaping</td><td>E34 board-control</td><td class="num delta down">closed</td></tr>
+          <tr><td>Imitation / BC</td><td>E9/E15 distill</td><td class="num delta down">closed</td></tr>
+          <tr class="row-win"><td>Training regime</td><td>E36 PFSP self-play</td><td class="num delta">open &mdash; here</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:12px 0 0"><span class="callout warn">The ByteRL arch comparison settled first that
+        their net is <b>simpler</b> than ours (flat head + mean-pool + LSTM, no pointer). So the thing that
+        let a pure policy beat search in our game can&rsquo;t be their architecture &mdash; it must be the
+        <b>self-play regime</b>. That is exactly what E36 isolates.</span></p>
+    </div>
+
+    <!-- HEADLINE RESULT: SEARCH GAP -->
+    <div class="panel wide">
+      <h2>The headline &mdash; fair play-time search lost ground</h2>
+      <p class="sub">The Phase-3 wall: even the best pure net gets beaten by fair, matched-draft
+        search (<code>rbeam:shared</code>) roughly 4 games in 5. Lower bars mean the pure net is
+        <i>harder for search to beat</i>. E36 gen1 pulled that number down by <b>0.104 with disjoint
+        CIs</b> &mdash; and <code>rbeam:shared</code> was never in gen1&rsquo;s pool, so this is
+        generalisation to a <b>held-out</b> strong searcher, not overfitting to a training opponent.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 940 190" role="img" aria-label="Fair-search win rate against each pure net">
+        <!-- scale 0.65 .. 0.85 -> x 230..900 -->
+        <g font-size="9.5">
+          <line x1="230" y1="20" x2="230" y2="132" stroke="var(--hair)"/>
+          <line x1="230" y1="132" x2="900" y2="132" stroke="var(--hair)"/>
+          <line x1="397.5" y1="20" x2="397.5" y2="132" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="565" y1="20" x2="565" y2="132" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="732.5" y1="20" x2="732.5" y2="132" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <line x1="900" y1="20" x2="900" y2="132" stroke="var(--hair)" stroke-dasharray="2 3"/>
+          <text x="230" y="148" text-anchor="middle">0.65</text>
+          <text x="397.5" y="148" text-anchor="middle">0.70</text>
+          <text x="565" y="148" text-anchor="middle">0.75</text>
+          <text x="732.5" y="148" text-anchor="middle">0.80</text>
+          <text x="900" y="148" text-anchor="middle">0.85</text>
+          <text x="565" y="166" text-anchor="middle" fill="var(--ink-soft)">&larr; rbeam:shared win rate vs the pure net (lower = pure net harder to beat)</text>
+        </g>
+        <!-- e29slim 0.807, CI 0.766..0.843 -->
+        <g>
+          <rect x="230" y="36" width="526" height="22" rx="2" fill="var(--brass)" opacity="0.55"/>
+          <line x1="618.6" y1="47" x2="876.6" y2="47" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <line x1="618.6" y1="42" x2="618.6" y2="52" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <line x1="876.6" y1="42" x2="876.6" y2="52" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <text x="224" y="51" text-anchor="end" font-size="10.5" fill="var(--ink)">e29slim (start)</text>
+          <text x="762" y="51" font-size="10" fill="var(--ink-soft)">0.807 [.766, .843]</text>
+        </g>
+        <!-- gen1 0.703, CI 0.656..0.745 -->
+        <g>
+          <rect x="230" y="70" width="178" height="22" rx="2" fill="var(--petrol)"/>
+          <line x1="250.1" y1="81" x2="548.3" y2="81" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <line x1="250.1" y1="76" x2="250.1" y2="86" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <line x1="548.3" y1="76" x2="548.3" y2="86" stroke="var(--ink-soft)" stroke-width="1.2"/>
+          <text x="224" y="85" text-anchor="end" font-size="10.5" fill="var(--ink)" font-weight="600">E36 gen1</text>
+          <text x="414" y="85" font-size="10" fill="var(--petrol)" font-weight="600">0.703 [.656, .745]</text>
+        </g>
+        <!-- disjoint marker -->
+        <line x1="565" y1="60" x2="565" y2="102" stroke="var(--ok)" stroke-width="1.2" stroke-dasharray="3 3"/>
+        <text x="565" y="116" text-anchor="middle" font-size="9" fill="var(--ok)">CIs disjoint: 0.745 &lt; 0.766</text>
+      </svg>
+      </div>
+      <p style="margin:10px 0 0"><span class="callout win"><b>Methodology validated:</b> the e29slim
+        control here reads <b>0.807</b>, reproducing Phase-3&rsquo;s independently-measured 0.808 almost
+        exactly. Same ruler, moved by 0.104. This is the <b>first training-side dent</b> in the search gap
+        that Phase 3 established as the reactive net&rsquo;s wall.</span></p>
+    </div>
+
+    <!-- SECOND RULER + INTERNAL FP -->
+    <div class="panel">
+      <h2>Second ruler &mdash; avg-hard3</h2>
+      <p class="sub">Win rate vs the three hardest scripted opponents, paired against e29slim on identical
+        held-out states (n=150/opp, seed 40M). The pool is near-saturated here, so this is the softer read
+        &mdash; but it moves the right way and confirms nothing regressed.</p>
+      <div class="chartbox">
+      <svg viewBox="0 0 470 120" role="img" aria-label="avg-hard3 ladder">
+        <g font-size="9">
+          <line x1="120" y1="14" x2="120" y2="86" stroke="var(--hair)"/>
+          <line x1="120" y1="86" x2="452" y2="86" stroke="var(--hair)"/>
+          <text x="120" y="100" text-anchor="middle">0.90</text>
+          <text x="452" y="100" text-anchor="middle">0.97</text>
+        </g>
+        <!-- scale 0.90..0.97 -> x 120..452 (332 wide) -->
+        <!-- e29slim 0.919 -> 120+(0.019/0.07*332)=120+90.1=210 -->
+        <rect x="120" y="24" width="90" height="18" rx="2" fill="var(--brass)" opacity="0.55"/>
+        <text x="114" y="37" text-anchor="end" font-size="9.5" fill="var(--ink)">e29slim</text>
+        <text x="216" y="37" font-size="9.5" fill="var(--ink-soft)">0.919</text>
+        <!-- gen1 0.956 -> 120+(0.056/0.07*332)=120+265.6=386 -->
+        <rect x="120" y="52" width="266" height="18" rx="2" fill="var(--ok)"/>
+        <text x="114" y="65" text-anchor="end" font-size="9.5" fill="var(--ink)" font-weight="600">gen1</text>
+        <text x="392" y="65" font-size="9.5" fill="var(--ok)" font-weight="600">0.956 +0.037</text>
+      </svg>
+      </div>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0">
+        Boardkeep exploit not opened &mdash; gen1 wins 0.767 of that matchup (driver eval; the proper E10
+        bench is a follow-up).</p>
+    </div>
+
+    <!-- INTERNAL FP MONOTONE -->
+    <div class="panel">
+      <h2>Fictitious play is working</h2>
+      <p class="sub">Internal head-to-head win rates confirm the generational ladder is monotone &mdash;
+        each net beats the one before it, and both beat the frozen starting champion. That is the
+        signature of a healthy best-response loop, not a random walk.</p>
+      <table class="kv">
+        <thead><tr><th>Matchup</th><th class="num">win rate</th></tr></thead>
+        <tbody>
+          <tr><td>gen0 vs frozen e29slim</td><td class="num delta">0.658</td></tr>
+          <tr><td>gen1 vs frozen e29slim</td><td class="num delta">0.750</td></tr>
+          <tr class="row-win"><td>gen1 vs gen0</td><td class="num delta">0.592</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:10px 0 0">
+        Monotone improvement across generations at only ~1.5M steps each &mdash; the loop has not yet
+        plateaued, which is what motivates scaling.</p>
+    </div>
+
+    <!-- CAVEATS + NEXT -->
+    <div class="panel wide">
+      <h2>What this is &mdash; and isn&rsquo;t &mdash; yet</h2>
+      <p class="sub">Gate 0 is a signal test, not a promotion. The scale is a rounding error next to the
+        paper that inspired it: <b>2 generations, ~3M steps, one seed, ~3 hours on one GPU</b> vs
+        ByteRL&rsquo;s cluster-weeks of population play. The point was to find out whether the regime moves
+        the needle at all before spending the budget. It does.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <p class="callout warn"><b>Caveats.</b> Single seed, 2 generations &mdash; the gain may grow with
+          scale or plateau. avg-hard3 is pool-saturated (trust the search dent). Boardkeep is a driver-eval
+          number, not the E10 bench. gen1 is <i>not</i> a promoted artifact &mdash; that needs 3 seeds, more
+          generations, guardrails, and fresh-anchor confirms.</p>
+        <p class="callout win"><b>Why it&rsquo;s worth scaling.</b> This is the first lever to move
+          <i>both</i> rulers the right way after arch, reward, and imitation all closed &mdash; and the
+          search dent generalised to a <b>held-out</b> searcher. The loop is still monotone at 3M steps, so
+          there is headroom to buy.</p>
+      </div>
+      <p style="margin:14px 0 0"><span class="callout"><b>Next.</b> Scale the PFSP program &mdash; more
+        generations and budget &mdash; then the <b>arch-retest arm</b>: every &ldquo;capacity/recurrence
+        doesn&rsquo;t help&rdquo; verdict (E6 LSTM, E29 slim) was measured under the <i>weak fixed-zoo
+        signal</i>. Under the richer self-play signal, recurrence especially should be re-tested rather than
+        assumed dead. The driver isolates the regime lever first; the arch retest rides on top of it.</span></p>
+    </div>
+
+  </div>
+
+  <div class="method">
+    <h3>Method &amp; provenance</h3>
+    <p><b>Regime.</b> Prioritized fictitious self-play, after ByteRL / optimistic smooth fictitious play
+      (<code>arXiv 2303.04096</code>). The reactive net best-responds to a mixture that samples one frozen
+      pool member per game, weighted <code>max(0.1, 1&minus;WR)</code> toward losing matchups; the pool grows
+      with past-self checkpoints (cap 4, evict oldest) plus scripted / <code>boardkeep</code> anchors.</p>
+    <p><b>Net.</b> Unchanged from <code>e29slim</code> &mdash; E29 slim extractor + E28 pointer head +
+      <code>ldraft</code> learned draft, <code>token-fx</code> observation. The <i>only</i> variable is the
+      training opponent. No arch, loss, or reward edit.</p>
+    <p><b>Tooling.</b> <code>locma/policies/pfsp.py</code> (<code>PFSPBattleMixture</code>),
+      <code>pfsp:pool.json[,draft]</code> registry spec (hidden), generational driver
+      <code>scripts/e36_pfsp.py</code> (warm-start &rarr; best-respond &rarr; eval &rarr; reweight &rarr;
+      admit &rarr; rewrite pool). CI-safe scripted-pool test in <code>tests/test_pfsp.py</code>.</p>
+    <p><b>Gate evals.</b> avg-hard3 = mean win rate vs the three hardest scripted opponents, paired vs
+      e29slim on identical held-out states (n=150/opp, seed 40M). Search gap = <code>rbeam:shared</code> win
+      rate against the pure net (n=400, seed 30M); <code>rbeam:shared</code> is <i>not</i> a pool member, so
+      the dent is held-out. CIs are bootstrap; the search-gap CIs are disjoint.</p>
+    <p><b>Numbers.</b> <code>runs/e36/gate0_summary.json</code>, driver log
+      <code>runs/e36/history.json</code>, artifacts <code>runs/e36_gen{0,1}.zip</code> (gitignored). Control
+      0.807 reproduces the Phase-3 measurement of 0.808.</p>
+    <p><b>Provenance.</b> Branch <code>feat/e36-pfsp</code>, PR&nbsp;#101, git <code>455c0ca</code>. Prior
+      context: E29 slim (PR&nbsp;#93, the arch this warm-starts from), the Phase-3 search-gap program
+      (<code>rbeam</code> / <code>netdmcts</code> as fair search of record), E34 reward shaping (PR&nbsp;#100,
+      the last closed lever). Gate 0 only &mdash; not a promoted recipe of record.</p>
+  </div>
+</div>
+
+</body>
+</html>
