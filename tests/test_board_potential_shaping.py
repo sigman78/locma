@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from locma.core.instance import CardInstance
+from locma.data.cards_db import load_cards
 from locma.envs.battle_env import BattleEnv
 from locma.policies.registry import make_policy
 
@@ -38,6 +40,28 @@ def _rollout(weight: float, gamma: float = 1.0, seed: int = 7):
         rewards.append(r)
         done = term or trunc
     return rewards
+
+
+def test_potential_modes_diff_vs_oppcut():
+    """diff Phi = my - op board power; oppcut Phi = -op (ignores the agent's board)."""
+    cards = load_cards()
+    mine = CardInstance.from_card(cards[0], 100)  # atk+def = a_m
+    theirs = CardInstance.from_card(cards[1], 200)  # atk+def = a_t
+    a_m, a_t = mine.attack + mine.defense, theirs.attack + theirs.defense
+
+    for mode, expected in (("diff", a_m - a_t), ("oppcut", -a_t)):
+        env = BattleEnv(
+            opponent=make_policy("scripted"),
+            seed=1,
+            agent_seat=0,
+            obs_mode="token-fx",
+            board_potential_weight=0.1,
+            board_potential_mode=mode,
+        )
+        env.reset(seed=1)
+        env.gs.players[0].board = [mine]
+        env.gs.players[1].board = [theirs]
+        assert env._board_potential() == float(expected)
 
 
 def test_shaping_off_is_sparse_terminal():

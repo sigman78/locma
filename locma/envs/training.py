@@ -57,6 +57,7 @@ def _make_battle_env(
     draft_override: str | None = None,
     board_potential_weight: float = 0.0,
     shaping_gamma: float = 0.99,
+    board_potential_mode: str = "diff",
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -106,6 +107,7 @@ def _make_battle_env(
         shared_draft=shared_draft,
         board_potential_weight=board_potential_weight,
         shaping_gamma=shaping_gamma,
+        board_potential_mode=board_potential_mode,
     )
 
 
@@ -126,6 +128,7 @@ def _build_env(
     draft_override: str | None = None,
     board_potential_weight: float = 0.0,
     shaping_gamma: float = 0.99,
+    board_potential_mode: str = "diff",
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
@@ -160,6 +163,7 @@ def _build_env(
             draft_override,
             board_potential_weight,
             shaping_gamma,
+            board_potential_mode,
         )
         for i in range(n_envs)
     ]
@@ -547,6 +551,7 @@ def train_zoo(
     pointer_head: bool = False,
     slim: bool = False,
     board_potential_weight: float = 0.0,
+    board_potential_mode: str = "diff",
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -597,6 +602,7 @@ def train_zoo(
             draft_override=draft_override,
             board_potential_weight=board_potential_weight,
             shaping_gamma=gamma,
+            board_potential_mode=board_potential_mode,
         )
 
     model = _make_model(
