@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 from locma.depot import resolve_path
 from locma.policies.battles import (
@@ -15,8 +16,10 @@ from locma.policies.drafts import (
     DistilledDraftPolicy,
     GreedyDraftPolicy,
     MaxAttackDraftPolicy,
+    MaxDefenseDraftPolicy,
     MaxGuardDraftPolicy,
     RandomDraftPolicy,
+    WeightedDraftPolicy,
 )
 from locma.policies.exploits import ShellBattlePolicy, ShellDraftPolicy
 
@@ -418,3 +421,50 @@ def make_policy(spec: str):
     if base in _FACTORIES:
         return _FACTORIES[base](params, spec)
     raise ValueError(f"unknown policy '{spec}'")
+
+
+# -- standalone draft policies (the web Play draft's "complete for me") -------
+
+# name -> (dropdown label, factory). Order drives the dropdown; `balanced` first
+# because it is the strongest heuristic draft (Condorcet under strong fair
+# pilots, docs/baseline.md) and the default.
+_DRAFT_FACTORIES = {
+    "balanced": ("Balanced — curve-aware (best heuristic)", BalancedDraftPolicy),
+    "weighted": ("Weighted — keyword-valued greedy", WeightedDraftPolicy),
+    "greedy": ("Greedy — raw stats", GreedyDraftPolicy),
+    "max-guard": ("Max Guard — defensive wall", MaxGuardDraftPolicy),
+    "max-attack": ("Max Attack — aggro stats", MaxAttackDraftPolicy),
+    "max-defense": ("Max Defense — tanky board", MaxDefenseDraftPolicy),
+    "random": ("Random", RandomDraftPolicy),
+}
+
+
+def draft_policy_choices() -> list[dict]:
+    """``[{name, label}]`` for UI dropdowns — heuristic drafts only; the server
+    appends any locally available depot draft nets (it knows the depot)."""
+    return [{"name": n, "label": label} for n, (label, _) in _DRAFT_FACTORIES.items()]
+
+
+def make_draft_policy(spec: str):
+    """A standalone draft policy from a dropdown name or a draft-override tail.
+
+    Known names resolve via ``_DRAFT_FACTORIES``; anything else goes through the
+    ``_draft_param`` grammar (float item-discount, ``.json`` table/curve, or a
+    learned model path / ``depot:`` ref -> MaskablePPODraftPolicy). Unlike
+    ``_draft_param``, a model path is validated eagerly (the policy itself is
+    lazy) so a bad spec fails the request instead of the mid-draft pick.
+    Raises ValueError on an unknown name / missing file.
+    """
+    entry = _DRAFT_FACTORIES.get(spec)
+    if entry is not None:
+        return entry[1]()
+    try:
+        float(spec)  # a numeric item-discount tail needs no file
+    except ValueError:
+        try:
+            path = resolve_path(spec)
+        except Exception as e:
+            raise ValueError(f"unknown draft policy {spec!r}: {e}") from e
+        if not os.path.exists(path):
+            raise ValueError(f"unknown draft policy or missing file: {spec!r}") from None
+    return _draft_param([spec], 0)

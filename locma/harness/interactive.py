@@ -191,6 +191,31 @@ class InteractiveGame:
         self._advance()
         return self._response()
 
+    def complete_draft(self, draft_policy) -> dict:
+        """Auto-pick every remaining human draft round with ``draft_policy``.
+
+        A stateful policy (balanced/distilled/learned) is seeded with the picks
+        the human already made by hand, so curve/deck-so-far tracking stays
+        accurate mid-draft. Like a final submit_draft, the returned response is
+        battle-pending — the client decides when to actually show the battle.
+        """
+        gs = self.gs
+        if self.result is not None or gs.phase != Phase.DRAFT or gs.current != self.human_seat:
+            raise WrongPhase("not your draft turn")
+        self._slice = []
+        self._steps = []
+        draft_policy.reset(self.seed)
+        note = getattr(draft_policy, "note_cards", None)
+        if note is not None:
+            note(gs.picks[self.human_seat])
+        while gs.phase == Phase.DRAFT and gs.current == self.human_seat:
+            seat = gs.current
+            pick = draft_policy.draft_action(make_draft_view(gs), [0, 1, 2])
+            draftmod.apply_draft_pick(gs, pick)
+            self.rec.on_step(seat, pick, gs)
+            self._advance()
+        return self._response()
+
     # -- payload builders --
     def _play_view(self) -> dict:
         gs = self.gs

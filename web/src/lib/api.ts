@@ -177,6 +177,16 @@ export const submitDraft = (id: string, pick: number) =>
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pick }),
   }).then(j<SubmitResponse>)
 
+// named draft policies for the draft screen's "complete for me" dropdown
+export interface DraftPolicyChoice { name: string; label: string }
+export const getDraftPolicies = () =>
+  fetch('/api/draft-policies').then(j<DraftPolicyChoice[]>)
+
+export const completeDraft = (id: string, policy: string) =>
+  fetch(`/api/games/${id}/draft/complete`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ policy }),
+  }).then(j<SubmitResponse>)
+
 export const submitAction = (id: string, action: ActionDict) =>
   fetch(`/api/games/${id}/action`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }),

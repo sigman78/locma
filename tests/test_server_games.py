@@ -52,6 +52,43 @@ def test_full_game_over_http_writes_replay():
     assert any(h["replay_id"] == resp["result"]["replay_id"] for h in listed)
 
 
+def test_draft_policies_listed():
+    c, _ = client()
+    body = c.get("/api/draft-policies").json()
+    names = [p["name"] for p in body]
+    assert "balanced" in names and "greedy" in names
+    assert all("label" in p for p in body)
+
+
+def test_complete_draft_stages_full_deck():
+    c, _ = client()
+    gid = c.post("/api/games", json={"opponent": "random", "seed": 3}).json()["game_id"]
+    # two manual picks, then auto-complete with the balanced draft
+    c.post(f"/api/games/{gid}/draft", json={"pick": 1})
+    c.post(f"/api/games/{gid}/draft", json={"pick": 2})
+    resp = c.post(f"/api/games/{gid}/draft/complete", json={"policy": "balanced"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["pending"]["phase"] == "battle"
+    assert len(body["drafted"]) == 30
+
+
+def test_complete_draft_unknown_policy_400():
+    c, _ = client()
+    gid = c.post("/api/games", json={"opponent": "random", "seed": 3}).json()["game_id"]
+    assert c.post(f"/api/games/{gid}/draft/complete", json={"policy": "nope"}).status_code == 400
+
+
+def test_complete_draft_wrong_phase_409():
+    c, _ = client()
+    gid = c.post("/api/games", json={"opponent": "random", "seed": 3}).json()["game_id"]
+    while c.get(f"/api/games/{gid}").json()["pending"]["phase"] == "draft":
+        c.post(f"/api/games/{gid}/draft", json={"pick": 0})
+    assert (
+        c.post(f"/api/games/{gid}/draft/complete", json={"policy": "balanced"}).status_code == 409
+    )
+
+
 def test_wrong_phase_409():
     c, _ = client()
     gid = c.post("/api/games", json={"opponent": "random", "seed": 2}).json()["game_id"]

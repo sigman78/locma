@@ -27,7 +27,7 @@
       {:else}
         <button class="primary" on:click={() => dispatch('again')}>Play again</button>
       {/if}
-      <a href="#/replays" class="replay-btn">View replay</a>
+      <a href="#/replays/{result.replay_id}" class="replay-btn">View replay</a>
     </div>
     <p class="rid">replay {result.replay_id}</p>
   </div>

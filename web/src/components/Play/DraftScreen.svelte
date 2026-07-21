@@ -4,6 +4,7 @@
   import { digitIndex, isTypingTarget } from '../../lib/keys'
   import type { CardState } from '../../lib/replay'
   import type { DraftPending } from '../../lib/play'
+  import type { DraftPolicyChoice } from '../../lib/api'
   import CardView from '../ReplayViewer/CardView.svelte'
   import DeckStrip from './DeckStrip.svelte'
   import ManaCurve from './ManaCurve.svelte'
@@ -15,7 +16,13 @@
   export let doneCardIds: number[] = []
   // keyboard only fires while the Play tab is visible (tabs stay mounted hidden)
   export let active = true
-  const dispatch = createEventDispatcher<{ pick: number; auto: void; play: void }>()
+  // named draft policies for the "complete for me" dropdown (fetched by Play)
+  export let draftPolicies: DraftPolicyChoice[] = []
+  // a draft request is in flight (a learned auto-complete can take seconds):
+  // lock the controls so the running pick can't be raced
+  export let busy = false
+  let policy = 'balanced'
+  const dispatch = createEventDispatcher<{ pick: number; auto: string; play: void }>()
 
   function toCard(cardId: number, i: number): CardState {
     const m = cardMeta(cardId)
@@ -34,10 +41,11 @@
   // Keyboard (draft only): 1/2/3 pick a card, A auto-picks the rest. Starting
   // the battle stays a deliberate click — no Enter-to-play.
   function onKey(e: KeyboardEvent) {
-    if (!active || done || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
+    if (!active || done || busy || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target))
+      return
     const idx = digitIndex(e.key, cards.length)
     if (idx !== null) { e.preventDefault(); dispatch('pick', idx) }
-    else if (e.key.toLowerCase() === 'a') { e.preventDefault(); dispatch('auto') }
+    else if (e.key.toLowerCase() === 'a') { e.preventDefault(); dispatch('auto', policy) }
   }
 </script>
 
@@ -63,18 +71,28 @@
   {#if deckIds.length > 0}
     <div class="deck-section">
       <ManaCurve cardIds={deckIds} />
-      <DeckStrip cardIds={deckIds} label="Your deck" />
+      <!-- bigger cards on the review screen: the whole deck is up for inspection -->
+      <DeckStrip cardIds={deckIds} label="Your deck" cardW={done ? 110 : 80} />
     </div>
   {/if}
 
   {#if done}
+    <p class="review-hint">Inspect your deck (hover a card for details), then start the battle.</p>
     <button class="play-btn" on:click={() => dispatch('play')}>Play ▶</button>
   {:else}
     <div class="foot">
       <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>
-      <button class="auto" title="Auto-pick the rest (press A)" on:click={() => dispatch('auto')}>
-        Pick rest for me <span class="keycap">A</span>
-      </button>
+      <label class="auto-group" title="Draft policy used to complete the deck">
+        <select class="policy" disabled={busy} bind:value={policy}>
+          {#each draftPolicies as p (p.name)}
+            <option value={p.name}>{p.label}</option>
+          {/each}
+        </select>
+        <button class="auto" title="Auto-pick the rest (press A)" disabled={busy}
+          on:click={() => dispatch('auto', policy)}>
+          Complete for me <span class="keycap">A</span>
+        </button>
+      </label>
     </div>
   {/if}
 </div>
@@ -99,6 +117,12 @@
   .auto { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
     padding: 6px 14px; cursor: pointer; font-weight: 600; }
   .auto:hover { background: #2a2a44; }
+  .auto:disabled, .policy:disabled { opacity: 0.55; cursor: default; }
+  .auto:disabled:hover { background: #23232b; }
+  .auto-group { display: flex; align-items: center; gap: 8px; }
+  .policy { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
+    padding: 6px 8px; font: inherit; font-size: 0.9rem; max-width: 280px; }
+  .review-hint { margin: 0; color: #aaa; font-size: 0.9rem; }
   .deck-section { display: flex; flex-direction: column; align-items: center; gap: 8px;
     width: 100%; max-width: 700px; }
   .play-btn { background: #2a2a44; color: #fff; border: 1px solid #4a4f6a; border-radius: 4px;

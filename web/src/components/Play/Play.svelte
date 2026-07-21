@@ -1,7 +1,15 @@
 <!-- web/src/components/Play/Play.svelte -->
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { createGame, getGame, submitAction, submitDraft } from '../../lib/api'
+  import {
+    completeDraft,
+    createGame,
+    getDraftPolicies,
+    getGame,
+    submitAction,
+    submitDraft,
+    type DraftPolicyChoice,
+  } from '../../lib/api'
   import { loadCards } from '../../lib/cards'
   import type { ActionDict, EventDict } from '../../lib/replay'
   import type {
@@ -50,6 +58,15 @@
   loadCards()
     .then(() => (ready = true))
     .catch((e) => (error = String(e)))
+
+  // "complete for me" dropdown options; a static fallback keeps the button
+  // usable even if the list request fails (the server defaults to balanced too)
+  let draftPolicies: DraftPolicyChoice[] = [
+    { name: 'balanced', label: 'Balanced — curve-aware (best heuristic)' },
+  ]
+  getDraftPolicies()
+    .then((l) => { if (l.length) draftPolicies = l })
+    .catch(() => {})
 
   onDestroy(() => {
     seq?.cancel()
@@ -187,16 +204,14 @@
     }
   }
 
-  // Auto-draft every remaining round with random picks; stage at the end.
-  async function autoDraft() {
+  // Auto-complete the remaining rounds server-side with the chosen draft
+  // policy; the result is STAGED for deck review — never straight into battle.
+  async function autoDraft(policy: string) {
     if (!gameId || playing || inFlight) return
     inFlight = true
     armThinking()
     try {
-      let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
-      while (r.pending && r.pending.phase === 'draft') {
-        r = await submitDraft(gameId, Math.floor(Math.random() * 3))
-      }
+      const r = await completeDraft(gameId, policy)
       staged = { cardIds: r.drafted ?? [], response: r }
     } catch (e) {
       await recover(e)
@@ -289,14 +304,26 @@
     <h1>LOCM — Play vs AI</h1>
     <NewGame on:start={(e) => start(e.detail)} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
-    <DraftScreen
-      {active}
-      pending={snap.pending as DraftPending}
-      done={!!staged}
-      doneCardIds={staged?.cardIds ?? []}
-      on:pick={(e) => pick(e.detail)}
-      on:auto={autoDraft}
-      on:play={play} />
+    <div class="draft-stage">
+      <DraftScreen
+        {active}
+        pending={snap.pending as DraftPending}
+        done={!!staged}
+        doneCardIds={staged?.cardIds ?? []}
+        {draftPolicies}
+        busy={inFlight}
+        on:pick={(e) => pick(e.detail)}
+        on:auto={(e) => autoDraft(e.detail)}
+        on:play={play} />
+      <!-- same slow-reply hint as the battle board: a learned draft net
+           (ldraft) takes seconds to load + pick, so the screen must not look hung -->
+      {#if thinking}
+        <div class="thinking" role="status" aria-live="polite">
+          <span class="spinner"></span>
+          <span>Drafting<span class="dots"><i>.</i><i>.</i><i>.</i></span></span>
+        </div>
+      {/if}
+    </div>
   {:else if battlePending}
     <!-- board + deck tracker as side-by-side flex items. Only the (wide) board
          pans horizontally (its own wrapper); the tracker is a sibling, so its
@@ -361,6 +388,8 @@
      stays overflow:visible so the page's own vertical scroll isn't doubled by an
      inner one and the draft tooltip isn't clipped. */
   .stage-row { display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
+  /* anchor for the draft-phase thinking pill (same absolute placement as the board's) */
+  .draft-stage { position: relative; }
   .board-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
   /* the tracker keeps its width and lives in page flow (never shrinks/scrolls) */

@@ -213,6 +213,12 @@ class BalancedDraftPolicy:
         PartialRandomDraftPolicy), keeping the curve/creature tracking accurate."""
         self._picks.append(view.offered[idx])
 
+    def note_cards(self, cards):
+        """Seed the tracker with picks made before this policy took over (the web
+        Play auto-complete, where the human drafts the first rounds manually).
+        Accepts any card-likes exposing ``cost``/``type`` (core Card or CardView)."""
+        self._picks.extend(cards)
+
     def draft_action(self, view, legal):
         idx = max(legal, key=lambda i: self._score(view.offered[i]))
         self.note_pick(view, idx)
@@ -283,6 +289,11 @@ class DistilledDraftPolicy:
         """Record a pick made on this policy's behalf (e.g. an overridden pick by
         PartialRandomDraftPolicy), keeping the curve/creature tracking accurate."""
         self._picks.append(view.offered[idx])
+
+    def note_cards(self, cards):
+        """Seed the tracker with picks made before this policy took over (see
+        BalancedDraftPolicy.note_cards)."""
+        self._picks.extend(cards)
 
     def draft_action(self, view, legal):
         idx = max(legal, key=lambda i: self._score(view.offered[i]))

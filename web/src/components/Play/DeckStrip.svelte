@@ -46,6 +46,7 @@
   .strip-label { color: #888; font-size: 0.8rem; display: block; margin-bottom: 4px; }
   .strip { display: flex; flex-wrap: wrap; max-width: 100%;
     padding-right: calc(var(--card-w, 80px) / 3); }
-  /* position: relative + z-index: auto keeps CardView's :hover z-index: 50 untrapped */
+  /* position: relative + z-index: auto keeps CardView's :hover z-index: 50 untrapped.
+     Card separation (dark rim + halo) comes from CardView itself. */
   .strip-card { position: relative; margin-right: calc(var(--card-w, 80px) / -3); margin-bottom: 8px; }
 </style>

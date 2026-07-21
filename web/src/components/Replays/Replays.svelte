@@ -5,6 +5,12 @@
   import { getReplay } from '../../lib/api'
   import type { Replay } from '../../lib/replay'
 
+  // whether the Replays tab is the visible one (tabs stay mounted hidden) —
+  // forwarded to the library so its index refreshes on each activation
+  export let active = false
+  // deep-link replay id from the '#/replays/<id>' hash (Play's "View replay")
+  export let openId: string | null = null
+
   let current: Replay | null = null
   let error: string | null = null
 
@@ -15,6 +21,15 @@
       error = String(e)
     }
   }
+
+  $: if (openId) open(openId)
+
+  function back() {
+    current = null
+    // drop the deep-link id so a later "View replay" for another (or the same)
+    // game re-triggers the reactive open above
+    if (openId) location.hash = '#/replays'
+  }
 </script>
 
 <div>
@@ -22,9 +37,9 @@
     <p class="error">Error: {error} <button on:click={() => (error = null)}>dismiss</button></p>
   {/if}
   {#if current}
-    <ReplayViewer replay={current} on:back={() => (current = null)} />
+    <ReplayViewer replay={current} on:back={back} />
   {:else}
-    <ReplayLibrary on:open={(e) => open(e.detail)} />
+    <ReplayLibrary {active} on:open={(e) => open(e.detail)} />
   {/if}
 </div>
 
