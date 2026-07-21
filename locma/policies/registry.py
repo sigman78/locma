@@ -301,6 +301,21 @@ def _lppo(params, spec):
     return Composer(battle, _draft_param(params, 1), name=spec)
 
 
+def _pfsp(params, spec):
+    """Prioritized fictitious self-play mixture — spec ``pfsp:pool.json[,draft]``.
+
+    A population training opponent (E36): samples a frozen pool member per game,
+    weighted by the pool JSON (the driver prioritises losing matchups). Members
+    are arbitrary registry specs (past-self ``ppo:`` checkpoints + scripted
+    exploiters). The draft half is the usual ``_draft_param`` (overridden by the
+    env's draft_override in training). See locma/policies/pfsp.py.
+    """
+    from locma.policies.pfsp import PFSPBattleMixture  # noqa: PLC0415
+
+    pool_json = params[0] if params and params[0] else "pool.json"
+    return Composer(PFSPBattleMixture(pool_json), _draft_param(params, 1), name=spec)
+
+
 # --- E10 exploit archetypes: scripted strategies aimed at the learned
 # policies' suspected blind spots (see locma/policies/exploits.py). ---
 
@@ -375,6 +390,7 @@ _FACTORIES = {
     "rbeam": _rbeam,
     "ppo": _ppo,
     "lppo": _lppo,
+    "pfsp": _pfsp,
     "mixed": _mixed,
     "rnddeck": _rnddeck,
     "guardwall": _guardwall,
@@ -389,7 +405,7 @@ _FACTORIES = {
 # `vbeam:path,width,max_actions` or `rbeam:path,width,max_actions,n_plans,
 # n_worlds`); `mixed` is a non-stationary training opponent, not a baseline
 # to rank.
-_HIDDEN = {"ppo", "lppo", "mixed", "netdmcts", "vbeam", "rbeam"}
+_HIDDEN = {"ppo", "lppo", "pfsp", "mixed", "netdmcts", "vbeam", "rbeam"}
 
 
 def policy_names() -> list[str]:
