@@ -55,6 +55,8 @@ def _make_battle_env(
     draft_noise: int = 0,
     shared_draft: bool = False,
     draft_override: str | None = None,
+    board_potential_weight: float = 0.0,
+    shaping_gamma: float = 0.99,
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -102,6 +104,8 @@ def _make_battle_env(
         seat_random=seat_random,
         obs_mode=obs_mode,
         shared_draft=shared_draft,
+        board_potential_weight=board_potential_weight,
+        shaping_gamma=shaping_gamma,
     )
 
 
@@ -120,6 +124,8 @@ def _build_env(
     draft_noise: int = 0,
     shared_draft: bool = False,
     draft_override: str | None = None,
+    board_potential_weight: float = 0.0,
+    shaping_gamma: float = 0.99,
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
@@ -152,6 +158,8 @@ def _build_env(
             draft_noise,
             shared_draft,
             draft_override,
+            board_potential_weight,
+            shaping_gamma,
         )
         for i in range(n_envs)
     ]
@@ -260,6 +268,7 @@ def train_agent(
     draft_noise: int = 0,
     shared_draft: bool = False,
     draft_override: str | None = None,
+    board_potential_weight: float = 0.0,
 ):
     """Train a seeded MaskablePPO agent against `opponent_spec` and save it.
 
@@ -292,6 +301,9 @@ def train_agent(
         pick alternates by round, so the two seats get asymmetric decks.
     draft_override: draft BOTH seats' decks with a named draft or a learned-draft
         model path (E19) instead of the opponent's own draft half.
+    board_potential_weight: E33 trade-value lever. w>0 adds potential-based
+        reward shaping w·(γΦ(s')-Φ(s)), Φ = board-power differential (Σ atk+def),
+        optimal-policy-preserving. 0 = OFF (default, unchanged reward).
 
     Imports the ML stack lazily; an ImportError means the `[ml]` extra is absent.
     """
@@ -304,6 +316,8 @@ def train_agent(
         draft_noise=draft_noise,
         shared_draft=shared_draft,
         draft_override=draft_override,
+        board_potential_weight=board_potential_weight,
+        shaping_gamma=gamma,
     )
     model = _make_model(
         env,
@@ -532,6 +546,7 @@ def train_zoo(
     draft_override: str | None = None,
     pointer_head: bool = False,
     slim: bool = False,
+    board_potential_weight: float = 0.0,
 ):
     """Train ONE MaskablePPO model back-to-back against each opponent in turn.
 
@@ -580,6 +595,8 @@ def train_zoo(
             draft_noise=draft_noise,
             shared_draft=shared_draft,
             draft_override=draft_override,
+            board_potential_weight=board_potential_weight,
+            shaping_gamma=gamma,
         )
 
     model = _make_model(

@@ -505,6 +505,12 @@ def train_zoo_cmd(
         help="E29 slim arm: transformer-free SlimTokenExtractor (per-slot embeddings "
         "+ pooled context, ~4x cheaper); pointer head recommended (token obs_mode only)",
     ),
+    board_potential_weight: float = typer.Option(
+        0.0,
+        "--board-potential-weight",
+        help="E33 trade-value lever: potential-based reward shaping w*(g*Phi'-Phi), "
+        "Phi = board-power differential (sum atk+def); 0 = off (default)",
+    ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
     zoo (a curriculum; see ZOO_OPPONENTS in locma/envs/training.py). Requires the
@@ -557,6 +563,7 @@ def train_zoo_cmd(
             draft_override=draft_override,
             extractor_kwargs={"feature_ln": True} if feature_ln else None,
             slim=slim,
+            board_potential_weight=board_potential_weight,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

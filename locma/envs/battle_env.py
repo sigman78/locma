@@ -76,8 +76,17 @@ class BattleEnv(gym.Env):
         seat_random: bool = False,
         obs_mode: str = "flat",
         shared_draft: bool = False,
+        board_potential_weight: float = 0.0,
+        shaping_gamma: float = 0.99,
     ) -> None:
         super().__init__()
+        # E33 trade-value lever: potential-based reward shaping with a board-control
+        # potential Φ(s) = my_board_power - op_board_power (power = Σ atk+def). The
+        # per-step shaping reward w·(γΦ(s') - Φ(s)) is optimal-policy-preserving
+        # (Ng et al. 1999, Φ(terminal)=0) and rewards favourable trades (ΔΦ up) —
+        # the exact quantity E33 found 29% too low. Default 0.0 = OFF (unchanged).
+        self.board_potential_weight = float(board_potential_weight)
+        self.shaping_gamma = float(shaping_gamma)
         _VALID_OBS_MODES = {"flat", "token", "token-v1", "token-fx"}
         if obs_mode not in _VALID_OBS_MODES:
             raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
@@ -117,6 +126,12 @@ class BattleEnv(gym.Env):
         if self.obs_mode == "token-v1":
             return "v1"
         return "fx" if self.obs_mode == "token-fx" else "v0"
+
+    def _board_potential(self) -> float:
+        """Φ(s) = agent_board_power − opponent_board_power, power = Σ(atk+def)."""
+        me = self.gs.players[self.agent_seat].board
+        op = self.gs.players[1 - self.agent_seat].board
+        return float(sum(c.attack + c.defense for c in me) - sum(c.attack + c.defense for c in op))
 
     def _encode_obs(self):
         """Build the current observation according to self.obs_mode."""
@@ -202,6 +217,8 @@ class BattleEnv(gym.Env):
         -------
         obs, reward, terminated, truncated, info
         """
+        phi_before = self._board_potential() if self.board_potential_weight else 0.0
+
         legal = battlemod.battle_legal(self.gs)
         view = make_battle_view(self.gs)
         battlemod.apply_battle(self.gs, index_to_action(view, legal, int(idx)))
@@ -213,6 +230,12 @@ class BattleEnv(gym.Env):
         reward = 0.0
         if terminated:
             reward = 1.0 if self.gs.winner == self.agent_seat else -1.0
+
+        if self.board_potential_weight:
+            # Φ(terminal)=0 by convention; the telescoping sum is constant per
+            # episode, so this is a pure per-step credit signal, not a return bonus.
+            phi_after = 0.0 if terminated else self._board_potential()
+            reward += self.board_potential_weight * (self.shaping_gamma * phi_after - phi_before)
 
         obs = self._zero_obs() if terminated else self._encode_obs()
 
