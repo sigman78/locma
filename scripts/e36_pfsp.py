@@ -94,6 +94,15 @@ def main() -> None:
     ap.add_argument("--n-envs", type=int, default=6)
     ap.add_argument("--eval-games", type=int, default=100, help="pairs vs each pool member")
     ap.add_argument("--seed", type=int, default=14_000_000)
+    ap.add_argument(
+        "--start-gen", type=int, default=0, help="first generation index (naming + seed)"
+    )
+    ap.add_argument("--warm", default=E29, help="warm-start ckpt for the first gen of this run")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue an existing chain: load runs/e36/pool.json instead of reseeding SEED_POOL",
+    )
     args = ap.parse_args()
 
     lines: list[str] = []
@@ -102,12 +111,17 @@ def main() -> None:
         print(m, flush=True)
         lines.append(m)
 
-    pool = [dict(e) for e in SEED_POOL]
-    write_pool(pool)
-    warm = f"{E29}"  # gen 0 warm-starts from the frozen champion
+    if args.resume and Path(POOL).exists():
+        pool = json.loads(Path(POOL).read_text())
+        log(f"resuming: loaded pool with {len(pool)} members from {POOL}")
+    else:
+        pool = [dict(e) for e in SEED_POOL]
+        write_pool(pool)
+    warm = args.warm  # first gen of this run warm-starts from here
+    log(f"start-gen {args.start_gen}, warm from {warm}")
     history = []
 
-    for g in range(args.generations):
+    for g in range(args.start_gen, args.start_gen + args.generations):
         log(f"\n=== generation {g} ===")
         out = f"runs/e36_gen{g}.zip"
         train_gen(warm, args.steps, out, args.seed + g, args.n_envs, log)
@@ -132,10 +146,13 @@ def main() -> None:
         history.append({"gen": g, "out": out, "wr_vs_pool": wr})
         warm = out  # next generation continues from this one
 
-    Path("runs/e36/history.json").write_text(
-        json.dumps({"history": history, "log": lines}, indent=2)
+    hist_path = (
+        "runs/e36/history.json"
+        if args.start_gen == 0
+        else f"runs/e36/history_gen{args.start_gen}+.json"
     )
-    log("\nwrote runs/e36/history.json")
+    Path(hist_path).write_text(json.dumps({"history": history, "log": lines}, indent=2))
+    log(f"\nwrote {hist_path}")
     log(f"final net: {history[-1]['out'] if history else 'none'}")
 
 
