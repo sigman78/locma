@@ -17,7 +17,12 @@ from locma.harness.interactive import IllegalMove, InteractiveGame, WrongPhase
 from locma.harness.replay_store import get_replay, list_headers, write_replay
 from locma.harness.replay_stream import build_replay, build_replay_from_log_row
 from locma.harness.trace import read_game_log
-from locma.policies.registry import make_policy, policy_names
+from locma.policies.registry import (
+    draft_policy_choices,
+    make_draft_policy,
+    make_policy,
+    policy_names,
+)
 from locma.server.depot_api import depot_router
 from locma.server.experiments import experiments_router
 from locma.server.jobs import JobRunner
@@ -42,6 +47,10 @@ class NewGameRequest(BaseModel):
 
 class DraftRequest(BaseModel):
     pick: int
+
+
+class CompleteDraftRequest(BaseModel):
+    policy: str = "balanced"
 
 
 class ActionRequest(BaseModel):
@@ -126,6 +135,28 @@ def create_app(
             "depot_models": models,
             "suggestions": suggestions,
         }
+
+    @app.get("/api/draft-policies")
+    def get_draft_policies() -> list[dict]:
+        """Named draft policies for the Play draft's "complete for me" dropdown:
+        the heuristic drafts plus any locally present pinned depot draft nets
+        (artifacts whose name contains 'draft', e.g. ldraft/edraft)."""
+        choices = draft_policy_choices()
+        for name in dep.artifact_names():
+            if "draft" not in name:
+                continue
+            rec = dep.load_record(name)
+            if rec["kind"] != "model" or not rec["pin"]:
+                continue
+            vrec = next(v for v in rec["versions"] if v["version"] == rec["pin"])
+            if dep.version_status(rec, vrec) != "local":
+                continue
+            for f in sorted(vrec["files"]):
+                stem = os.path.splitext(f)[0]
+                choices.append(
+                    {"name": f"depot:{name}/{f}", "label": f"{stem} — learned (depot:{name})"}
+                )
+        return choices
 
     @app.post("/api/replays")
     def run_replay(req: RunRequest) -> dict:
@@ -226,6 +257,26 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(e)) from e
         except IllegalMove as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        _persist_if_finished(game)
+        return resp
+
+    @app.post("/api/games/{gid}/draft/complete")
+    def game_draft_complete(gid: str, req: CompleteDraftRequest) -> dict:
+        game = sessions.get(gid)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+        try:
+            dp = make_draft_policy(req.policy)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except ImportError as e:
+            raise HTTPException(
+                status_code=400, detail=f"'{req.policy}' requires the [ml] extra: {e}"
+            ) from e
+        try:
+            resp = game.complete_draft(dp)
+        except WrongPhase as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
         _persist_if_finished(game)
         return resp
 

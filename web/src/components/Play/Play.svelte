@@ -1,7 +1,15 @@
 <!-- web/src/components/Play/Play.svelte -->
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { createGame, getGame, submitAction, submitDraft } from '../../lib/api'
+  import {
+    completeDraft,
+    createGame,
+    getDraftPolicies,
+    getGame,
+    submitAction,
+    submitDraft,
+    type DraftPolicyChoice,
+  } from '../../lib/api'
   import { loadCards } from '../../lib/cards'
   import type { ActionDict, EventDict } from '../../lib/replay'
   import type {
@@ -50,6 +58,15 @@
   loadCards()
     .then(() => (ready = true))
     .catch((e) => (error = String(e)))
+
+  // "complete for me" dropdown options; a static fallback keeps the button
+  // usable even if the list request fails (the server defaults to balanced too)
+  let draftPolicies: DraftPolicyChoice[] = [
+    { name: 'balanced', label: 'Balanced — curve-aware (best heuristic)' },
+  ]
+  getDraftPolicies()
+    .then((l) => { if (l.length) draftPolicies = l })
+    .catch(() => {})
 
   onDestroy(() => {
     seq?.cancel()
@@ -187,16 +204,14 @@
     }
   }
 
-  // Auto-draft every remaining round with random picks; stage at the end.
-  async function autoDraft() {
+  // Auto-complete the remaining rounds server-side with the chosen draft
+  // policy; the result is STAGED for deck review — never straight into battle.
+  async function autoDraft(policy: string) {
     if (!gameId || playing || inFlight) return
     inFlight = true
     armThinking()
     try {
-      let r = await submitDraft(gameId, Math.floor(Math.random() * 3))
-      while (r.pending && r.pending.phase === 'draft') {
-        r = await submitDraft(gameId, Math.floor(Math.random() * 3))
-      }
+      const r = await completeDraft(gameId, policy)
       staged = { cardIds: r.drafted ?? [], response: r }
     } catch (e) {
       await recover(e)
@@ -294,8 +309,9 @@
       pending={snap.pending as DraftPending}
       done={!!staged}
       doneCardIds={staged?.cardIds ?? []}
+      {draftPolicies}
       on:pick={(e) => pick(e.detail)}
-      on:auto={autoDraft}
+      on:auto={(e) => autoDraft(e.detail)}
       on:play={play} />
   {:else if battlePending}
     <!-- board + deck tracker as side-by-side flex items. Only the (wide) board

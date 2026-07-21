@@ -153,6 +153,11 @@ class MaskablePPODraftPolicy:
         hook), keeping the deck-so-far observation accurate."""
         self._picks.append(view.offered[idx])
 
+    def note_cards(self, cards) -> None:
+        """Seed the tracker with picks made before this policy took over (the web
+        Play auto-complete). encode_draft accepts core Card and CardView alike."""
+        self._picks.extend(cards)
+
     def draft_action(self, view, legal):
         self._ensure()
         obs = encode_draft(view, self._picks)
