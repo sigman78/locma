@@ -71,6 +71,43 @@ def _atype(action) -> str:
     return "P"
 
 
+def _play_iid(action):
+    """Instance id of a hand card a Summon/Use plays (None for Attack/Pass)."""
+    from locma.core.actions import Summon, Use  # noqa: PLC0415
+
+    if isinstance(action, Summon):
+        return action.card_instance_id
+    if isinstance(action, Use):
+        return action.item_instance_id
+    return None
+
+
+def _power(board) -> int:
+    """Board 'power' = sum of attack+defense over a side's creatures (current stats)."""
+    return sum(c.attack + c.defense for c in board)
+
+
+def _find(board, iid):
+    for c in board:
+        if c.instance_id == iid:
+            return c
+    return None
+
+
+def _overkill(view, action):
+    """For a TRADE (Attack into a creature): attack wasted beyond the target's
+    defense (>=0). None if the action is not a creature-trade."""
+    from locma.core.actions import Attack  # noqa: PLC0415
+
+    if not isinstance(action, Attack) or action.target_id == -1:
+        return None
+    a = _find(view.my_board, action.attacker_id)
+    t = _find(view.op_board, action.target_id)
+    if a is None or t is None:
+        return None
+    return max(0, a.attack - t.defense)
+
+
 def _seq_stats(actions) -> dict:
     """Count action types + face/trade split over an action list (Pass dropped)."""
     c = Counter(_atype(a) for a in actions if _atype(a) != "P")
@@ -111,21 +148,41 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
     st: dict = {"turn": -1, "pending": None, "subj_actions": []}
 
     def plan_leaf(gs, plan):
-        """Simulate the plan; return (end_view_or_None, wins, mana_unspent)."""
+        """Simulate the plan; return (end_view, wins, mana_unspent, trade_records).
+
+        Each trade record = board-power exchange dphi = Φ(after) - Φ(before) and
+        overkill for one creature-trade in the plan (Φ = my_power - op_power)."""
         sim = _clone_battle(gs)
+        trades = []
         for a in plan:
             if isinstance(a, Pass):
                 break
+            v = make_battle_view(sim)
+            phi0 = _power(v.my_board) - _power(v.op_board)
+            ok = _overkill(v, a)
             battlemod.apply_battle(sim, a)
             if sim.phase == Phase.ENDED:
-                return None, sim.winner == seat, 0
-        return make_battle_view(sim), False, sim.players[seat].mana
+                return None, sim.winner == seat, 0, trades
+            if ok is not None:  # it was a creature-trade
+                v2 = make_battle_view(sim)
+                phi1 = _power(v2.my_board) - _power(v2.op_board)
+                trades.append({"dphi": phi1 - phi0, "overkill": ok})
+        return make_battle_view(sim), False, sim.players[seat].mana, trades
 
     def close(end_view) -> None:
         p = st["pending"]
         if p is None:
             return
         p["subj"] = _seq_stats(st["subj_actions"])
+        # per-trade board-power exchange: dphi_i = phis[i+1] - phis[i] for each
+        # subject action i that was a creature-trade (phis[i] = Φ before action i,
+        # phis[i+1] = Φ after; the Pass hook supplies the final Φ).
+        phis, meta = st.get("phis", []), st.get("subj_trade_meta", [])
+        p["subj_trades"] = [
+            {"dphi": phis[i + 1] - phis[i], "overkill": ok}
+            for i, ok in enumerate(meta)
+            if ok is not None and i + 1 < len(phis)
+        ]
         if end_view is not None:
             me = end_view  # BattleView: my_hand / my_board with .cost, player mana on gs
             p["mana_unspent"] = st.get("end_mana", 0)
@@ -147,10 +204,17 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
                 if len(legal) >= 2
                 else legal
             )
-            end_view, plan_wins, plan_mana = plan_leaf(gs, plan)
+            end_view, plan_wins, plan_mana, plan_trades = plan_leaf(gs, plan)
             line, exhausted = find_lethal(gs)
             ps = _seq_stats(plan)
             st["plan_end_view"] = end_view
+            st["phis"] = []  # Φ at each subject hook this turn (incl the Pass hook)
+            st["subj_trade_meta"] = []  # overkill per non-pass action (None if not a trade)
+            # instance_id -> card_id for the hand at turn start; both the subject's
+            # actual plays and the plan's plays reference these instances.
+            hand_map = {c.instance_id: c.card.id for c in gs.players[seat].hand}
+            st["hand_map"] = hand_map
+            plan_cards = [hand_map.get(_play_iid(a)) for a in plan if _play_iid(a) is not None]
             st["pending"] = {
                 "opp": opp_spec,
                 "seed": seed,
@@ -164,14 +228,25 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
                 "lethal_unknown": not exhausted,
                 "subj_seq": [],
                 "plan_seq": [_atype(a) for a in plan if _atype(a) != "P"],
+                "avail_cards": sorted(hand_map.values()),
+                "plan_cards": [c for c in plan_cards if c is not None],
+                "subj_cards": [],
+                "plan_trades": plan_trades,
             }
-        me = gs.players[seat]
-        st["end_mana"] = me.mana  # last-seen mana this turn = unspent at Pass
+        v = make_battle_view(gs)
+        st["phis"].append(_power(v.my_board) - _power(v.op_board))
+        st["end_mana"] = gs.players[seat].mana  # last-seen mana this turn = unspent at Pass
         if st["pending"] is not None and not isinstance(action, Pass):
             st["subj_actions"].append(action)
             st["pending"]["subj_seq"].append(_atype(action))
+            st["subj_trade_meta"].append(_overkill(v, action))
+            iid = _play_iid(action)
+            if iid is not None:
+                cid = st["hand_map"].get(iid)
+                if cid is not None:
+                    st["pending"]["subj_cards"].append(cid)
         if isinstance(action, Pass):
-            close(make_battle_view(gs))
+            close(v)
 
     if seat == 0:
         res = run_game(subject, opp, seed, on_pre_step=hook)
@@ -255,7 +330,71 @@ def aggregate(rows: list[dict]) -> dict:
             "same_end_rate": round(same_end / n, 3),
             "first_div_hist": dict(Counter(str(d) for d in divs).most_common()),
         },
+        "trade_efficiency": {
+            "subject": _trade_stats([t for r in dec for t in r.get("subj_trades", [])]),
+            "plan": _trade_stats([t for r in dec for t in r.get("plan_trades", [])]),
+        },
+        "per_card": _card_table(dec),
     }
+
+
+def _trade_stats(trs: list[dict]) -> dict | None:
+    """Efficiency of a set of creature-trades: mean board-power exchange dphi
+    (Φ_after - Φ_before; >0 = favorable), mean overkill (wasted attack), and the
+    favorable/even/unfavorable split. dphi is per-trade so it isolates trade
+    QUALITY from trade FREQUENCY."""
+    if not trs:
+        return None
+    d = [t["dphi"] for t in trs]
+    ok = [t["overkill"] for t in trs]
+    return {
+        "n_trades": len(trs),
+        "mean_dphi": round(statistics.fmean(d), 3),
+        "mean_overkill": round(statistics.fmean(ok), 3),
+        "favorable": round(sum(x > 0 for x in d) / len(d), 3),
+        "even": round(sum(x == 0 for x in d) / len(d), 3),
+        "unfavorable": round(sum(x < 0 for x in d) / len(d), 3),
+    }
+
+
+def _card_table(dec: list[dict]) -> list[dict]:
+    """Per card_id: times available in hand at turn start vs times the subject
+    played it vs times the plan played it, over matched states. Sorted by the
+    plan-minus-subject play-rate gap (most UNDER-played by the reactive net)."""
+    from locma.data.cards_db import load_cards  # noqa: PLC0415
+
+    meta = {c.id: c for c in load_cards()}
+    avail, subj, plan = Counter(), Counter(), Counter()
+    for r in dec:
+        avail.update(r.get("avail_cards", []))
+        subj.update(r.get("subj_cards", []))
+        plan.update(r.get("plan_cards", []))
+
+    table = []
+    for cid, a in avail.items():
+        if a < 5:  # ignore cards barely seen
+            continue
+        c = meta.get(cid)
+        sr, pr = subj[cid] / a, plan[cid] / a
+        table.append(
+            {
+                "card_id": cid,
+                "name": getattr(c, "name", str(cid)),
+                "type": int(getattr(c, "type", -1)),
+                "cost": getattr(c, "cost", None),
+                "is_item": bool(
+                    getattr(c, "player_hp", 0)
+                    or getattr(c, "enemy_hp", 0)
+                    or getattr(c, "card_draw", 0)
+                ),
+                "avail": a,
+                "subj_rate": round(sr, 3),
+                "plan_rate": round(pr, 3),
+                "gap": round(pr - sr, 3),
+            }
+        )
+    table.sort(key=lambda d: d["gap"], reverse=True)
+    return table
 
 
 def main() -> None:
@@ -303,7 +442,39 @@ def main() -> None:
     summary = {"subject": args.subject, "games": len(specs), **aggregate(all_turns)}
     Path(args.out).write_text(json.dumps(summary, indent=2))
     print(f"\nwrote {args.out}  ({len(all_turns)} turns)")
-    print(json.dumps(summary, indent=2))
+
+    # headline scalars
+    top = {
+        k: summary[k]
+        for k in (
+            "card_usage_per_turn",
+            "item_play_rate",
+            "attack_face_share",
+            "mana_unspent_per_turn",
+            "missed_lethal",
+            "trade_efficiency",
+            "ordering",
+        )
+    }
+    print(json.dumps(top, indent=2))
+
+    # card-id breakdown: most UNDER-played by the reactive net (plan plays it more)
+    tbl = summary["per_card"]
+    print("\n=== most UNDER-played by subject (plan_rate - subj_rate, avail>=5) ===")
+    print(f"{'card':22s}{'kind':6s}{'cost':>5}{'avail':>7}{'subj':>7}{'plan':>7}{'gap':>7}")
+    for row in tbl[:15]:
+        kind = "item" if row["is_item"] else "minion"
+        print(
+            f"{row['name'][:21]:22s}{kind:6s}{str(row['cost']):>5}{row['avail']:>7}"
+            f"{row['subj_rate']:>7}{row['plan_rate']:>7}{row['gap']:>+7}"
+        )
+    print("\n=== most OVER-played by subject (subj plays it more than plan) ===")
+    for row in sorted(tbl, key=lambda d: d["gap"])[:8]:
+        kind = "item" if row["is_item"] else "minion"
+        print(
+            f"{row['name'][:21]:22s}{kind:6s}{str(row['cost']):>5}{row['avail']:>7}"
+            f"{row['subj_rate']:>7}{row['plan_rate']:>7}{row['gap']:>+7}"
+        )
 
 
 if __name__ == "__main__":
