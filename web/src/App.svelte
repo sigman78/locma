@@ -21,10 +21,15 @@
   let ready = false
   let error: string | null = null
   let tab: TabId = 'experiments'
+  // deep link: '#/replays/<replay_id>' opens that replay directly (e.g. the
+  // Play end-overlay's "View replay"); a bare '#/replays' shows the library
+  let replayId: string | null = null
 
-  function fromHash(): TabId {
+  function fromHash() {
     const h = location.hash.replace(/^#\/?/, '')
-    return (TABS.some((t) => t.id === h) ? h : 'experiments') as TabId
+    const [head, ...rest] = h.split('/')
+    tab = (TABS.some((t) => t.id === head) ? head : 'experiments') as TabId
+    replayId = tab === 'replays' && rest.length ? decodeURIComponent(rest.join('/')) : null
   }
   function select(id: TabId) {
     location.hash = `#/${id}`
@@ -42,10 +47,9 @@
   }
 
   onMount(() => {
-    tab = fromHash()
-    const onHash = () => (tab = fromHash())
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
+    fromHash()
+    window.addEventListener('hashchange', fromHash)
+    return () => window.removeEventListener('hashchange', fromHash)
   })
 
   loadCards()
@@ -82,7 +86,9 @@
       <Experiments active={tab === 'experiments'} />
     </section>
     <section class:hidden={tab !== 'depot'}><Depot active={tab === 'depot'} /></section>
-    <section class:hidden={tab !== 'replays'}><Replays /></section>
+    <section class:hidden={tab !== 'replays'}>
+      <Replays active={tab === 'replays'} openId={replayId} />
+    </section>
     <section class:hidden={tab !== 'play'}><Play active={tab === 'play'} /></section>
   {/if}
 

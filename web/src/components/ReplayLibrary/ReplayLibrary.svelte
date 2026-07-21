@@ -6,6 +6,9 @@
   import PolicySelect from '../shared/PolicySelect.svelte'
 
   const dispatch = createEventDispatcher<{ open: string }>()
+  // the library stays mounted while its tab is hidden; refresh the index on
+  // every activation so replays written meanwhile (a finished Play game) show up
+  export let active = true
   let rows: ReplayHeader[] = []
   let logs: { path: string; rows: number }[] = []
   let pa = 'greedy', pb = 'random', seed = 0
@@ -18,8 +21,8 @@
   }
   onMount(async () => {
     logs = await listGameLogs()
-    await refresh()
   })
+  $: if (active) refresh()
 
   async function run() {
     busy = true

@@ -304,15 +304,26 @@
     <h1>LOCM — Play vs AI</h1>
     <NewGame on:start={(e) => start(e.detail)} />
   {:else if snap.pending && snap.pending.phase === 'draft'}
-    <DraftScreen
-      {active}
-      pending={snap.pending as DraftPending}
-      done={!!staged}
-      doneCardIds={staged?.cardIds ?? []}
-      {draftPolicies}
-      on:pick={(e) => pick(e.detail)}
-      on:auto={(e) => autoDraft(e.detail)}
-      on:play={play} />
+    <div class="draft-stage">
+      <DraftScreen
+        {active}
+        pending={snap.pending as DraftPending}
+        done={!!staged}
+        doneCardIds={staged?.cardIds ?? []}
+        {draftPolicies}
+        busy={inFlight}
+        on:pick={(e) => pick(e.detail)}
+        on:auto={(e) => autoDraft(e.detail)}
+        on:play={play} />
+      <!-- same slow-reply hint as the battle board: a learned draft net
+           (ldraft) takes seconds to load + pick, so the screen must not look hung -->
+      {#if thinking}
+        <div class="thinking" role="status" aria-live="polite">
+          <span class="spinner"></span>
+          <span>Drafting<span class="dots"><i>.</i><i>.</i><i>.</i></span></span>
+        </div>
+      {/if}
+    </div>
   {:else if battlePending}
     <!-- board + deck tracker as side-by-side flex items. Only the (wide) board
          pans horizontally (its own wrapper); the tracker is a sibling, so its
@@ -377,6 +388,8 @@
      stays overflow:visible so the page's own vertical scroll isn't doubled by an
      inner one and the draft tooltip isn't clipped. */
   .stage-row { display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
+  /* anchor for the draft-phase thinking pill (same absolute placement as the board's) */
+  .draft-stage { position: relative; }
   .board-scroll { flex: 0 1 auto; min-width: 0; overflow-x: auto; }
   .board-stage { position: relative; width: max-content; margin: 0 auto; }
   /* the tracker keeps its width and lives in page flow (never shrinks/scrolls) */

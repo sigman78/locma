@@ -18,6 +18,9 @@
   export let active = true
   // named draft policies for the "complete for me" dropdown (fetched by Play)
   export let draftPolicies: DraftPolicyChoice[] = []
+  // a draft request is in flight (a learned auto-complete can take seconds):
+  // lock the controls so the running pick can't be raced
+  export let busy = false
   let policy = 'balanced'
   const dispatch = createEventDispatcher<{ pick: number; auto: string; play: void }>()
 
@@ -38,7 +41,8 @@
   // Keyboard (draft only): 1/2/3 pick a card, A auto-picks the rest. Starting
   // the battle stays a deliberate click — no Enter-to-play.
   function onKey(e: KeyboardEvent) {
-    if (!active || done || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target)) return
+    if (!active || done || busy || e.altKey || e.ctrlKey || e.metaKey || isTypingTarget(e.target))
+      return
     const idx = digitIndex(e.key, cards.length)
     if (idx !== null) { e.preventDefault(); dispatch('pick', idx) }
     else if (e.key.toLowerCase() === 'a') { e.preventDefault(); dispatch('auto', policy) }
@@ -79,12 +83,12 @@
     <div class="foot">
       <span class="count">Drafted: {pending.my_picks} / {pending.total}</span>
       <label class="auto-group" title="Draft policy used to complete the deck">
-        <select class="policy" bind:value={policy}>
+        <select class="policy" disabled={busy} bind:value={policy}>
           {#each draftPolicies as p (p.name)}
             <option value={p.name}>{p.label}</option>
           {/each}
         </select>
-        <button class="auto" title="Auto-pick the rest (press A)"
+        <button class="auto" title="Auto-pick the rest (press A)" disabled={busy}
           on:click={() => dispatch('auto', policy)}>
           Complete for me <span class="keycap">A</span>
         </button>
@@ -113,6 +117,8 @@
   .auto { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
     padding: 6px 14px; cursor: pointer; font-weight: 600; }
   .auto:hover { background: #2a2a44; }
+  .auto:disabled, .policy:disabled { opacity: 0.55; cursor: default; }
+  .auto:disabled:hover { background: #23232b; }
   .auto-group { display: flex; align-items: center; gap: 8px; }
   .policy { background: #23232b; color: #ddd; border: 1px solid #4a4f6a; border-radius: 4px;
     padding: 6px 8px; font: inherit; font-size: 0.9rem; max-width: 280px; }
