@@ -598,13 +598,13 @@
       0 3px 8px rgba(0, 0, 0, 0.55),
       0 20px 30px 4px rgba(0, 0, 0, 0.7),
       0 0 0 1px rgba(255, 255, 255, 0.09); }
-  /* a playable card keeps its green glow on top of the elevation */
+  /* a playable card keeps its cyan glow on top of the elevation */
   .hand.mine .slot.playable:hover {
     box-shadow:
       0 3px 8px rgba(0, 0, 0, 0.55),
       0 20px 30px 4px rgba(0, 0, 0, 0.7),
       0 0 0 1px rgba(255, 255, 255, 0.09),
-      0 0 13px rgba(79, 217, 122, 0.6); }
+      0 0 13px rgba(64, 224, 224, 0.6); }
   /* carried / tethered hand card: tight cursor tracking while held (the inline
      transform wins over :hover), springy overshoot on the way back */
   .slot.tethered { transition: transform 0.05s linear; z-index: 40;
@@ -624,7 +624,7 @@
   /* a minion with legal attack targets: soft amber ready-glow */
   .slot.ready { outline-color: rgba(255, 210, 61, 0.55);
     animation: ready-breathe 2.6s ease-in-out infinite; }
-  .slot.playable { outline-color: #4fd97a; box-shadow: 0 0 9px rgba(79, 217, 122, 0.45);
+  .slot.playable { outline-color: #40e0e0; box-shadow: 0 0 9px rgba(64, 224, 224, 0.45);
     animation: playable-breathe 2.4s ease-in-out infinite; }
   .slot.armed { outline-color: #ffd23d; box-shadow: 0 0 9px rgba(255, 210, 61, 0.5);
     animation: none; }
@@ -633,7 +633,7 @@
   .slot.snapped { outline-color: #ff5d5d; box-shadow: 0 0 12px rgba(255, 93, 93, 0.85);
     animation: none; }
   @keyframes playable-breathe {
-    50% { box-shadow: 0 0 15px rgba(79, 217, 122, 0.75); }
+    50% { box-shadow: 0 0 15px rgba(64, 224, 224, 0.75); }
   }
   @keyframes ready-breathe {
     50% { outline-color: rgba(255, 210, 61, 0.25); }
