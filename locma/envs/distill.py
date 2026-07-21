@@ -13,7 +13,14 @@ import random
 
 import numpy as np
 
-from locma.envs.encode import ACTION_SIZE, MAX_TOKENS, N_TACTICAL, OBS_SIZE, TOKEN_FEATS
+from locma.envs.encode import (
+    ACTION_SIZE,
+    MAX_TOKENS,
+    N_TACTICAL,
+    OBS_SIZE,
+    TOKEN_FEATS,
+    TOKEN_FEATS_FX,
+)
 from locma.envs.practicum import _manifest_path
 
 _ARRAY_KEYS = ("obs", "action", "mask", "winner", "seat", "opponent_id", "game_id")
@@ -43,17 +50,18 @@ def load_practicum(path: str) -> tuple[dict, dict]:
 
     obs_mode = manifest.get("obs_mode", "flat")
 
-    if obs_mode == "token":
+    if obs_mode in {"token", "token-fx"}:
+        expected_tf = TOKEN_FEATS_FX if obs_mode == "token-fx" else TOKEN_FEATS
         mt = manifest.get("max_tokens")
         tf = manifest.get("token_feats")
         nt = manifest.get("n_tactical")
         az = manifest.get("action_size")
-        if mt != MAX_TOKENS or tf != TOKEN_FEATS or nt != N_TACTICAL or az != ACTION_SIZE:
+        if mt != MAX_TOKENS or tf != expected_tf or nt != N_TACTICAL or az != ACTION_SIZE:
             raise ValueError(
                 "practicum layout mismatch: manifest "
                 f"max_tokens/token_feats/n_tactical/action_size="
                 f"{mt}/{tf}/{nt}/{az} "
-                f"!= encode {MAX_TOKENS}/{TOKEN_FEATS}/{N_TACTICAL}/{ACTION_SIZE}; "
+                f"!= encode {MAX_TOKENS}/{expected_tf}/{N_TACTICAL}/{ACTION_SIZE}; "
                 "regenerate the practicum"
             )
         with np.load(path) as data:

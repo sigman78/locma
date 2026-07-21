@@ -42,7 +42,7 @@ def cmd_record(args) -> None:
         games=args.games,
         out=args.out,
         seed=args.seed,
-        obs_mode="token",
+        obs_mode=args.obs_mode,
         labeler=lambda gs: concept_labels(gs, node_cap=args.node_cap),
     )
     print(f"recorded {manifest['n_examples']} labeled examples -> {args.out}")
@@ -175,6 +175,7 @@ def main() -> None:
 
     rec = sub.add_parser("record", help="record a concept-labeled token practicum")
     rec.add_argument("--teacher", default="mcts:100")
+    rec.add_argument("--obs-mode", default="token", help="token | token-fx (match the net)")
     rec.add_argument("--games", type=int, default=150)
     rec.add_argument("--seed", type=int, default=1_000_000)
     rec.add_argument("--node-cap", type=int, default=3000)

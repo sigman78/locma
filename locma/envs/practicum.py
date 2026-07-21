@@ -22,6 +22,7 @@ from locma.envs.encode import (
     N_TACTICAL,
     OBS_SIZE,
     TOKEN_FEATS,
+    TOKEN_FEATS_FX,
     action_mask,
     encode_battle,
     encode_battle_tokens,
@@ -54,6 +55,8 @@ class _Collector:
     def __init__(self, teacher_seat: int, obs_mode: str = "flat", labeler=None) -> None:
         self.teacher_seat = teacher_seat
         self.obs_mode = obs_mode
+        # token-fx records the 20-wide "fx" variant; plain token records v0 (17).
+        self.token_variant = "fx" if obs_mode == "token-fx" else "v0"
         self.labeler = labeler  # optional: gs -> dict of per-state concept labels
         self.obs: list = []
         self.action: list = []
@@ -74,8 +77,8 @@ class _Collector:
         if idx is None or idx >= ACTION_SIZE:
             self.dropped += 1
             return
-        if self.obs_mode == "token":
-            self.obs.append(encode_battle_tokens(view))
+        if self.obs_mode in {"token", "token-fx"}:
+            self.obs.append(encode_battle_tokens(view, variant=self.token_variant))
         else:
             self.obs.append(encode_battle(view))
         self.action.append(idx)
@@ -108,8 +111,11 @@ def record_practicum(
     decision and must return a flat dict of floats; each key is written to the
     npz as ``concept_<key>`` (float32, one value per example).
     """
-    if obs_mode not in {"flat", "token"}:
-        raise ValueError(f"obs_mode must be 'flat' or 'token', got {obs_mode!r}")
+    if obs_mode not in {"flat", "token", "token-fx"}:
+        raise ValueError(f"obs_mode must be 'flat', 'token', or 'token-fx', got {obs_mode!r}")
+    # token-fx shares the token save/manifest branch; only the token width differs.
+    is_token = obs_mode in {"token", "token-fx"}
+    tok_feats = TOKEN_FEATS_FX if obs_mode == "token-fx" else TOKEN_FEATS
 
     opponents = list(opponents)
     obs_all: list = []
@@ -165,12 +171,12 @@ def record_practicum(
             common_arrays[f"concept_{key}"] = np.asarray(
                 [d[key] for d in labels_all], dtype=np.float32
             )
-    if obs_mode == "token":
+    if is_token:
         # .reshape(...) gives correct shape even when n==0 (mirrors flat branch).
         obs_arrays = dict(
             obs_tokens=(
                 np.asarray([d["tokens"] for d in obs_all], dtype=np.float32).reshape(
-                    n, MAX_TOKENS, TOKEN_FEATS
+                    n, MAX_TOKENS, tok_feats
                 )
             ),
             obs_card_ids=(
@@ -205,9 +211,9 @@ def record_practicum(
         "failed_games": failed_games,
         "engine_version": _engine_version(),
     }
-    if obs_mode == "token":
+    if is_token:
         manifest["max_tokens"] = MAX_TOKENS
-        manifest["token_feats"] = TOKEN_FEATS
+        manifest["token_feats"] = tok_feats
         manifest["n_tactical"] = N_TACTICAL
     else:
         manifest["obs_size"] = OBS_SIZE
