@@ -509,7 +509,13 @@ def train_zoo_cmd(
         0.0,
         "--board-potential-weight",
         help="E33 trade-value lever: potential-based reward shaping w*(g*Phi'-Phi), "
-        "Phi = board-power differential (sum atk+def); 0 = off (default)",
+        "Phi = board power; 0 = off (default)",
+    ),
+    board_potential_mode: str = typer.Option(
+        "diff",
+        "--board-potential-mode",
+        help="Phi form: 'diff' (my-op board power, E34 Gate-1 negative) or "
+        "'oppcut' (-op board power, isolates enemy removal)",
     ),
 ):
     """Train one MaskablePPO agent back-to-back against the code-declared opponent
@@ -564,6 +570,7 @@ def train_zoo_cmd(
             extractor_kwargs={"feature_ln": True} if feature_ln else None,
             slim=slim,
             board_potential_weight=board_potential_weight,
+            board_potential_mode=board_potential_mode,
         )
     except ImportError as e:
         raise typer.BadParameter("training requires the [ml] extra: uv sync --extra ml") from e

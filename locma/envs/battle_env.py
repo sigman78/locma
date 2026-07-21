@@ -78,15 +78,23 @@ class BattleEnv(gym.Env):
         shared_draft: bool = False,
         board_potential_weight: float = 0.0,
         shaping_gamma: float = 0.99,
+        board_potential_mode: str = "diff",
     ) -> None:
         super().__init__()
-        # E33 trade-value lever: potential-based reward shaping with a board-control
-        # potential Φ(s) = my_board_power - op_board_power (power = Σ atk+def). The
-        # per-step shaping reward w·(γΦ(s') - Φ(s)) is optimal-policy-preserving
-        # (Ng et al. 1999, Φ(terminal)=0) and rewards favourable trades (ΔΦ up) —
-        # the exact quantity E33 found 29% too low. Default 0.0 = OFF (unchanged).
+        # E33 trade-value lever: potential-based reward shaping w·(γΦ(s') - Φ(s)),
+        # optimal-policy-preserving (Ng et al. 1999, Φ(terminal)=0). Modes for Φ:
+        #   "diff"   — my_board_power - op_board_power (power = Σ atk+def). E34
+        #              Gate 1 NEGATIVE: rewards own development as much as removal,
+        #              net board-hoarded and traded worse.
+        #   "oppcut" — -op_board_power. Isolates ENEMY removal: only killing their
+        #              minions raises Φ; own development/counterdamage don't move it.
+        # Default weight 0.0 = OFF (unchanged reward).
+        _VALID_MODES = {"diff", "oppcut"}
+        if board_potential_mode not in _VALID_MODES:
+            raise ValueError(f"board_potential_mode must be in {_VALID_MODES!r}")
         self.board_potential_weight = float(board_potential_weight)
         self.shaping_gamma = float(shaping_gamma)
+        self.board_potential_mode = board_potential_mode
         _VALID_OBS_MODES = {"flat", "token", "token-v1", "token-fx"}
         if obs_mode not in _VALID_OBS_MODES:
             raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
@@ -128,10 +136,12 @@ class BattleEnv(gym.Env):
         return "fx" if self.obs_mode == "token-fx" else "v0"
 
     def _board_potential(self) -> float:
-        """Φ(s) = agent_board_power − opponent_board_power, power = Σ(atk+def)."""
-        me = self.gs.players[self.agent_seat].board
-        op = self.gs.players[1 - self.agent_seat].board
-        return float(sum(c.attack + c.defense for c in me) - sum(c.attack + c.defense for c in op))
+        """Φ(s), power = Σ(atk+def). "diff" = my − op; "oppcut" = −op (removal only)."""
+        op = sum(c.attack + c.defense for c in self.gs.players[1 - self.agent_seat].board)
+        if self.board_potential_mode == "oppcut":
+            return float(-op)
+        me = sum(c.attack + c.defense for c in self.gs.players[self.agent_seat].board)
+        return float(me - op)
 
     def _encode_obs(self):
         """Build the current observation according to self.obs_mode."""
