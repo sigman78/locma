@@ -127,6 +127,9 @@
      own stacking context, so in an overlapped strip they never paint over the next card. */
   .card { position: relative; isolation: isolate; width: 100%; height: 100%;
     border-radius: 6px; overflow: hidden; border: 1px solid #333;
+    /* dark rim + soft halo on every side: keeps neighbouring cards visually
+       separate wherever they sit close or overlap (deck strip, hands, boards) */
+    box-shadow: 0 0 0 1.5px #000, 0 0 10px rgba(0, 0, 0, 0.65);
     background-color: #1c1c22;
     user-select: none; -webkit-user-select: none; -webkit-user-drag: none;
     background-image:
