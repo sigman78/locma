@@ -28,6 +28,7 @@ def main() -> None:
     ap.add_argument("--warm", default=E29)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--driver", choices=["subproc", "batched"], default="subproc")
+    ap.add_argument("--device", default="auto", help="SB3 learner device: auto|cpu|cuda|mps")
     args = ap.parse_args()
 
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
@@ -52,18 +53,25 @@ def main() -> None:
             obs_mode="token-fx",
             draft_override=LDRAFT,
         )
-    model = MaskablePPO.load(resolve_path(args.warm), env=env, device="auto")
+    model = MaskablePPO.load(resolve_path(args.warm), env=env, device=args.device)
+    model.verbose = 0  # silence SB3's per-iteration fps table (ambiguous vs the timed number below)
 
     # warmup: forces the SubprocVecEnv workers to lazily load every pool net,
     # so the timed segment measures steady-state rollout+update throughput.
     model.learn(total_timesteps=args.warmup, reset_num_timesteps=True)
 
+    # Measure over the ACTUAL steps SB3 ran, not the requested budget: learn()
+    # always collects whole rollouts (n_steps*n_envs) and rounds the budget UP, so
+    # dividing by args.steps mis-reports (and the skew depends on n_envs). This is
+    # true end-to-end throughput: rollout collection + PPO update (incl. KL stop).
+    n0 = model.num_timesteps
     t0 = time.perf_counter()
     model.learn(total_timesteps=args.steps, reset_num_timesteps=False)
     dt = time.perf_counter() - t0
+    actual_steps = model.num_timesteps - n0
     env.close()
 
-    fps = args.steps / dt if dt > 0 else 0.0
+    fps = actual_steps / dt if dt > 0 else 0.0
     print(
         json.dumps(
             {
@@ -71,7 +79,7 @@ def main() -> None:
                 "n_envs": args.n_envs,
                 "opp_device": opp_device,
                 "learner_device": str(model.device),
-                "timed_steps": args.steps,
+                "actual_steps": actual_steps,
                 "seconds": round(dt, 2),
                 "fps": round(fps, 1),
             }

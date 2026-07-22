@@ -52,7 +52,14 @@ def write_pool(entries: list[dict]) -> None:
 
 
 def train_gen(
-    warm_ckpt: str, steps: int, out: str, seed: int, n_envs: int, log, driver: str = "subproc"
+    warm_ckpt: str,
+    steps: int,
+    out: str,
+    seed: int,
+    n_envs: int,
+    log,
+    driver: str = "subproc",
+    device: str = "auto",
 ) -> None:
     """Warm-start from ``warm_ckpt`` and best-respond to pfsp:POOL for ``steps``.
 
@@ -81,7 +88,7 @@ def train_gen(
             draft_override=LDRAFT,
         )
     # load WITH the env (n_envs may differ from the saved model)
-    model = MaskablePPO.load(resolve_path(warm_ckpt), env=env, device="auto")
+    model = MaskablePPO.load(resolve_path(warm_ckpt), env=env, device=device)
     log(f"  training best-response ({steps} steps, warm from {warm_ckpt})")
     model.learn(total_timesteps=steps, reset_num_timesteps=True)
     model.save(out)
@@ -119,6 +126,11 @@ def main() -> None:
         help="env backend: subproc (inline opponent) or batched (single-process batched opponent)",
     )
     ap.add_argument(
+        "--device",
+        default="auto",
+        help="SB3 learner device: auto|cpu|cuda|mps (tiny slim net often faster on cpu)",
+    )
+    ap.add_argument(
         "--resume",
         action="store_true",
         help="continue an existing chain: load runs/e36/pool.json instead of reseeding SEED_POOL",
@@ -144,7 +156,16 @@ def main() -> None:
     for g in range(args.start_gen, args.start_gen + args.generations):
         log(f"\n=== generation {g} ===")
         out = f"runs/e36_gen{g}.zip"
-        train_gen(warm, args.steps, out, args.seed + g, args.n_envs, log, driver=args.driver)
+        train_gen(
+            warm,
+            args.steps,
+            out,
+            args.seed + g,
+            args.n_envs,
+            log,
+            driver=args.driver,
+            device=args.device,
+        )
         new_spec = f"ppo:{out},{LDRAFT}"
 
         # eval the new net vs every pool member -> prioritised weights (PFSP)
