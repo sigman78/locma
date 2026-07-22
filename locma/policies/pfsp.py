@@ -19,6 +19,7 @@ episode seed.
 from __future__ import annotations
 
 import json
+import os
 import random
 from pathlib import Path
 
@@ -39,6 +40,16 @@ class PFSPBattleMixture:
             raise ValueError(f"PFSP pool {pool_json!r} is empty")
         self._specs = [e["spec"] for e in entries]
         self._battles = [make_policy(s).battle for s in self._specs]
+        # Optional device pin for the frozen pool nets. Default "auto" (GPU): the
+        # E36 bench (2026-07-21) found forcing these tiny slim nets onto CPU was
+        # ~4-7% SLOWER — they're too small for GPU contention to matter, and a
+        # per-step CPU forward inside each worker just adds Python latency. The
+        # hook stays for a future larger pool. Scripted members have no .device.
+        opp_device = os.environ.get("LOCMA_PFSP_OPP_DEVICE", "auto")
+        if opp_device != "auto":
+            for b in self._battles:
+                if hasattr(b, "device"):
+                    b.device = opp_device
         w = [float(e.get("weight", 1.0)) for e in entries]
         total = sum(w) or 1.0
         self._weights = [x / total for x in w]
