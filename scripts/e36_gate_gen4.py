@@ -58,6 +58,13 @@ LADDER = {
     "gen7": f"ppo:runs/e36_gen7.zip,{LDRAFT}",
 }
 
+# M1 independent-replication chain (E36 handoff): fresh gen0-7, seed 20M, n_envs 12,
+# platform M1/CPU. Resolved from the depot artifact e36m1 so the eval runs on the
+# checkpoints published from the Mac. Same rbeam:shared candidate and seeds as the
+# x86 ladder, so the search-gap numbers are directly comparable. The e29slim control
+# above anchors both chains (platform-independent net, must reproduce ~0.807).
+LADDER.update({f"m1_gen{g}": f"ppo:depot:e36m1/e36_m1_gen{g}.zip,{LDRAFT}" for g in range(8)})
+
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
 
 
