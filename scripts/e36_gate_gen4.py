@@ -56,14 +56,12 @@ LADDER = {
     "gen5": f"ppo:runs/e36_gen5.zip,{LDRAFT}",
     "gen6": f"ppo:runs/e36_gen6.zip,{LDRAFT}",
     "gen7": f"ppo:runs/e36_gen7.zip,{LDRAFT}",
+    # M1 independent-replication chain (depot:e36m1, E36 handoff): fresh gen0-7,
+    # seed 20M, n_envs 12, platform M1/CPU. Depot refs so the ladder runs on
+    # either box; same rbeam:shared candidate and seeds as the x86 ladder above,
+    # so the search-gap numbers are directly comparable (e29slim anchors both).
+    **{f"m1_gen{g}": f"ppo:depot:e36m1/e36_m1_gen{g}.zip,{LDRAFT}" for g in range(8)},
 }
-
-# M1 independent-replication chain (E36 handoff): fresh gen0-7, seed 20M, n_envs 12,
-# platform M1/CPU. Resolved from the depot artifact e36m1 so the eval runs on the
-# checkpoints published from the Mac. Same rbeam:shared candidate and seeds as the
-# x86 ladder, so the search-gap numbers are directly comparable. The e29slim control
-# above anchors both chains (platform-independent net, must reproduce ~0.807).
-LADDER.update({f"m1_gen{g}": f"ppo:depot:e36m1/e36_m1_gen{g}.zip,{LDRAFT}" for g in range(8)})
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
 
@@ -197,6 +195,11 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--nets", default="e29slim,gen1,gen4", help="comma list of ladder labels")
     ap.add_argument("--smoke", action="store_true", help="2 pairs, 4 hard3 games, serial")
+    ap.add_argument(
+        "--no-hard3",
+        action="store_true",
+        help="skip the avg-hard3 ruler (pool-saturated ~0.95 at the top of the ladder)",
+    )
     ap.add_argument("--out", default="runs/e36/gen4_gate.json")
     args = ap.parse_args()
 
@@ -213,7 +216,7 @@ def main() -> None:
         lines.append(msg)
 
     log(f"E36 gen4 gate evals — {utc_now()}  nets={labels}")
-    hard3 = run_hard3(nets, hard3_games, workers, log)
+    hard3 = None if args.no_hard3 else run_hard3(nets, hard3_games, workers, log)
     search = run_search_gap(nets, pairs, args.block_pairs, workers, log)
 
     payload = {
@@ -229,10 +232,10 @@ def main() -> None:
     print("\n================ E36 GEN4 GATE LADDER ================")
     print(f"{'net':10s} {'avg-hard3':>10s} {'search-gap (rbeam:shared WR, lower=better)':>44s}")
     for label in labels:
-        h = hard3[label]["avg_hard3"]
+        h = f"{hard3[label]['avg_hard3']:>10.3f}" if hard3 else f"{'—':>10s}"
         s = search[label]
         print(
-            f"{label:10s} {h:>10.3f}   {s['search_wr_vs_net']:.3f} "
+            f"{label:10s} {h}   {s['search_wr_vs_net']:.3f} "
             f"CI[{s['wilson_ci'][0]:.3f},{s['wilson_ci'][1]:.3f}]  (n={s['games']})"
         )
     print(f"\nwrote {args.out}")
