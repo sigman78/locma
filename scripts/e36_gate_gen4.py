@@ -53,6 +53,9 @@ LADDER = {
     "e29slim": f"ppo:{E29_TRIO},{LDRAFT}",
     "gen1": f"ppo:runs/e36_gen1.zip,{LDRAFT}",
     "gen4": f"ppo:runs/e36_gen4.zip,{LDRAFT}",
+    "gen5": f"ppo:runs/e36_gen5.zip,{LDRAFT}",
+    "gen6": f"ppo:runs/e36_gen6.zip,{LDRAFT}",
+    "gen7": f"ppo:runs/e36_gen7.zip,{LDRAFT}",
 }
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
