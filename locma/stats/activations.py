@@ -30,11 +30,27 @@ def practicum_obs(arrays: dict, obs_mode: str):
 
     Returns a float32 (N, OBS_SIZE) array for "flat", or a dict keyed by the
     token obs-space names ("tokens", "card_ids", "token_mask", "scalars") for
-    "token" — exactly what ``collect_activations`` expects.
+    "token"/"token-fx" — exactly what ``collect_activations`` expects.
+
+    "token-fx" nets (e28c/e29slim/e36) expect 20-wide tokens: the 17-wide v0
+    row plus the 3 play-effect columns. Practicum arrays store only the 17-wide
+    base, so the fx columns are re-derived per slot from ``obs_card_ids`` via the
+    encoder's deterministic ``card_id -> (player_hp, enemy_hp, card_draw)`` table.
     """
-    if obs_mode == "token":
+    if obs_mode in ("token", "token-fx"):
+        tokens = arrays["obs_tokens"].astype(np.float32)
+        if obs_mode == "token-fx":
+            from locma.envs.encode import TOKEN_FEATS, TOKEN_FEATS_FX, _fx_table  # noqa: PLC0415
+
+            if tokens.shape[-1] == TOKEN_FEATS:  # append the 3 fx columns
+                cids = arrays["obs_card_ids"].astype(int)
+                fx = np.zeros((*cids.shape, TOKEN_FEATS_FX - TOKEN_FEATS), dtype=np.float32)
+                table = _fx_table()
+                for cid, row in table.items():
+                    fx[cids == cid] = row
+                tokens = np.concatenate([tokens, fx], axis=-1)
         return {
-            "tokens": arrays["obs_tokens"].astype(np.float32),
+            "tokens": tokens,
             "card_ids": arrays["obs_card_ids"].astype(np.float32),
             "token_mask": arrays["obs_token_mask"].astype(np.float32),
             "scalars": arrays["obs_scalars"].astype(np.float32),

@@ -1,0 +1,87 @@
+{
+  "name": "e36",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-22T23:15:42+00:00",
+      "git_commit": "c6e4378",
+      "git_dirty": true,
+      "command": "F:\\WorkDir\\locma\\.venv\\Scripts\\locma depot publish e36 runs/e36_gen0.zip runs/e36_gen1.zip runs/e36_gen2.zip runs/e36_gen3.zip runs/e36_gen4.zip runs/e36_gen5.zip runs/e36_gen6.zip runs/e36_gen7.zip runs/e36/gen5-7_gate.json runs/e36/gen4_gate.json runs/e36/m1_gate.json runs/e36/gen7_boardkeep_guard.json runs/e36/history_gen5+.json --kind model --parent e29slim@1 --note E36 PFSP self-play \u2014 reactive recipe of record (gen7). First TRAINING-side closure of the Phase-3 search wall: prioritized fictitious self-play warm-started from e29slim drives fair play-time search rbeam:shared from 0.807 WR over the pure net down to PARITY. x86 primary chain (seed 14M, n_envs 6): gen1 0.703 -> gen4 0.588 -> gen7 0.510 [.461,.559] (CI straddles 0.50). M1 independent replication (depot:e36m1, seed 20M, n_envs 12, Apple/CPU): gen0 0.750 -> gen4 0.510 -> gen7 0.520 [.471,.569] \u2014 both chains land at parity, disjoint seeds/platform/n_envs. gen7 dominates on all four rulers: search-parity, avg-hard3 0.953 (>e29slim ensemble 0.934), Elo 2008 (>e29slim 1835, beats it h2h 0.78), boardkeep exploit 0.168 (<e29slim 0.189, most robust reactive net measured). Weight-space signature: effective rank falls monotonically every layer parent->gen7 (self-play concentrated capacity, did not add it). RECIPE: ppo:depot:e36/e36_gen7.zip,depot:ldraft/ldraft_sX.zip. CAVEAT: two agreeing single-seed chains, NOT a 3-seed ensemble artifact; self-play H2H saturated by gen5-7 while held-out ruler kept moving. --meta {\"search_gap_gen7_x86\": 0.510, \"search_gap_gen7_m1\": 0.520, \"search_gap_parent\": 0.807, \"avg_hard3_gen7\": 0.9533, \"elo_gen7\": 2008, \"elo_e29slim\": 1835, \"h2h_vs_e29slim\": 0.78, \"boardkeep_exploit_gen7\": 0.1675, \"promoted_net\": \"e36_gen7.zip\", \"chain_seed_x86\": 14000000, \"confirm_chain\": \"depot:e36m1\", \"n_generations\": 8}",
+      "parents": [
+        "e29slim@1"
+      ],
+      "note": "E36 PFSP self-play \u2014 reactive recipe of record (gen7). First TRAINING-side closure of the Phase-3 search wall: prioritized fictitious self-play warm-started from e29slim drives fair play-time search rbeam:shared from 0.807 WR over the pure net down to PARITY. x86 primary chain (seed 14M, n_envs 6): gen1 0.703 -> gen4 0.588 -> gen7 0.510 [.461,.559] (CI straddles 0.50). M1 independent replication (depot:e36m1, seed 20M, n_envs 12, Apple/CPU): gen0 0.750 -> gen4 0.510 -> gen7 0.520 [.471,.569] \u2014 both chains land at parity, disjoint seeds/platform/n_envs. gen7 dominates on all four rulers: search-parity, avg-hard3 0.953 (>e29slim ensemble 0.934), Elo 2008 (>e29slim 1835, beats it h2h 0.78), boardkeep exploit 0.168 (<e29slim 0.189, most robust reactive net measured). Weight-space signature: effective rank falls monotonically every layer parent->gen7 (self-play concentrated capacity, did not add it). RECIPE: ppo:depot:e36/e36_gen7.zip,depot:ldraft/ldraft_sX.zip. CAVEAT: two agreeing single-seed chains, NOT a 3-seed ensemble artifact; self-play H2H saturated by gen5-7 while held-out ruler kept moving.",
+      "meta": {
+        "search_gap_gen7_x86": 0.51,
+        "search_gap_gen7_m1": 0.52,
+        "search_gap_parent": 0.807,
+        "avg_hard3_gen7": 0.9533,
+        "elo_gen7": 2008,
+        "elo_e29slim": 1835,
+        "h2h_vs_e29slim": 0.78,
+        "boardkeep_exploit_gen7": 0.1675,
+        "promoted_net": "e36_gen7.zip",
+        "chain_seed_x86": 14000000,
+        "confirm_chain": "depot:e36m1",
+        "n_generations": 8
+      },
+      "files": {
+        "e36_gen0.zip": {
+          "sha256": "8fcec913cd4b7faac7d6884aac09f33cc48ba3097ddd30a9d3050716af824892",
+          "size": 1556709
+        },
+        "e36_gen1.zip": {
+          "sha256": "e13f080c98fa3e1082338fe9c78f791d0fefe47396e559db1e9aee9fab297d17",
+          "size": 1556710
+        },
+        "e36_gen2.zip": {
+          "sha256": "9df1bdf02c214c79c0b3404d928bfe0b28d4b80b5cd165ab879b539d7e1ab016",
+          "size": 1556710
+        },
+        "e36_gen3.zip": {
+          "sha256": "7ec38712c88f4284ca05cffb34d0388b9d486b6f303e741bcd0a8781c9c7a1e8",
+          "size": 1556710
+        },
+        "e36_gen4.zip": {
+          "sha256": "6e7495ded9f21ff217e6dd6025b3a3485af70a4a69203f3d6357248ffb14a35d",
+          "size": 1556494
+        },
+        "e36_gen5.zip": {
+          "sha256": "6fbce5dd71fc5dcc1f44eafaee9ebaef659a8133802369d589f16d2f4b83d249",
+          "size": 1556710
+        },
+        "e36_gen6.zip": {
+          "sha256": "e09b7a3842b80d91a69a731a3a27f16a05cf320a9343f5676b9be33fa1729562",
+          "size": 1556710
+        },
+        "e36_gen7.zip": {
+          "sha256": "2648cd859a2c2823b06c52427b65d5b014074252ecad56a4c0ca3f3a14c19e92",
+          "size": 1556710
+        },
+        "gen5-7_gate.json": {
+          "sha256": "733efa349685c62da946fe95d69e536c5cbab3b5373250563ccfd9ddba0e4089",
+          "size": 4979
+        },
+        "gen4_gate.json": {
+          "sha256": "97ada6a6b2a0bccd6ec841da7c54cd9817dd350f584d605a7ff54c42b10d452e",
+          "size": 3128
+        },
+        "m1_gate.json": {
+          "sha256": "9931d20daf0a53a6d435faa28d5d16a956047c97c09c4f60c8000dd6020e4b27",
+          "size": 7817
+        },
+        "gen7_boardkeep_guard.json": {
+          "sha256": "d4ac77b34ba7b416a7b446245092ae5d9effecfe036b71292bcf28afe003563a",
+          "size": 241
+        },
+        "history_gen5+.json": {
+          "sha256": "cbd9cc2262de60458c7cda23ce29bbdff6ff104d50ac5ca087e25bf5102942b8",
+          "size": 3354
+        }
+      },
+      "published": "gh:depot/e36-v1"
+    }
+  ]
+}

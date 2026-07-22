@@ -40,6 +40,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default="depot:b0k/b0k_s0.zip", help="token model.zip or depot: ref")
     ap.add_argument("--data", default="runs/probe-mcts-token.npz", help="token practicum .npz")
+    ap.add_argument(
+        "--obs-mode",
+        default="token",
+        choices=("token", "token-fx"),
+        help="token (17-wide) or token-fx (20-wide; fx cols re-derived from card_ids)",
+    )
     ap.add_argument("--out", default="runs/netviz-data.json")
     ap.add_argument("--max-examples", type=int, default=30_000)
     ap.add_argument("--n-scatter", type=int, default=2_600)
@@ -71,7 +77,7 @@ def main() -> None:
     model = MaskablePPO.load(resolve_path(args.model), device="cpu")
     if not isinstance(model.observation_space, spaces.Dict):
         raise SystemExit("netviz_extract expects a token (Dict-obs) model")
-    obs = practicum_obs(arrays, "token")
+    obs = practicum_obs(arrays, args.obs_mode)
 
     print("collecting trained activations...")
     acts, kinds = collect_activations(model.policy, obs, batch_size=2048)
@@ -175,7 +181,14 @@ def main() -> None:
         ):
             linears = [m for m in seq if isinstance(m, nn.Linear)]
             out.extend((f"{tower}_l{i + 1}", m) for i, m in enumerate(linears))
-        out.append(("action_net", policy.action_net))
+        # Plain nets have a Linear action_net; E28 pointer-head nets wrap a
+        # per-slot scoring MLP (PointerActionNet) — extract its Linears.
+        an = policy.action_net
+        if isinstance(an, nn.Linear):
+            out.append(("action_net", an))
+        else:
+            an_linears = [m for m in an.modules() if isinstance(m, nn.Linear)]
+            out.extend((f"action_net_{i + 1}", m) for i, m in enumerate(an_linears))
         return out
 
     weights = {}

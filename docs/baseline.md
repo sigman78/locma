@@ -4,9 +4,12 @@ The canonical pair-score matrix for the five built-in baseline policies — row'
 win rate vs column, `locma tournament random scripted greedy max-guard
 max-attack --games 500 --seed 0 --matrix` (1000 games per pair, mirrored,
 `--seed 0`). This is the living reference; dated sections below are frozen
-snapshots. The current **recipes of record**: the reactive and guarded-reactive
-recipes are in the 2026-07-20 E29-slim section below (transformer-free slim
-extractor, superseding the 2026-07-19 E28c token-fx recipes); the planner
+snapshots. The current **recipes of record**: the **pure reactive** recipe is in
+the 2026-07-22 E36 section below (`depot:e36` gen7, the PFSP self-play net that
+took fair play-time search to a coin flip — first training-side closure of the
+search wall, superseding E29-slim on the pure rung); the **guarded-reactive**
+`lppo` recipe remains the 2026-07-20 E29-slim section (a 3-seed ensemble; gen7
+is single-seed and does not yet have an ensemble variant); the planner
 recipe is in the 2026-07-07 section; the strongest
 **play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
 beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
@@ -25,17 +28,137 @@ policy in the registry, are in the 2026-07-09 sections below.
 |------------|--------|----------|--------|-----------|------------|
 | random     | —      | 0.01     | 0.01   | 0.01      | 0.02       |
 | scripted   | 0.99   | —        | 0.55   | 0.51      | 0.61       |
-| greedy     | 0.99   | 0.45     | —      | 0.45      | 0.32       |
-| max-guard  | 0.99   | 0.49     | 0.55   | —         | 0.55       |
+| greedy     | 0.98   | 0.45     | —      | 0.44      | 0.32       |
+| max-guard  | 0.99   | 0.49     | 0.56   | —         | 0.55       |
 | max-attack | 0.98   | 0.39     | 0.68   | 0.45      | —          |
 
-Ranking by rating (openskill ordinal / Elo): `max-attack` (60.83 / 2845) >
-`max-guard` (29.69 / 1967) > `greedy` (1.04 / 1247) > `scripted` (-16.13 / 902) >
-`random` (-42.27 / 540). Note the pool is **non-transitive** — and more so under
-the shuffled pool: `scripted` (rated 4th) beats `greedy` (0.55), `max-guard`
-(0.51), **and** `max-attack` (0.61) head-to-head, yet rates below all three; and
-`max-guard` beats `max-attack` (0.55) against the rating order. Read the matrix,
-not just the ordinal.
+Ranking by rating (openskill ordinal / Elo, `--seed 0` 500-game refresh
+2026-07-22): `scripted` (26.98 / 1680) > `max-guard` (26.32 / 1667) >
+`max-attack` (25.61 / 1654) > `greedy` (23.84 / 1600) > `random` (-7.57 / 899).
+This refresh **reordered** the prior snapshot (which topped `max-attack`):
+`scripted` now rates first, consistent with beating `greedy` (0.55),
+`max-guard` (0.51) **and** `max-attack` (0.61) head-to-head. The pool stays
+mildly **non-transitive**: `greedy` beats none of the other four head-to-head
+yet rates 4th (above `random`), and `max-attack` thrashes `greedy` (0.68) but
+loses to both `scripted` (0.39) and `max-guard` (0.45) — the two that rate
+above it. Read the matrix, not just the ordinal. (E36 gen7 sits far above this
+pool at Elo 2008 — see the 2026-07-22 section; it beats every baseline
+0.89–0.98.)
+
+---
+
+# Recipes of record — 2026-07-22: E36 PFSP self-play — reactive net reaches SEARCH PARITY (promoted, pure rung)
+
+E36 (branch `feat/e36-pfsp`, worklog "E36", program doc
+`docs/reactive-limits-program.md`): the first **training-side** closure of the
+Phase-3 search wall. After architecture (E28/E29 — raised skill but not the
+wall), imitation (E9/E15) and reward shaping (E34) were exhausted, the untried
+class was the **training regime** — who the net plays, not the net or its loss.
+Prioritized fictitious self-play (`locma/policies/pfsp.py`, generational driver
+`scripts/e36_pfsp.py`): each generation best-responds to a pool sampled per game
+and reweighted toward losing matchups (past-selves + scripted/boardkeep/max
+anchors), warm-started from `depot:e29slim` and drafting with `depot:ldraft`.
+Published as `depot:e36` v1 (parent e29slim@1); the chain gen0–7 plus every gate
+eval and the exploit guard-rail are bundled in the artifact.
+
+**The result — fair play-time search lost its entire edge over the pure net.**
+The held-out ruler is the play-time-search recipe of record `rbeam:shared`
+(8,20,4,4) head-to-head vs `ppo:<net>,ldraft`; its win rate over the pure net is
+the *search gap* (lower = the net is harder for fair search to beat; 0.50 =
+parity). It falls monotonically across generations on TWO independent chains:
+
+| gen | x86 primary (seed 14M, n_envs 6) | M1 confirm (seed 20M, n_envs 12, Apple/CPU) |
+|---|---|---|
+| parent (e29slim) | 0.812 [.771, .848] | 0.812 (shared control) |
+| gen0 | — | 0.750 [.705, .790] |
+| gen1 | 0.703 [.656, .745] | 0.642 [.594, .688] |
+| gen2 | — | 0.623 [.574, .669] |
+| gen3 | — | 0.585 [.536, .632] |
+| gen4 | 0.588 [.539, .635] | 0.510 [.461, .559] |
+| gen5 | 0.550 [.501, .598] | 0.550 [.501, .598] |
+| gen6 | 0.525 [.476, .574] | 0.512 [.464, .561] |
+| **gen7** | **0.510 [.461, .559]** | **0.520 [.471, .569]** |
+
+Both chains land at PARITY — gen7's Wilson CI straddles 0.50 on both. Disjoint
+seeds, platform, and n_envs, and a *held-out* searcher (generalization, not
+overfit to the training pool), so the effect is robust across the three
+confounds a same-box seed replicate would leave open. n=400 games/net, SEED base
+30M. Method validated: the e29slim control reproduces 0.812 (== Gate-0 0.807 ==
+Phase-3's 0.808) on the identical harness. The x86 chain measured the
+odd/endpoint gens (gen1/4/5/6/7); the M1 chain measured the full gen0–7 ladder.
+
+## gen7 promoted — the pure reactive recipe of record
+
+| role | recipe of record since 2026-07-22 | headline |
+|---|---|---|
+| **reactive (recipe of record)** | `ppo:depot:e36/e36_gen7.zip,depot:ldraft/ldraft_sX.zip` | search-gap **0.510** (parity) · avg-hard3 **0.953** |
+| prior reactive record (E29 slim) | `ppo:depot:e29slim/e29slim_sX.zip,depot:ldraft/ldraft_sX.zip` | search-gap 0.807 · avg-hard3 0.903 |
+
+gen7 dominates the prior reactive RoR on **all four rulers** — it did not trade
+one ruler for another:
+
+| ruler | gen7 | e29slim | direction |
+|---|---:|---:|---|
+| search gap (`rbeam:shared` WR, lower=better) | **0.510** | 0.807 | −0.297, to parity |
+| avg-hard3 (pure net vs 3 hard scripted, higher=better) | **0.953** | 0.903 (0.934 ens) | + |
+| Elo vs baseline pool (7-way, 500g) | **2008** | 1835 | +173, tops ladder |
+| head-to-head vs e29slim | **0.78** | — | dominant |
+| boardkeep exploit guard-rail (2000 mirrored @ 5M CRN, lower=better) | **0.168** [.152, .185] | 0.189 | most exploit-robust reactive net measured |
+
+The exploit number is notable: gen7 as a **bare single net** is harder for the
+boardkeep archetype to exploit than any prior recipe — including the guarded
+`lppo` stacks (E29-slim 0.189, E28c 0.219) — so self-play bought search-parity
+without opening an exploit.
+
+## Weight-space signature — capacity concentrated, not added
+
+`scripts/e36_weight_evolution.py` over the chain: every Linear layer's weight
+matrix loses **effective rank** monotonically parent→gen7 (mean over the six
+non-trivial layers 77.2 → 55.6, −28%; e.g. `extractor_head_1` 137.8 → 76.4,
+`action_net_1` 104.3 → 80.2). Self-play made the net *spectrally simpler* as it
+got better — the same compression dynamic E29 found when a 7.4×-smaller extractor
+won the pure rung. Interactive anatomy: `docs/notes/netviz-e36-gen7.html` (PCA
+state cloud, per-layer eigenspectra, layer CKA, weight-SVD vs re-init) and
+`docs/notes/netviz-e36-evolution.html` (the generational rank/spectrum curves
+plotted against the behavioural search-gap curve).
+
+## Caveats — what this is not (yet)
+
+- **Two agreeing single-seed chains, not a 3-seed ensemble.** x86 (14M) and M1
+  (20M) independently replicate parity — stronger than a same-box seed replicate
+  — but gen7 is one net, so there is no `lppo:e36` guarded-ensemble variant. The
+  **guarded-reactive RoR stays E29-slim** (the 3-seed trio). A milestone-4
+  deployment artifact would be a 3-seed e36 chain plus its `lppo` stack.
+- **Which single net to deploy — x86 gen7 vs M1 gen7 is a dead heat.** Direct
+  head-to-head at matched draft (n=1000, seed 60M): x86 gen7 **0.479** [.448,
+  .510] — a statistical tie. On the trustworthy search-gap ruler x86 leads by a
+  hair (0.510 vs 0.520); M1 gen7 is in fact slightly *more* exploit-robust
+  (boardkeep **0.139** [.124,.154] vs x86's 0.168). x86 gen7 stays the RoR (it
+  leads the primary ruler and carries the full four-ruler battery incl. Elo
+  2008), but `depot:e36m1/e36_m1_gen7.zip` is a drop-in equal alternate.
+  `runs/e36/x86_vs_m1.json`.
+- **Self-play H2H saturated by gen5–7** (each gen beats its prior self only
+  ~0.49–0.52) while the held-out search ruler kept moving — generalization
+  outran the internal margin. Both chains flatten *at* parity, not below it;
+  pushing past parity likely needs more scale (a throughput rewrite, e.g. JAX) or
+  a fresh lever, not more generations of this loop.
+- **The guarded `lppo:e36 gen7` stack was not separately measured.** The E26 lens
+  increment is expected to stack (mechanisms disjoint) but is unproven on gen7.
+
+## Reproduce
+
+```bash
+# held-out search-gap ladder (both chains share the harness; ~2-3h on 8 workers)
+.venv/Scripts/python scripts/e36_gate_gen4.py --workers 8 \
+    --nets e29slim,gen1,gen4,gen5,gen6,gen7                            # x86 primary
+.venv/Scripts/python scripts/e36_gate_gen4.py --workers 8 \
+    --nets m1_gen0,m1_gen1,m1_gen2,m1_gen3,m1_gen4,m1_gen5,m1_gen6,m1_gen7  # M1 confirm (depot:e36m1)
+# exploit guard-rail + generational weight-SVD bundle for the viz pages
+.venv/Scripts/python scripts/e36_weight_evolution.py
+locma tournament random scripted greedy max-guard max-attack \
+    ppo:depot:e29slim/e29slim_s0.zip,depot:ldraft/ldraft_s0.zip \
+    ppo:depot:e36/e36_gen7.zip,depot:ldraft/ldraft_s0.zip --games 500 --seed 0 --matrix
+```
 
 ---
 
