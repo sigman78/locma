@@ -108,7 +108,15 @@ one ruler for another:
 The exploit number is notable: gen7 as a **bare single net** is harder for the
 boardkeep archetype to exploit than any prior recipe — including the guarded
 `lppo` stacks (E29-slim 0.189, E28c 0.219) — so self-play bought search-parity
-without opening an exploit.
+without opening an exploit. The proper E10 bench (`scripts/e36_exploit.py`, 5
+archetypes, 2000 mirrored @ 5M CRN) confirms it and adds a bonus: **PFSP
+hardened the net across the board**, guardrail PASS on all five, every rate down
+vs the e29slim origin — rnddeck 0.013 (was 0.050), guardwall 0.088 (0.158),
+bufface 0.075 (0.140), boardkeep 0.168 (0.236), shell 0.128 (0.210). Only
+boardkeep is in the PFSP pool; the other four are **held out**, so adversarial
+robustness generalized out of self-play scale for free (M1 gen7 the same,
+marginally lower). Closing the search gap did not open an exploit hole — it
+shrank them.
 
 ## Weight-space signature — capacity concentrated, not added
 
