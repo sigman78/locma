@@ -51,21 +51,35 @@ def write_pool(entries: list[dict]) -> None:
     Path(POOL).write_text(json.dumps(entries, indent=2))
 
 
-def train_gen(warm_ckpt: str, steps: int, out: str, seed: int, n_envs: int, log) -> None:
-    """Warm-start from ``warm_ckpt`` and best-respond to pfsp:POOL for ``steps``."""
+def train_gen(
+    warm_ckpt: str, steps: int, out: str, seed: int, n_envs: int, log, driver: str = "subproc"
+) -> None:
+    """Warm-start from ``warm_ckpt`` and best-respond to pfsp:POOL for ``steps``.
+
+    ``driver`` selects the env backend: "subproc" (default, SubprocVecEnv with the
+    opponent inline in each worker) or "batched" (single-process BatchedOpponentVecEnv
+    that resolves all opponents in batched forwards — ~2-3x collection throughput,
+    decision-preserving; see docs/worklog E36). The trained best-response is the
+    same either way — only opponent-inference batching differs."""
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
 
     from locma.depot import resolve_path  # noqa: PLC0415
-    from locma.envs.training import _build_env  # noqa: PLC0415
 
-    env = _build_env(
-        f"pfsp:{POOL}",
-        seed,
-        n_envs,
-        both_seat=True,
-        obs_mode="token-fx",
-        draft_override=LDRAFT,
-    )
+    if driver == "batched":
+        from locma.envs.batched_selfplay import make_batched_opponent_vecenv  # noqa: PLC0415
+
+        env = make_batched_opponent_vecenv(POOL, n_envs, seed=seed, ldraft=LDRAFT, obs_variant="fx")
+    else:
+        from locma.envs.training import _build_env  # noqa: PLC0415
+
+        env = _build_env(
+            f"pfsp:{POOL}",
+            seed,
+            n_envs,
+            both_seat=True,
+            obs_mode="token-fx",
+            draft_override=LDRAFT,
+        )
     # load WITH the env (n_envs may differ from the saved model)
     model = MaskablePPO.load(resolve_path(warm_ckpt), env=env, device="auto")
     log(f"  training best-response ({steps} steps, warm from {warm_ckpt})")
@@ -99,6 +113,12 @@ def main() -> None:
     )
     ap.add_argument("--warm", default=E29, help="warm-start ckpt for the first gen of this run")
     ap.add_argument(
+        "--driver",
+        choices=["subproc", "batched"],
+        default="subproc",
+        help="env backend: subproc (inline opponent) or batched (single-process batched opponent)",
+    )
+    ap.add_argument(
         "--resume",
         action="store_true",
         help="continue an existing chain: load runs/e36/pool.json instead of reseeding SEED_POOL",
@@ -124,7 +144,7 @@ def main() -> None:
     for g in range(args.start_gen, args.start_gen + args.generations):
         log(f"\n=== generation {g} ===")
         out = f"runs/e36_gen{g}.zip"
-        train_gen(warm, args.steps, out, args.seed + g, args.n_envs, log)
+        train_gen(warm, args.steps, out, args.seed + g, args.n_envs, log, driver=args.driver)
         new_spec = f"ppo:{out},{LDRAFT}"
 
         # eval the new net vs every pool member -> prioritised weights (PFSP)

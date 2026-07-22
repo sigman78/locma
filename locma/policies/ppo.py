@@ -57,6 +57,31 @@ def _lean_masked_argmax(model, obs, mask) -> int:
         return int(torch.argmax(logits).item())
 
 
+def batched_masked_argmax(model, obs_list, mask_arr):
+    """Vectorised sibling of ``_lean_masked_argmax``: one forward over a batch of
+    ``obs_list`` (dict-of-arrays for token obs, or list of flat arrays for draft)
+    with per-row masks ``mask_arr`` [B, A]. Returns an int ndarray [B]. Same
+    decision as B separate lean-argmax calls (byte-identical per row), but one
+    forward amortises the SB3/torch launch overhead — the E36 batched-opponent
+    driver relies on this (profiled ~B-fold cheaper up to the GPU's limit)."""
+    import numpy as np  # noqa: PLC0415 — lazy [ml]-adjacent dep
+    import torch  # noqa: PLC0415 — lazy [ml] dep
+
+    policy = model.policy
+    if isinstance(obs_list[0], dict):
+        batch = {k: np.stack([o[k] for o in obs_list]) for k in obs_list[0]}
+    else:
+        batch = np.stack(obs_list)
+    obs_t, _ = policy.obs_to_tensor(batch)
+    with torch.no_grad():
+        features = policy.extract_features(obs_t, policy.pi_features_extractor)
+        latent_pi = policy.mlp_extractor.forward_actor(features)
+        logits = policy.action_net(latent_pi)
+        mask_t = torch.as_tensor(np.asarray(mask_arr, dtype=bool), device=logits.device)
+        logits = torch.where(mask_t, logits, torch.full_like(logits, float("-inf")))
+        return logits.argmax(dim=1).cpu().numpy()
+
+
 class MaskablePPOBattlePolicy:
     """Wraps a saved MaskablePPO model as a Battle Policy.
 

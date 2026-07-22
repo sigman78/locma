@@ -20,6 +20,12 @@ is identical for both architectures). The agent uses deterministic argmax here t
 keep its forward cost equal across modes and isolate the opponent-batching effect;
 real training samples + updates, so absolute FPS is higher than a live trainer but
 the sequential-vs-batched RATIO is the number we care about.
+
+CAVEAT (see docs/worklog 2026-07): the ~3x here is vs a single-process SEQUENTIAL
+control. Integrated end-to-end (locma/envs/batched_selfplay.py) the batched VecEnv
+is SLOWER than the process-parallel SubprocVecEnv baseline, because this control
+does not model SubprocVec's parallel game-engine stepping. This script stands as
+the batch-ceiling / decision-equivalence probe, not evidence the design wins.
 """
 
 from __future__ import annotations

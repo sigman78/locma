@@ -27,22 +27,31 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=60000, help="timed step budget")
     ap.add_argument("--warm", default=E29)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--driver", choices=["subproc", "batched"], default="subproc")
     args = ap.parse_args()
 
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
 
     from locma.depot import resolve_path  # noqa: PLC0415
-    from locma.envs.training import _build_env  # noqa: PLC0415
 
     opp_device = os.environ.get("LOCMA_PFSP_OPP_DEVICE", "auto")  # matches pfsp default
-    env = _build_env(
-        f"pfsp:{POOL}",
-        args.seed,
-        args.n_envs,
-        both_seat=True,
-        obs_mode="token-fx",
-        draft_override=LDRAFT,
-    )
+    if args.driver == "batched":
+        from locma.envs.batched_selfplay import make_batched_opponent_vecenv  # noqa: PLC0415
+
+        env = make_batched_opponent_vecenv(
+            POOL, args.n_envs, seed=args.seed, ldraft=LDRAFT, obs_variant="fx"
+        )
+    else:
+        from locma.envs.training import _build_env  # noqa: PLC0415
+
+        env = _build_env(
+            f"pfsp:{POOL}",
+            args.seed,
+            args.n_envs,
+            both_seat=True,
+            obs_mode="token-fx",
+            draft_override=LDRAFT,
+        )
     model = MaskablePPO.load(resolve_path(args.warm), env=env, device="auto")
 
     # warmup: forces the SubprocVecEnv workers to lazily load every pool net,
@@ -58,6 +67,7 @@ def main() -> None:
     print(
         json.dumps(
             {
+                "driver": args.driver,
                 "n_envs": args.n_envs,
                 "opp_device": opp_device,
                 "learner_device": str(model.device),
