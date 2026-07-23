@@ -135,7 +135,7 @@ def main() -> None:
     ap.add_argument(
         "--resume",
         action="store_true",
-        help="continue an existing chain: load the chain's pool.json instead of reseeding SEED_POOL",
+        help="continue an existing chain: load its pool.json instead of reseeding SEED_POOL",
     )
     ap.add_argument(
         "--tag",

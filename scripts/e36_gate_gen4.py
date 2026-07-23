@@ -61,10 +61,11 @@ LADDER = {
     # either box; same rbeam:shared candidate and seeds as the x86 ladder above,
     # so the search-gap numbers are directly comparable (e29slim anchors both).
     **{f"m1_gen{g}": f"ppo:depot:e36m1/e36_m1_gen{g}.zip,{LDRAFT}" for g in range(8)},
-    # s22 seed-replicate chain (M1 box, seed 22M, `e36_pfsp.py --tag s22`): same
-    # regime as depot:e36m1 (1.5M steps/gen, n_envs 12, CPU) differing ONLY in
-    # seed — the pair isolates seed variance. Local runs/ paths (M1 box only).
-    **{f"s22_gen{g}": f"ppo:runs/e36_s22_gen{g}.zip,{LDRAFT}" for g in range(8)},
+    # s22 seed-replicate chain (depot:e36s22, `e36_pfsp.py --tag s22`): same
+    # regime as depot:e36m1 (1.5M steps/gen, n_envs 12, M1/CPU) differing ONLY
+    # in seed (22M vs 20M) — the pair isolates seed variance. Depot refs so the
+    # ladder runs on either box.
+    **{f"s22_gen{g}": f"ppo:depot:e36s22/e36_s22_gen{g}.zip,{LDRAFT}" for g in range(8)},
 }
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
