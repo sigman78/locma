@@ -58,6 +58,7 @@ def _make_battle_env(
     board_potential_weight: float = 0.0,
     shaping_gamma: float = 0.99,
     board_potential_mode: str = "diff",
+    deck_pool_path: str | None = None,
 ):
     """Top-level env factory (picklable for SubprocVecEnv spawn on Windows).
 
@@ -108,6 +109,7 @@ def _make_battle_env(
         board_potential_weight=board_potential_weight,
         shaping_gamma=shaping_gamma,
         board_potential_mode=board_potential_mode,
+        deck_pool_path=deck_pool_path,
     )
 
 
@@ -129,6 +131,7 @@ def _build_env(
     board_potential_weight: float = 0.0,
     shaping_gamma: float = 0.99,
     board_potential_mode: str = "diff",
+    deck_pool_path: str | None = None,
 ):
     """Build a (vectorised) training env. n_envs>1 runs each env in its own
     process for true CPU parallelism; each env gets a distinct seed. ``both_seat``
@@ -164,6 +167,7 @@ def _build_env(
             board_potential_weight,
             shaping_gamma,
             board_potential_mode,
+            deck_pool_path,
         )
         for i in range(n_envs)
     ]
