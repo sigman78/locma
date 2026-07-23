@@ -57,7 +57,9 @@ class CpuSampler(threading.Thread):
                     frontier = out
                 workers = 0.0
                 if kids:
-                    out = subprocess.check_output(["ps", "-o", "%cpu=", "-p", ",".join(kids)], text=True)
+                    out = subprocess.check_output(
+                        ["ps", "-o", "%cpu=", "-p", ",".join(kids)], text=True
+                    )
                     workers = sum(float(x) for x in out.split())
                 self.samples.append((time.time(), main, workers))
             except Exception:  # noqa: BLE001
@@ -144,7 +146,8 @@ def main() -> None:
         if not discard:
             results.append(row)
         print(
-            f"{tag:<38} rollout {roll_w:>5.1f}s (main {roll_main:>4.0f}% + workers {roll_workers:>4.0f}%)  "
+            f"{tag:<38} rollout {roll_w:>5.1f}s "
+            f"(main {roll_main:>4.0f}% + workers {roll_workers:>4.0f}%)  "
             f"update {upd_w:>5.1f}s ({upd_cores:.2f} cores)  "
             f"-> {steps / (t1 - t0):>5.0f} steps/s{'  [warm-up, discarded]' if discard else ''}",
             flush=True,
