@@ -60,6 +60,7 @@ def train_gen(
     pool_path: str,
     driver: str = "subproc",
     device: str = "auto",
+    deck_pool_path: str | None = None,
 ) -> None:
     """Warm-start from ``warm_ckpt`` and best-respond to pfsp:POOL for ``steps``.
 
@@ -73,6 +74,8 @@ def train_gen(
     from locma.depot import resolve_path  # noqa: PLC0415
 
     if driver == "batched":
+        if deck_pool_path is not None:
+            raise ValueError("--deck-pool requires the default 'subproc' driver (not 'batched')")
         from locma.envs.batched_selfplay import make_batched_opponent_vecenv  # noqa: PLC0415
 
         env = make_batched_opponent_vecenv(
@@ -81,6 +84,8 @@ def train_gen(
     else:
         from locma.envs.training import _build_env  # noqa: PLC0415
 
+        # deck_pool_path set -> envs sample cached decks (no live ldraft draft);
+        # draft_override is then a no-op but kept harmless.
         env = _build_env(
             f"pfsp:{pool_path}",
             seed,
@@ -88,6 +93,7 @@ def train_gen(
             both_seat=True,
             obs_mode="token-fx",
             draft_override=LDRAFT,
+            deck_pool_path=deck_pool_path,
         )
     # load WITH the env (n_envs may differ from the saved model)
     model = MaskablePPO.load(resolve_path(warm_ckpt), env=env, device=device)
@@ -143,6 +149,16 @@ def main() -> None:
         help="isolate this chain's artifacts under runs/e36_<tag>_gen*.zip + runs/e36_<tag>/ "
         "so parallel seed chains don't clobber each other (empty = legacy runs/e36* paths)",
     )
+    ap.add_argument(
+        "--deck-pool",
+        default=None,
+        help="path to a cached deck-pool JSON; if set, envs sample pre-drafted decks "
+        "instead of live ldraft drafting (removes ~60 draft calls/game). Auto-generated "
+        "with the 80/20 ldraft/random mixture if the file is absent. Subproc driver only.",
+    )
+    ap.add_argument(
+        "--deck-pool-size", type=int, default=2000, help="decks to pre-draft if generating"
+    )
     args = ap.parse_args()
 
     suffix = f"_{args.tag}" if args.tag else ""
@@ -161,6 +177,21 @@ def main() -> None:
     else:
         pool = [dict(e) for e in SEED_POOL]
         write_pool(pool, pool_path)
+    # Cached deck pool (optional): load or generate once; workers load it read-only.
+    deck_pool = None
+    deck_pool_path = args.deck_pool
+    if deck_pool_path is not None:
+        from locma.envs.deckpool import DeckPool  # noqa: PLC0415
+
+        if Path(deck_pool_path).exists():
+            deck_pool = DeckPool.load(deck_pool_path)
+            log(f"deck-pool: loaded {len(deck_pool.decks)} decks from {deck_pool_path}")
+        else:
+            log(f"deck-pool: generating {args.deck_pool_size} decks (80/20 ldraft/random)...")
+            deck_pool = DeckPool.generate(args.deck_pool_size, seed=args.seed)
+            deck_pool.save(deck_pool_path)
+            log(f"deck-pool: wrote {deck_pool_path}")
+
     warm = args.warm  # first gen of this run warm-starts from here
     log(f"start-gen {args.start_gen}, warm from {warm}")
     history = []
@@ -178,8 +209,24 @@ def main() -> None:
             pool_path,
             driver=args.driver,
             device=args.device,
+            deck_pool_path=deck_pool_path,
         )
         new_spec = f"ppo:{out},{LDRAFT}"
+
+        # Deck-pool refresh (budget-guarded): after each generation, tell the pool
+        # how many matches it served (~steps / agent-decisions-per-game) and let it
+        # roll a fresh slice IFF cumulative generation stays under the cost budget.
+        # Workers reload the refreshed file at the next generation.
+        if deck_pool is not None:
+            deck_pool.record_matches(args.steps // 30)  # ~30 agent decisions/game
+            replaced = deck_pool.maybe_refresh(seed=args.seed + 7000 + g)
+            deck_pool.save(deck_pool_path)
+            st = deck_pool.stats()
+            gate = "deferred" if replaced == 0 else "ok"
+            log(
+                f"  deck-pool: refreshed {replaced} decks "
+                f"(amortized gen {st['amortized_frac']} vs {st['budget_frac']} budget, {gate})"
+            )
 
         # eval the new net vs every pool member -> prioritised weights (PFSP)
         opp_specs = [e["spec"] for e in pool]

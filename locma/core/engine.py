@@ -126,6 +126,15 @@ def run_game(
             on_step(seat, pick, gs)
 
     # --- Battle phase ---
+    return _run_battle(gs, pols, seed, max_turns, on_snapshot, on_pre_step, on_step, on_event)
+
+
+def _run_battle(
+    gs, pols, seed, max_turns, on_snapshot, on_pre_step, on_step, on_event
+) -> GameResult:
+    """Drive the battle phase to completion. Shared by ``run_game`` (after its
+    draft) and ``run_battle_from_decks`` (which injects pre-drafted decks). ``gs``
+    must already have both ``players[*].deck`` populated and ``phase == BATTLE``."""
     battlemod.start_battle(gs, emit=on_event)
     if on_snapshot is not None:
         on_snapshot(gs)
@@ -162,3 +171,61 @@ def run_game(
         gs.winner = 0 if h0 >= h1 else 1
 
     return GameResult(winner=gs.winner, turns=gs.turn, seed=seed)
+
+
+def run_battle_from_decks(
+    deck0: list[int],
+    deck1: list[int],
+    policy0,
+    policy1,
+    seed: int,
+    cards=None,
+    max_turns: int = 200,
+    on_step=None,
+    on_snapshot=None,
+    on_pre_step=None,
+    on_event=None,
+) -> GameResult:
+    """Play a battle from two PRE-DRAFTED decks, skipping the draft phase.
+
+    ``deck0``/``deck1`` are lists of card ids (the 30 cards each seat drafted;
+    order irrelevant — the deck is reshuffled by the game rng). This is the
+    injection path for a cached deck pool: it reproduces exactly what
+    ``draft._finish_draft`` builds (``CardInstance.from_card`` with a global
+    instance-id counter, then ``gs.rng.shuffle``) so the deck objects are built
+    just as a live draft would — only the ~60 draft policy calls are skipped.
+    Determinism: same seed + decks + policies -> same (winner, turns) (fresh rng,
+    no draft consumption), and the per-seed reshuffle keeps draw order varying so
+    the same deck is not replayed as the same game. (Draw order differs from a
+    live ``run_game`` at the same seed, since the draft consumes rng there —
+    irrelevant for training/benching on cached decks.)
+    """
+    cards = cards or load_cards()
+    policy0.reset(seed)
+    policy1.reset(seed)
+    gs = GameState.new(random.Random(seed))
+    deal_decks(gs, deck0, deck1, cards)
+    pols = (policy0, policy1)
+    return _run_battle(gs, pols, seed, max_turns, on_snapshot, on_pre_step, on_step, on_event)
+
+
+def deal_decks(gs, deck0: list[int], deck1: list[int], cards=None) -> None:
+    """Populate ``gs.players[*].deck`` from two card-id lists and set phase=BATTLE.
+
+    Reproduces ``draft._finish_draft`` (``CardInstance.from_card`` with a global
+    instance-id counter, then ``gs.rng.shuffle``) so a cached deck is dealt
+    exactly as a live draft would build it. Shared by ``run_battle_from_decks``
+    and ``BattleEnv.reset`` (deck-pool path)."""
+    from locma.core.instance import CardInstance  # noqa: PLC0415
+
+    cards = cards or load_cards()
+    by_id = {c.id: c for c in (cards if isinstance(cards, list) else cards.values())}
+    iid = 0
+    for p, deck_ids in ((0, deck0), (1, deck1)):
+        deck = []
+        for cid in deck_ids:
+            deck.append(CardInstance.from_card(by_id[cid], iid))
+            iid += 1
+        gs.rng.shuffle(deck)
+        gs.players[p].deck = deck
+    gs.phase = Phase.BATTLE

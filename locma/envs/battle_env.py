@@ -79,6 +79,7 @@ class BattleEnv(gym.Env):
         board_potential_weight: float = 0.0,
         shaping_gamma: float = 0.99,
         board_potential_mode: str = "diff",
+        deck_pool_path: str | None = None,
     ) -> None:
         super().__init__()
         # E33 trade-value lever: potential-based reward shaping w·(γΦ(s') - Φ(s)),
@@ -112,6 +113,16 @@ class BattleEnv(gym.Env):
         # symmetry of the default rule (both seats otherwise pick identically from
         # identical triplets under a deterministic draft).
         self.shared_draft = shared_draft
+        # deck_pool_path: if set, skip live drafting each episode — sample two
+        # pre-drafted decks from the cached pool (loaded read-only once here) and
+        # deal them directly. Removes the ~60 draft-policy calls/game. The pool is
+        # a disk artifact so every SubprocVecEnv worker loads the same one.
+        self.deck_pool = None
+        if deck_pool_path is not None:
+            from locma.envs.deckpool import DeckPool  # noqa: PLC0415
+
+            self.deck_pool = DeckPool.load(deck_pool_path)
+        self._deck_rng = random.Random(seed + 4241)
 
         if obs_mode == "flat":
             self.observation_space = spaces.Box(
@@ -196,13 +207,19 @@ class BattleEnv(gym.Env):
             self.agent_seat = self._seat_rng.randint(0, 1)
 
         self.gs = GameState.new(random.Random(eff))
-        draftmod.start_draft(self.gs, self._cards, shared=self.shared_draft)
+        if self.deck_pool is not None:
+            # Cached-deck path: sample two decks and deal them (no draft calls).
+            from locma.core.engine import deal_decks  # noqa: PLC0415
 
-        # Opponent drafts for both seats in v1 (battle-only training target)
-        while self.gs.phase == Phase.DRAFT:
-            dv = make_draft_view(self.gs)
-            pick = self.opponent.draft_action(dv, draftmod.draft_legal(self.gs))
-            draftmod.apply_draft_pick(self.gs, pick)
+            d0, d1 = self.deck_pool.sample_pair(self._deck_rng)
+            deal_decks(self.gs, d0, d1, self._cards)
+        else:
+            draftmod.start_draft(self.gs, self._cards, shared=self.shared_draft)
+            # Opponent drafts for both seats in v1 (battle-only training target)
+            while self.gs.phase == Phase.DRAFT:
+                dv = make_draft_view(self.gs)
+                pick = self.opponent.draft_action(dv, draftmod.draft_legal(self.gs))
+                draftmod.apply_draft_pick(self.gs, pick)
 
         battlemod.start_battle(self.gs)
         self._opp_play_until_agent()
