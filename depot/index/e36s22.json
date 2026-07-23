@@ -1,0 +1,92 @@
+{
+  "name": "e36s22",
+  "kind": "model",
+  "pin": 1,
+  "versions": [
+    {
+      "version": 1,
+      "created": "2026-07-23T02:53:16+00:00",
+      "git_commit": "212ef2b",
+      "git_dirty": false,
+      "command": ".venv/bin/locma depot publish e36s22 runs/e36_s22_gen0.zip runs/e36_s22_gen1.zip runs/e36_s22_gen2.zip runs/e36_s22_gen3.zip runs/e36_s22_gen4.zip runs/e36_s22_gen5.zip runs/e36_s22_gen6.zip runs/e36_s22_gen7.zip runs/e36_s22/history.json runs/e36_s22/train.log runs/e36_s22/gate.json runs/e36_s22/gate.log --kind model --parent e29slim@1 --note E36 PFSP third seed chain (s22), M1 Max/CPU, seed 22M, n_envs 12, 1.5M steps/gen, gen0-7 \u2014 identical regime to e36m1, differs ONLY in seed (isolates seed variance). Gate: anchor 0.8125 exact 3rd repro, s22_gen4 0.520, s22_gen7 0.4975 (CI straddles 0.50). Completes the 3-seed promotion-bar item: pooled endpoint 0.509 [.481,.537] across x86 14M / m1 20M / s22 22M. Confirmation evidence for the promoted depot:e36 gen7, not a candidate itself. --meta {\"seed\": 22000000, \"n_envs\": 12, \"platform\": \"m1-cpu\", \"steps_per_gen\": 1500000, \"generations\": 8, \"internal_h2h\": [0.61, 0.61, 0.52, 0.585, 0.54, 0.485, 0.54, 0.525], \"gate\": {\"anchor_e29slim\": 0.8125, \"s22_gen4\": 0.52, \"s22_gen7\": 0.4975}, \"pooled_3seed_endpoint\": 0.5092}",
+      "parents": [
+        "e29slim@1"
+      ],
+      "note": "E36 PFSP third seed chain (s22), M1 Max/CPU, seed 22M, n_envs 12, 1.5M steps/gen, gen0-7 \u2014 identical regime to e36m1, differs ONLY in seed (isolates seed variance). Gate: anchor 0.8125 exact 3rd repro, s22_gen4 0.520, s22_gen7 0.4975 (CI straddles 0.50). Completes the 3-seed promotion-bar item: pooled endpoint 0.509 [.481,.537] across x86 14M / m1 20M / s22 22M. Confirmation evidence for the promoted depot:e36 gen7, not a candidate itself.",
+      "meta": {
+        "seed": 22000000,
+        "n_envs": 12,
+        "platform": "m1-cpu",
+        "steps_per_gen": 1500000,
+        "generations": 8,
+        "internal_h2h": [
+          0.61,
+          0.61,
+          0.52,
+          0.585,
+          0.54,
+          0.485,
+          0.54,
+          0.525
+        ],
+        "gate": {
+          "anchor_e29slim": 0.8125,
+          "s22_gen4": 0.52,
+          "s22_gen7": 0.4975
+        },
+        "pooled_3seed_endpoint": 0.5092
+      },
+      "files": {
+        "e36_s22_gen0.zip": {
+          "sha256": "e5bbf660df19a2218772468a3e67fedbab458344ac316ce9c42d75e6cf96770d",
+          "size": 1570833
+        },
+        "e36_s22_gen1.zip": {
+          "sha256": "9dc6405fa56a18dac678798441b7a9efed049845b036bee59eb6e3fac5a105e1",
+          "size": 1570833
+        },
+        "e36_s22_gen2.zip": {
+          "sha256": "733fd5be31d85100b15580f4f885b31d9660f29baa018b67c53ca66c490f98c0",
+          "size": 1570834
+        },
+        "e36_s22_gen3.zip": {
+          "sha256": "eb7d633476299e0d7c737f5444de4ffb93306c20e2bf1414f4884fa469934229",
+          "size": 1570834
+        },
+        "e36_s22_gen4.zip": {
+          "sha256": "4c3e0bdf3a9051dfcfbff3d3b32ad03b042bc2e650d3d13707ad64f2d4ab909b",
+          "size": 1570834
+        },
+        "e36_s22_gen5.zip": {
+          "sha256": "52aaa696739c83f9ef50f7a085f15d3b4fdee421ea0d1e2c50c534bdd04b9258",
+          "size": 1570618
+        },
+        "e36_s22_gen6.zip": {
+          "sha256": "1170930a6bb48d1ef39d656ebd6cb89317878154d98b65a1c2e01d2ef1d06d12",
+          "size": 1570618
+        },
+        "e36_s22_gen7.zip": {
+          "sha256": "c4f33b723e7d37733a49ab06da4251cdf62170c5801b546365403b0e7722d060",
+          "size": 1570834
+        },
+        "history.json": {
+          "sha256": "4479dbb145ae33e4c14dbbe4e7f9c7f5c09a9b2570befd02821a427c01c90f0b",
+          "size": 7866
+        },
+        "train.log": {
+          "sha256": "eb498d748a9092b31897e1fd4ad47458fe952877627356aec704d3af8350933f",
+          "size": 463591
+        },
+        "gate.json": {
+          "sha256": "3d2c65ad656fd126c494c11f0e95ad48c4fe42e14479ebad82ebb62713fea8d5",
+          "size": 2542
+        },
+        "gate.log": {
+          "sha256": "fb09d36574826929296d42891da3f4d1d218e30e2ca43bf016cad141a2310455",
+          "size": 1959
+        }
+      },
+      "published": "gh:depot/e36s22-v1"
+    }
+  ]
+}
