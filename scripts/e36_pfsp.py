@@ -34,7 +34,6 @@ from pathlib import Path
 
 E29 = "depot:e29slim/e29slim_s0.zip"
 LDRAFT = "depot:ldraft/ldraft_s0.zip"
-POOL = "runs/e36/pool.json"
 # gen-0 seed pool: a frozen strong self + the scripted zoo + the known exploiter.
 SEED_POOL = [
     {"spec": f"ppo:{E29},{LDRAFT}", "weight": 2.0, "kind": "self"},
@@ -46,9 +45,9 @@ SEED_POOL = [
 MAX_SELF = 4  # keep at most this many past-self checkpoints in the pool
 
 
-def write_pool(entries: list[dict]) -> None:
-    Path(POOL).parent.mkdir(parents=True, exist_ok=True)
-    Path(POOL).write_text(json.dumps(entries, indent=2))
+def write_pool(entries: list[dict], pool_path: str) -> None:
+    Path(pool_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(pool_path).write_text(json.dumps(entries, indent=2))
 
 
 def train_gen(
@@ -58,6 +57,7 @@ def train_gen(
     seed: int,
     n_envs: int,
     log,
+    pool_path: str,
     driver: str = "subproc",
     device: str = "auto",
 ) -> None:
@@ -75,12 +75,14 @@ def train_gen(
     if driver == "batched":
         from locma.envs.batched_selfplay import make_batched_opponent_vecenv  # noqa: PLC0415
 
-        env = make_batched_opponent_vecenv(POOL, n_envs, seed=seed, ldraft=LDRAFT, obs_variant="fx")
+        env = make_batched_opponent_vecenv(
+            pool_path, n_envs, seed=seed, ldraft=LDRAFT, obs_variant="fx"
+        )
     else:
         from locma.envs.training import _build_env  # noqa: PLC0415
 
         env = _build_env(
-            f"pfsp:{POOL}",
+            f"pfsp:{pool_path}",
             seed,
             n_envs,
             both_seat=True,
@@ -133,9 +135,19 @@ def main() -> None:
     ap.add_argument(
         "--resume",
         action="store_true",
-        help="continue an existing chain: load runs/e36/pool.json instead of reseeding SEED_POOL",
+        help="continue an existing chain: load the chain's pool.json instead of reseeding SEED_POOL",
+    )
+    ap.add_argument(
+        "--tag",
+        default="",
+        help="isolate this chain's artifacts under runs/e36_<tag>_gen*.zip + runs/e36_<tag>/ "
+        "so parallel seed chains don't clobber each other (empty = legacy runs/e36* paths)",
     )
     args = ap.parse_args()
+
+    suffix = f"_{args.tag}" if args.tag else ""
+    run_dir = f"runs/e36{suffix}"
+    pool_path = f"{run_dir}/pool.json"
 
     lines: list[str] = []
 
@@ -143,19 +155,19 @@ def main() -> None:
         print(m, flush=True)
         lines.append(m)
 
-    if args.resume and Path(POOL).exists():
-        pool = json.loads(Path(POOL).read_text())
-        log(f"resuming: loaded pool with {len(pool)} members from {POOL}")
+    if args.resume and Path(pool_path).exists():
+        pool = json.loads(Path(pool_path).read_text())
+        log(f"resuming: loaded pool with {len(pool)} members from {pool_path}")
     else:
         pool = [dict(e) for e in SEED_POOL]
-        write_pool(pool)
+        write_pool(pool, pool_path)
     warm = args.warm  # first gen of this run warm-starts from here
     log(f"start-gen {args.start_gen}, warm from {warm}")
     history = []
 
     for g in range(args.start_gen, args.start_gen + args.generations):
         log(f"\n=== generation {g} ===")
-        out = f"runs/e36_gen{g}.zip"
+        out = f"runs/e36{suffix}_gen{g}.zip"
         train_gen(
             warm,
             args.steps,
@@ -163,6 +175,7 @@ def main() -> None:
             args.seed + g,
             args.n_envs,
             log,
+            pool_path,
             driver=args.driver,
             device=args.device,
         )
@@ -183,14 +196,14 @@ def main() -> None:
             drop = selves[0]["spec"]  # evict the oldest self
             pool = [e for e in pool if e["spec"] != drop]
             log(f"  evicted oldest self: {drop}")
-        write_pool(pool)
+        write_pool(pool, pool_path)
         history.append({"gen": g, "out": out, "wr_vs_pool": wr})
         warm = out  # next generation continues from this one
 
     hist_path = (
-        "runs/e36/history.json"
+        f"{run_dir}/history.json"
         if args.start_gen == 0
-        else f"runs/e36/history_gen{args.start_gen}+.json"
+        else f"{run_dir}/history_gen{args.start_gen}+.json"
     )
     Path(hist_path).write_text(json.dumps({"history": history, "log": lines}, indent=2))
     log(f"\nwrote {hist_path}")
