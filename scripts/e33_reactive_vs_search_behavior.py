@@ -50,8 +50,21 @@ from locma.harness.parallel import init_eval_worker
 E29 = "depot:e29slim/e29slim_s0.zip|depot:e29slim/e29slim_s1.zip|depot:e29slim/e29slim_s2.zip"
 LDRAFT = "depot:ldraft/ldraft_s0.zip"
 SUBJECT_DEFAULT = f"lppo:{E29},{LDRAFT}"
-ORACLE_PATHS = E29.split("|")  # vbeam over the same e29slim trio
+ORACLE_PATHS = E29.split("|")  # default-subject oracle; _subject_net_paths overrides per subject
 OPPONENTS = ("scripted", "max-guard", "max-attack")
+
+
+def _subject_net_paths(subject_spec: str) -> list[str]:
+    """Battle-net path(s) from a subject spec, for the vbeam oracle.
+
+    ``ppo:depot:e36/e36_gen7.zip,depot:ldraft/ldraft_s0.zip`` -> the gen7 path;
+    ``lppo:a|b|c,ldraft`` -> [a, b, c]. Strips the ``ppo:``/``lppo:`` prefix and
+    the trailing draft override (the part after the last comma)."""
+    body = subject_spec.split(":", 1)[1] if ":" in subject_spec else subject_spec
+    net_part = body.rsplit(",", 1)[0] if "," in body else body
+    return net_part.split("|")
+
+
 SEED0 = 12_000_000
 BEAM_WIDTH = 8
 MAX_ACTIONS = 20
@@ -132,6 +145,7 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
     from locma.policies.registry import make_policy  # noqa: PLC0415
     from locma.policies.vbeam import (  # noqa: PLC0415
         EnsembleValueEvaluator,
+        NetValueEvaluator,
         _clone_battle,
         plan_turn,
     )
@@ -139,7 +153,15 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
     if "subject" not in _CACHE or _CACHE.get("subject_spec") != subject_spec:
         _CACHE["subject_spec"] = subject_spec
         _CACHE["subject"] = make_policy(subject_spec)
-        _CACHE["eval"] = EnsembleValueEvaluator([resolve_path(p) for p in ORACLE_PATHS])
+        # vbeam oracle = the SUBJECT's own battle net(s), so "any difference is
+        # search, not a different net" holds for whichever subject is passed
+        # (the hardcoded e29 trio was correct only for the default subject). A
+        # single-net subject (e.g. e36 gen7) uses the plain NetValueEvaluator;
+        # a |-ensemble subject (e.g. the e29 trio) uses the ensemble.
+        _paths = [resolve_path(p) for p in _subject_net_paths(subject_spec)]
+        _CACHE["eval"] = (
+            NetValueEvaluator(_paths[0]) if len(_paths) == 1 else EnsembleValueEvaluator(_paths)
+        )
     if opp_spec not in _CACHE:
         _CACHE[opp_spec] = make_policy(opp_spec)
     subject, ev, opp = _CACHE["subject"], _CACHE["eval"], _CACHE[opp_spec]
