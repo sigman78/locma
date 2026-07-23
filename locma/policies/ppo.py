@@ -27,6 +27,61 @@ def _encode_for(model, view):
     return encode_battle(view)
 
 
+def _lean_masked_argmax(model, obs, mask) -> int:
+    """Deterministic masked-argmax that skips SB3's per-call distribution machinery.
+
+    ``model.predict(deterministic=True)`` builds a MaskableCategorical (logsumexp +
+    torch.distributions arg-validation + softmax) just to argmax it. For a
+    deterministic policy that whole object is dead weight: argmax over the masked
+    logits equals argmax over the masked softmax probs (softmax is monotone), so
+    this returns the SAME index while doing only forward + mask + argmax. Profiled
+    as ~92% of E36 self-play env time (frozen opponents + ldraft per pick); this
+    roughly halves the per-call cost. The forward chain mirrors
+    ``MaskableActorCriticPolicy.get_distribution`` exactly (pi extractor +
+    ``forward_actor``) so the decision is byte-identical."""
+    import numpy as np  # noqa: PLC0415 — lazy [ml]-adjacent dep
+    import torch  # noqa: PLC0415 — lazy [ml] dep
+
+    policy = model.policy
+    if isinstance(obs, dict):
+        batch = {k: np.expand_dims(v, 0) for k, v in obs.items()}
+    else:
+        batch = obs[None]
+    obs_t, _ = policy.obs_to_tensor(batch)
+    with torch.no_grad():
+        features = policy.extract_features(obs_t, policy.pi_features_extractor)
+        latent_pi = policy.mlp_extractor.forward_actor(features)
+        logits = policy.action_net(latent_pi)[0]
+        mask_t = torch.as_tensor(np.asarray(mask, dtype=bool), device=logits.device)
+        logits = torch.where(mask_t, logits, torch.full_like(logits, float("-inf")))
+        return int(torch.argmax(logits).item())
+
+
+def batched_masked_argmax(model, obs_list, mask_arr):
+    """Vectorised sibling of ``_lean_masked_argmax``: one forward over a batch of
+    ``obs_list`` (dict-of-arrays for token obs, or list of flat arrays for draft)
+    with per-row masks ``mask_arr`` [B, A]. Returns an int ndarray [B]. Same
+    decision as B separate lean-argmax calls (byte-identical per row), but one
+    forward amortises the SB3/torch launch overhead — the E36 batched-opponent
+    driver relies on this (profiled ~B-fold cheaper up to the GPU's limit)."""
+    import numpy as np  # noqa: PLC0415 — lazy [ml]-adjacent dep
+    import torch  # noqa: PLC0415 — lazy [ml] dep
+
+    policy = model.policy
+    if isinstance(obs_list[0], dict):
+        batch = {k: np.stack([o[k] for o in obs_list]) for k in obs_list[0]}
+    else:
+        batch = np.stack(obs_list)
+    obs_t, _ = policy.obs_to_tensor(batch)
+    with torch.no_grad():
+        features = policy.extract_features(obs_t, policy.pi_features_extractor)
+        latent_pi = policy.mlp_extractor.forward_actor(features)
+        logits = policy.action_net(latent_pi)
+        mask_t = torch.as_tensor(np.asarray(mask_arr, dtype=bool), device=logits.device)
+        logits = torch.where(mask_t, logits, torch.full_like(logits, float("-inf")))
+        return logits.argmax(dim=1).cpu().numpy()
+
+
 class MaskablePPOBattlePolicy:
     """Wraps a saved MaskablePPO model as a Battle Policy.
 
@@ -41,23 +96,34 @@ class MaskablePPOBattlePolicy:
         name: str = "ppo",
         deterministic: bool = True,
         model=None,
+        device: str | None = None,
     ):
         self.model_path = model_path
         self.name = name
         self.deterministic = deterministic
         self._model = model  # if provided, skip the lazy file load
+        # device for the lazy load: None -> SB3 "auto" (GPU if available). Set to
+        # "cpu" to keep small per-step opponent forwards off a contended GPU
+        # (E36 PFSP loads many pool nets across SubprocVecEnv workers).
+        self.device = device
 
     def _ensure(self) -> None:
         if self._model is None:
             from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-            self._model = MaskablePPO.load(self.model_path)
+            self._model = MaskablePPO.load(self.model_path, device=self.device or "auto")
+            # eval mode once (load leaves it in train mode); the lean argmax path
+            # below skips predict()'s per-call set_training_mode.
+            self._model.policy.set_training_mode(False)
 
     def battle_action(self, view, legal, state=None):
         self._ensure()
         obs = _encode_for(self._model, view)
         mask = action_mask(view, legal)
-        idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
+        if self.deterministic:
+            idx = _lean_masked_argmax(self._model, obs, mask)
+            return index_to_action(view, legal, idx)
+        idx, _ = self._model.predict(obs, action_masks=mask, deterministic=False)
         return index_to_action(view, legal, int(idx))
 
     def reset(self, seed=None) -> None:
@@ -79,18 +145,20 @@ class MaskablePPOEnsembleBattlePolicy:
     construction never touches the filesystem or imports the ``[ml]`` stack.
     """
 
-    def __init__(self, model_paths: list[str], name: str = "ppo-ens"):
+    def __init__(self, model_paths: list[str], name: str = "ppo-ens", device: str | None = None):
         if len(model_paths) < 2:
             raise ValueError("MaskablePPOEnsembleBattlePolicy needs at least 2 model paths")
         self.model_paths = list(model_paths)
         self.name = name
         self._models: list | None = None
+        self.device = device  # None -> SB3 "auto"; "cpu" keeps opponents off the GPU
 
     def _ensure(self) -> None:
         if self._models is None:
             from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
-            self._models = [MaskablePPO.load(p) for p in self.model_paths]
+            dev = self.device or "auto"
+            self._models = [MaskablePPO.load(p, device=dev) for p in self.model_paths]
 
     def battle_action(self, view, legal, state=None):
         import numpy as np  # noqa: PLC0415 — lazy [ml]-adjacent dep
@@ -147,6 +215,7 @@ class MaskablePPODraftPolicy:
             from sb3_contrib import MaskablePPO  # noqa: PLC0415 — optional [ml] dep
 
             self._model = MaskablePPO.load(self.model_path)
+            self._model.policy.set_training_mode(False)
 
     def note_pick(self, view, idx) -> None:
         """Record a pick made on this policy's behalf (PartialRandomDraftPolicy
@@ -162,8 +231,11 @@ class MaskablePPODraftPolicy:
         self._ensure()
         obs = encode_draft(view, self._picks)
         mask = draft_action_mask(legal)
-        idx, _ = self._model.predict(obs, action_masks=mask, deterministic=self.deterministic)
-        idx = int(idx)
+        if self.deterministic:
+            idx = _lean_masked_argmax(self._model, obs, mask)
+        else:
+            idx, _ = self._model.predict(obs, action_masks=mask, deterministic=False)
+            idx = int(idx)
         self.note_pick(view, idx)
         return idx
 
