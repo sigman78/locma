@@ -253,6 +253,57 @@ were trading/calibration, never lethals). **Parity is the training-side
 endpoint for this function class; lethal conversion stays play-time
 (E26).**
 
+### E38 — afterstate consequence columns (the obs answer to E30)
+
+E30's verdict was REPRESENTATIONAL, which is a claim about a fixed
+representation; E28c is the precedent that changing the representation can win.
+E38 gives the net, per candidate action, what the engine says that action does
+(`locma/envs/conseq.py`: board-power delta, damage, kills/losses, overkill, mana,
+wins-now, an exhaustive own-turn lethal solve, opponent-lethal-back). Fair on
+`lguard`'s argument — only our own actions are simulated, only public/own-known
+afterstate is read, no column touches hand contents (tested: swapping the
+opponent's whole hidden hand+deck, or reshuffling our own deck, changes nothing).
+
+**VERDICT (2026-07-24, worklog "Ruler re-pin + E38 Gate 1"): CLOSED (negative),
+and it is a STRONGER negative than E30's own.** Gate 1 on E30's controlled-BC
+harness (same teacher/practicum recipe, n=35,320, 3 seeds; the `factored` anchor
+reproduces E30 at 0.3761 vs 0.373). The columns are decodable and
+board-control-shaped — the ablation shows `dphi` is the strongest single column,
+the board-control four carry ~72% of the effect, and dropping BOTH lethal columns
+costs only 0.011 (so the "the teacher always takes a lethal" confound is ruled
+out). But adding them to an un-handicapped head moves plan agreement only
+**+0.0209** [+.018,+.018,+.027] vs its own shuffle control and **+0.0205** vs the
+baseline — inside the pre-registered close band (<=+0.03), a fifth of the +0.10
+bar E30 used to justify opening a training arm. The PPO/pointer-head arm was
+NOT built (kill criteria honored).
+
+So the missing quantity is **not information about immediate consequences; it is
+the multi-turn valuation of those consequences** — which is what depth supplies.
+Caveat worth carrying: the naive per-action-MLP arm read +0.0976 (ambiguous, near
+the open bar) purely because that architecture is a −0.071 handicap; a per-action
+comparison needs BOTH a shuffle control and an un-handicapped baseline or its
+delta is uninterpretable.
+
+## Rulers (re-pinned 2026-07-24)
+
+The E36 primary gate (`rbeam:shared` WR) is SATURATED at parity — 3-seed pooled
+0.509 [.481,.537] — so it cannot measure progress. Primary is now the fair
+`dmcts:15,150` rung (2250 sims), where the 3-seed pooled endpoint is **0.4067
+[.379,.435]**, CI excluding 0.50 with headroom both ways
+(`scripts/e36_dmcts_ladder.py --rungs`, `runs/e38/repin_dmcts.json`; this box
+reproduces the published x86 cells exactly). `dmcts:15,60` (900 sims) is *also*
+saturated (pooled 0.4867 [.459,.515]) and demotes to sensitivity.
+
+**This locates the crossover: gen7 is at parity with fair search up to ~900 sims
+and behind at 2250.** E22 put the planner's crossover at 450-1500 sims, so E36
+pushed it ~2x deeper in search budget rather than removing it — the precise form
+of the parity claim. Mechanism instrument: `e33_reactive_vs_search_behavior.py
+--oracle rbeam` (the 1-ply vbeam oracle was a lower bound as E33 claimed, but
+only by +0.026 root-disagree). Note E36 has since CLOSED two of E33's three
+residuals on gen7 — trade dphi is at parity with the reply-aware plan and
+face-greed is gone; overkill (+18%, worse against depth) and item under-play
+(−22%) survive.
+
 ## Explicitly out of scope
 
 Wider/deeper trunks (no capacity pressure, twice confirmed); more diversity
@@ -260,7 +311,10 @@ levers (one saturable resource, E7b/E7c/E13); recurrence (E6); auxiliary
 concept-prediction losses (E27 finding 1: representing != using); further
 play-time guards as ends (E26 stands as-is); **pool-composition /
 opponent-mixture levers at parity — planner and lguard anchors, any share
-up to 50% (E37a/b/c, dose-closed)**.
+up to 50% (E37a/b/c, dose-closed)**; **observation-side levers for
+search-choice recovery — E28c completed static card features (won), E38
+completed simulated per-action consequences (+0.021, closed), so the obs
+direction is exhausted for this question**.
 
 ## Milestones
 

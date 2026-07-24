@@ -6,9 +6,18 @@ only quantified the gap. This maps its SHAPE. The subject (default the reactive
 recipe of record, lppo:e29slim) drives full games vs the HARD3 pool; at each of
 its turn-starts we shadow-compute, from the identical state:
 
-  * the ORACLE turn plan  — vbeam over the SAME e29slim trio (one turn of pure
-    lookahead on the very net the subject uses; any difference is search, not a
-    different net). Cheap: one plan per turn.
+  * the ORACLE turn plan  — by default ``vbeam`` over the SUBJECT'S OWN net(s)
+    (one turn of pure lookahead on the very net the subject uses; any difference
+    is search, not a different net). Cheap: one plan per turn.
+
+    ``--oracle rbeam`` swaps in the reply-aware planner (``rbeam``'s
+    ``plan_turn_reply_aware``, n_plans x n_worlds expectiminimax over one genuine
+    opponent-reply ply) on the SAME net — deliberately still the subject's own
+    net, so the controlled reading holds and the only moved variable is search
+    DEPTH. This exists because the vbeam oracle is one ply, the WEAKEST
+    lookahead, and this script's own caveat calls it a LOWER BOUND on root
+    divergence; the strong search recipe of record is ``rbeam`` 8,20,4,4. Costs
+    ~n_plans*n_worlds critic leaves per turn instead of one beam.
   * the LETHAL oracle     — lguard.find_lethal, an exhaustive DFS solver (an
     UNBIASED ground truth for "a forced win exists this turn").
 
@@ -68,6 +77,9 @@ def _subject_net_paths(subject_spec: str) -> list[str]:
 SEED0 = 12_000_000
 BEAM_WIDTH = 8
 MAX_ACTIONS = 20
+# rbeam-oracle depth knobs — the 8,20,4,4 search recipe of record (E24).
+RBEAM_N_PLANS = 4
+RBEAM_N_WORLDS = 4
 
 _CACHE: dict = {}
 
@@ -135,7 +147,11 @@ def _seq_stats(actions) -> dict:
     }
 
 
-def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list[dict]:
+def _shadow_game(
+    subject_spec: str, opp_spec: str, seed: int, seat: int, oracle: str = "vbeam"
+) -> list[dict]:
+    import random  # noqa: PLC0415
+
     from locma.core import battle as battlemod  # noqa: PLC0415
     from locma.core.actions import Pass  # noqa: PLC0415
     from locma.core.engine import make_battle_view, run_game  # noqa: PLC0415
@@ -151,6 +167,7 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
     )
 
     if "subject" not in _CACHE or _CACHE.get("subject_spec") != subject_spec:
+        _CACHE.pop("oracle_plan", None)  # rebuild the plan fn against the new net
         _CACHE["subject_spec"] = subject_spec
         _CACHE["subject"] = make_policy(subject_spec)
         # vbeam oracle = the SUBJECT's own battle net(s), so "any difference is
@@ -165,6 +182,34 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
     if opp_spec not in _CACHE:
         _CACHE[opp_spec] = make_policy(opp_spec)
     subject, ev, opp = _CACHE["subject"], _CACHE["eval"], _CACHE[opp_spec]
+
+    # Oracle plan function. Both arms evaluate with the SUBJECT'S OWN net (`ev`),
+    # so search depth is the only moved variable between them. The rbeam arm's
+    # determinization rng is seeded per (game seed, seat) so the shadow is
+    # reproducible; it is NOT shared across games.
+    if oracle == "rbeam":
+        from locma.data.cards_db import load_cards  # noqa: PLC0415
+        from locma.policies.rbeam import plan_turn_reply_aware  # noqa: PLC0415
+
+        if "cards" not in _CACHE:
+            _CACHE["cards"] = load_cards()
+        rng = random.Random(seed * 4 + seat)
+
+        def oracle_plan(gs):
+            return plan_turn_reply_aware(
+                gs,
+                ev,
+                cards=_CACHE["cards"],
+                rng=rng,
+                width=BEAM_WIDTH,
+                max_actions=MAX_ACTIONS,
+                n_plans=RBEAM_N_PLANS,
+                n_worlds=RBEAM_N_WORLDS,
+            )
+    else:
+
+        def oracle_plan(gs):
+            return plan_turn(gs, ev, width=BEAM_WIDTH, max_actions=MAX_ACTIONS)
 
     turns: list[dict] = []
     st: dict = {"turn": -1, "pending": None, "subj_actions": []}
@@ -221,11 +266,7 @@ def _shadow_game(subject_spec: str, opp_spec: str, seed: int, seat: int) -> list
             close(None)  # previous turn had no Pass captured (rare)
             st["turn"] = gs.turn
             legal = list(battlemod.battle_legal(gs))
-            plan = (
-                plan_turn(gs, ev, width=BEAM_WIDTH, max_actions=MAX_ACTIONS)
-                if len(legal) >= 2
-                else legal
-            )
+            plan = oracle_plan(gs) if len(legal) >= 2 else legal
             end_view, plan_wins, plan_mana, plan_trades = plan_leaf(gs, plan)
             line, exhausted = find_lethal(gs)
             ps = _seq_stats(plan)
@@ -424,6 +465,14 @@ def main() -> None:
     ap.add_argument("--subject", default=SUBJECT_DEFAULT)
     ap.add_argument("--games", type=int, default=15, help="seeds per opponent (x2 seats)")
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument(
+        "--oracle",
+        choices=("vbeam", "rbeam"),
+        default="vbeam",
+        help="shadow planner: vbeam = 1 own-turn ply (cheap, a LOWER BOUND on "
+        "divergence); rbeam = + one genuine opponent-reply ply (the 8,20,4,4 "
+        "search RoR depth). Both run on the subject's OWN net.",
+    )
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--out", default="runs/e33-summary.json")
     ap.add_argument("--raw", default="runs/e33-raw.jsonl.gz")
@@ -431,14 +480,20 @@ def main() -> None:
     games = 2 if args.smoke else args.games
 
     specs = [
-        (args.subject, opp, SEED0 + i, seat)
+        (args.subject, opp, SEED0 + i, seat, args.oracle)
         for opp in OPPONENTS
         for i in range(games)
         for seat in (0, 1)
     ]
+    oracle_desc = (
+        f"rbeam({BEAM_WIDTH},{MAX_ACTIONS},{RBEAM_N_PLANS},{RBEAM_N_WORLDS})"
+        if args.oracle == "rbeam"
+        else f"vbeam({BEAM_WIDTH},{MAX_ACTIONS})"
+    )
     print(f"E33 behavioral autopsy — subject={args.subject}")
     print(
-        f"  {len(specs)} games ({games}/opp x2 x{len(OPPONENTS)} opps), oracle=vbeam:e29slim-trio"
+        f"  {len(specs)} games ({games}/opp x2 x{len(OPPONENTS)} opps), "
+        f"oracle={oracle_desc} on the subject's own net"
     )
 
     all_turns: list[dict] = []
@@ -461,7 +516,13 @@ def main() -> None:
                 for t in ts:
                     f.write(json.dumps(t) + "\n")
 
-    summary = {"subject": args.subject, "games": len(specs), **aggregate(all_turns)}
+    summary = {
+        "subject": args.subject,
+        "oracle": args.oracle,
+        "oracle_config": oracle_desc,
+        "games": len(specs),
+        **aggregate(all_turns),
+    }
     Path(args.out).write_text(json.dumps(summary, indent=2))
     print(f"\nwrote {args.out}  ({len(all_turns)} turns)")
 
