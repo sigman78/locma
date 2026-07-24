@@ -226,12 +226,41 @@ turn), so factorization is NOT the bottleneck. The reactive obs does not
 separably encode which action a lookahead teacher picks — play-time search
 fills that. No training arm opened.
 
+### E36/E37 — training-regime lever (PFSP self-play) and its exhaustion
+
+E36 (2026-07-22, PROMOTED `depot:e36` v1): the one lever the arms above
+never touched — the TRAINING REGIME. PFSP self-play (best-respond to a
+weighted pool of past selves + scripted anchors) closed the Phase-3 search
+wall to PARITY (`rbeam:shared` gap 0.807 -> 0.510, two independent chains,
+3-seed pooled 0.509 [.481,.537]) and then plateaued there for 4
+generations. Question: is THAT plateau regime (pool composition) or
+structural?
+
+**E37a/b/c VERDICT (2026-07-23, worklog E37/E37b/E37c): CLOSED — pool
+composition is exhausted; the plateau is structural.** Four arms on the
+same warm/seed/budget harness (`docs/e37-planner-anchor-plan.md`,
+pre-registered): matched-budget control, a fair `dmcts:15,60` planner
+anchor (~16% of games — INERT, three-instrument null incl. vs the pooled
+anchor itself), an lguard-wrapped self whose punishment is sharp and
+temporally adjacent (~15% — null at high power), and the dose-response
+escalation of that anchor to **30% and 50% of games** (exact-share
+`pin_share` driver mechanism). Missed-lethal dose curve 0/15/30/50%:
+0.0955/0.0873/0.0953/0.1047 (n~1600 lethal-turns each) — flat-to-adverse;
+held-out gate at parity everywhere; no specific adaptation to any anchor
+at any dose. What search adds is not learnable by playing against it —
+consistent with E30 (representational) and the E33/E36 autopsies (gains
+were trading/calibration, never lethals). **Parity is the training-side
+endpoint for this function class; lethal conversion stays play-time
+(E26).**
+
 ## Explicitly out of scope
 
 Wider/deeper trunks (no capacity pressure, twice confirmed); more diversity
 levers (one saturable resource, E7b/E7c/E13); recurrence (E6); auxiliary
 concept-prediction losses (E27 finding 1: representing != using); further
-play-time guards as ends (E26 stands as-is).
+play-time guards as ends (E26 stands as-is); **pool-composition /
+opponent-mixture levers at parity — planner and lguard anchors, any share
+up to 50% (E37a/b/c, dose-closed)**.
 
 ## Milestones
 

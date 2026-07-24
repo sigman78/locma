@@ -12,6 +12,10 @@ Per generation g:
   3. reweight the pool toward losing matchups (PFSP), admit the new net, cap size
   4. rewrite pool.json
 
+Pool entries may carry ``"pin_share": s`` — such members skip PFSP reweighting and
+their weight is re-solved each generation so their sampling probability stays
+exactly ``s`` (dose-controlled anchors, E37c dose-response arms).
+
 Gate 0 = 1-2 generations: does the self-play net beat the start net head-to-head,
 hold avg-hard3, and reduce boardkeep exploitability? (Those gate evals are run
 separately with the existing tools.) The paper used cluster-scale compute; this
@@ -233,6 +237,8 @@ def main() -> None:
         wr = eval_vs(new_spec, opp_specs, args.eval_games, args.seed + 900 + g)
         log(f"  gen{g} win-rate vs pool: {json.dumps(wr)}")
         for e in pool:
+            if "pin_share" in e:
+                continue  # dose-pinned member (E37c): its share is the treatment variable
             # prioritise opponents we're losing to: weight ~ (1 - winrate), floored
             e["weight"] = round(max(0.1, 1.0 - wr[e["spec"]]), 3)
 
@@ -243,6 +249,15 @@ def main() -> None:
             drop = selves[0]["spec"]  # evict the oldest self
             pool = [e for e in pool if e["spec"] != drop]
             log(f"  evicted oldest self: {drop}")
+        # re-solve pinned weights against the post-admission pool so each pinned
+        # member's sampling probability equals its pin_share exactly next gen
+        pinned = [e for e in pool if "pin_share" in e]
+        if pinned:
+            rest = sum(e["weight"] for e in pool if "pin_share" not in e)
+            s_tot = sum(float(e["pin_share"]) for e in pinned)
+            for e in pinned:
+                e["weight"] = round(float(e["pin_share"]) / (1.0 - s_tot) * rest, 3)
+                log(f"  pinned {e['spec']} at share {e['pin_share']} (weight {e['weight']})")
         write_pool(pool, pool_path)
         history.append({"gen": g, "out": out, "wr_vs_pool": wr})
         warm = out  # next generation continues from this one
