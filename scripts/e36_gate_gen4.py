@@ -66,6 +66,16 @@ LADDER = {
     # in seed (22M vs 20M) — the pair isolates seed variance. Depot refs so the
     # ladder runs on either box.
     **{f"s22_gen{g}": f"ppo:depot:e36s22/e36_s22_gen{g}.zip,{LDRAFT}" for g in range(8)},
+    # E37 anchor arms (docs/e37-planner-anchor-plan.md): s22 chain continued
+    # 2 gens with a fair dmcts:15,60 pool anchor (e37p) vs a matched-budget
+    # control (e37c) vs an lguard-wrapped-self anchor (e37l, E37b addendum) vs
+    # dose-pinned lguard arms at 30%/50% share (e37l30/e37l50, E37c addendum).
+    # Local runs/ refs — this-box artifacts.
+    **{
+        f"e37{arm}_gen{g}": f"ppo:runs/e36_e37{arm}_gen{g}.zip,{LDRAFT}"
+        for arm in ("p", "c", "l", "l30", "l50")
+        for g in (8, 9)
+    },
 }
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
