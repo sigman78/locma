@@ -8,10 +8,25 @@ play, not drafting. Each rung uses common random numbers across the two nets
 (same game seeds), so the e36 - e29slim delta is a paired read.
 
 Reported per (net, rung): the NET's win rate over the oracle (higher = the net
-beats the search harder) with Wilson 95% CI, plus the e36-vs-e29slim delta.
+beats the search harder) with Wilson 95% CI, plus the delta vs the ``e29slim``
+anchor when both are measured.
 
-    python scripts/e36_dmcts_ladder.py --pairs 200 --workers 16
-    python scripts/e36_dmcts_ladder.py --smoke        # 3 pairs, serial
+Also the RULER RE-PIN harness (2026-07-24): the E36 primary gate
+(``rbeam:shared`` WR) is saturated at parity (3-seed pooled 0.509 [.481,.537]),
+so it can no longer measure progress. The ``hard_2250sim`` rung is the
+unsaturated replacement — gen7 sits at 0.390 there, with headroom in both
+directions. ``--nets`` selects any subset of NETS (all three PFSP parity
+endpoints are registered), and ``--pool-nets`` reports one pooled Wilson CI
+across the seed replicates so the read is directly comparable to the pooled
+parity number it replaces.
+
+    python scripts/e36_dmcts_ladder.py --pairs 200 --workers 16   # original 2-net run
+    python scripts/e36_dmcts_ladder.py --smoke                    # 3 pairs, serial
+    # ruler re-pin: 3-seed endpoints + anchor on the hard rung only
+    python scripts/e36_dmcts_ladder.py --rungs hard_2250sim \
+        --nets e29slim,e36_gen7,e36_m1_gen7,e36_s22_gen7 \
+        --pool-nets e36_gen7,e36_m1_gen7,e36_s22_gen7 --workers 8 \
+        --out runs/e38/repin_hard.json
 """
 
 from __future__ import annotations
@@ -27,11 +42,17 @@ from locma.stats.intervals import wilson_ci
 
 LDRAFT = "depot:ldraft/ldraft_s0.zip"
 
-# The two reactive recipes of record, single-net, matched draft.
+# Reactive nets, single-net, matched draft. The first two are the original
+# ladder's default pair (prior RoR anchor + the promoted x86 gen7); the two
+# extra PFSP endpoints are the M1 and s22 seed replicates that make up the
+# 3-seed parity pool, registered here for the ruler re-pin.
 NETS = {
     "e29slim": f"ppo:depot:e29slim/e29slim_s0.zip,{LDRAFT}",
     "e36_gen7": f"ppo:depot:e36/e36_gen7.zip,{LDRAFT}",
+    "e36_m1_gen7": f"ppo:depot:e36m1/e36_m1_gen7.zip,{LDRAFT}",
+    "e36_s22_gen7": f"ppo:depot:e36s22/e36_s22_gen7.zip,{LDRAFT}",
 }
+DEFAULT_NETS = ("e29slim", "e36_gen7")
 
 # Fair determinized-MCTS oracle, K=15 worlds, matched ldraft draft (5th param),
 # scaled by iterations/world. Difficulty = 15 * I total simulations.
@@ -68,6 +89,20 @@ def main() -> None:
     ap.add_argument("--block-pairs", type=int, default=25)
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--smoke", action="store_true", help="3 pairs, serial")
+    ap.add_argument(
+        "--nets",
+        default=",".join(DEFAULT_NETS),
+        help=f"comma list of net labels from {sorted(NETS)}",
+    )
+    ap.add_argument(
+        "--rungs", default=",".join(RUNGS), help=f"comma list of rung labels from {list(RUNGS)}"
+    )
+    ap.add_argument(
+        "--pool-nets",
+        default="",
+        help="comma list of net labels to ALSO report as one pooled Wilson CI "
+        "(seed replicates of the same recipe; e.g. the 3 PFSP parity endpoints)",
+    )
     ap.add_argument("--out", default="runs/e36/dmcts_ladder.json")
     args = ap.parse_args()
 
@@ -75,9 +110,24 @@ def main() -> None:
     workers = 1 if args.smoke else args.workers
     block = args.block_pairs
 
+    net_labels = [s.strip() for s in args.nets.split(",") if s.strip()]
+    rung_labels = [s.strip() for s in args.rungs.split(",") if s.strip()]
+    pool_labels = [s.strip() for s in args.pool_nets.split(",") if s.strip()]
+    for label in net_labels + pool_labels:
+        if label not in NETS:
+            ap.error(f"unknown net label {label!r}; known: {sorted(NETS)}")
+    for label in rung_labels:
+        if label not in RUNGS:
+            ap.error(f"unknown rung label {label!r}; known: {list(RUNGS)}")
+    missing = [label for label in pool_labels if label not in net_labels]
+    if missing:
+        ap.error(f"--pool-nets labels must also be in --nets; missing: {missing}")
+    nets = {label: NETS[label] for label in net_labels}
+    rungs = {label: RUNGS[label] for label in rung_labels}
+
     units = []  # (net_label, net_spec, rung_label, oracle_spec, seed, n)
-    for rung, oracle in RUNGS.items():
-        for net_label, net_spec in NETS.items():
+    for rung, oracle in rungs.items():
+        for net_label, net_spec in nets.items():
             off = 0
             while off < pairs:
                 n = min(block, pairs - off)
@@ -85,7 +135,8 @@ def main() -> None:
                 off += n
 
     print(f"E36 dmcts-oracle ladder — {utc_now()}  {len(units)} blocks on {workers} workers")
-    agg: dict = {(nl, rg): [0, 0] for rg in RUNGS for nl in NETS}  # wins, games
+    print(f"  nets={net_labels}  rungs={rung_labels}  pool={pool_labels or '—'}")
+    agg: dict = {(nl, rg): [0, 0] for rg in rungs for nl in nets}  # wins, games
     t0 = time.perf_counter()
 
     def absorb(key, wins, games):
@@ -106,9 +157,9 @@ def main() -> None:
             absorb((u[0], u[2]), w, g)
 
     ladder: dict = {}
-    for rg in RUNGS:
+    for rg in rungs:
         row = {}
-        for nl in NETS:
+        for nl in nets:
             w, g = agg[(nl, rg)]
             lo, hi = wilson_ci(w, g)
             row[nl] = {
@@ -116,16 +167,28 @@ def main() -> None:
                 "ci": [round(lo, 4), round(hi, 4)],
                 "n": g,
             }
-        row["delta_e36_minus_e29slim"] = round(
-            row["e36_gen7"]["net_wr_vs_oracle"] - row["e29slim"]["net_wr_vs_oracle"], 4
-        )
+        if "e36_gen7" in nets and "e29slim" in nets:
+            row["delta_e36_minus_e29slim"] = round(
+                row["e36_gen7"]["net_wr_vs_oracle"] - row["e29slim"]["net_wr_vs_oracle"], 4
+            )
+        if len(pool_labels) > 1:
+            pw = sum(agg[(nl, rg)][0] for nl in pool_labels)
+            pg = sum(agg[(nl, rg)][1] for nl in pool_labels)
+            lo, hi = wilson_ci(pw, pg)
+            row["pooled"] = {
+                "members": pool_labels,
+                "net_wr_vs_oracle": round(pw / pg, 4),
+                "ci": [round(lo, 4), round(hi, 4)],
+                "n": pg,
+            }
         ladder[rg] = row
 
     payload = {
         "generated": utc_now(),
         "oracle": "dmcts (fair, non-cheating), K=15 worlds, matched ldraft draft",
-        "nets": NETS,
-        "rungs": RUNGS,
+        "nets": nets,
+        "rungs": rungs,
+        "pool_nets": pool_labels,
         "ladder": ladder,
         "seconds": round(time.perf_counter() - t0, 1),
     }
@@ -135,16 +198,19 @@ def main() -> None:
     print(
         "\n============ E36 vs dmcts-oracle ladder (net WR over oracle, higher=better) ============"
     )
-    print(f"{'rung':14s} {'sims':>6s} {'e29slim':>18s} {'e36_gen7':>18s} {'e36-e29slim':>12s}")
-    for rg in RUNGS:
-        sims = int(RUNGS[rg].split(",")[0].split(":")[1]) * int(RUNGS[rg].split(",")[1])
-        a, b = ladder[rg]["e29slim"], ladder[rg]["e36_gen7"]
-        print(
-            f"{rg:14s} {sims:>6d} "
-            f"{a['net_wr_vs_oracle']:.3f} [{a['ci'][0]:.2f},{a['ci'][1]:.2f}] "
-            f"{b['net_wr_vs_oracle']:.3f} [{b['ci'][0]:.2f},{b['ci'][1]:.2f}] "
-            f"{ladder[rg]['delta_e36_minus_e29slim']:+.3f}"
-        )
+    for rg in rungs:
+        sims = int(rungs[rg].split(",")[0].split(":")[1]) * int(rungs[rg].split(",")[1])
+        print(f"\n{rg}  ({sims} sims)")
+        keys = [*net_labels, *(["pooled"] if len(pool_labels) > 1 else [])]
+        for nl in keys:
+            c = ladder[rg][nl]
+            tag = f"pooled({len(pool_labels)} seeds)" if nl == "pooled" else nl
+            print(
+                f"  {tag:22s} {c['net_wr_vs_oracle']:.4f} "
+                f"[{c['ci'][0]:.3f},{c['ci'][1]:.3f}]  (n={c['n']})"
+            )
+        if "delta_e36_minus_e29slim" in ladder[rg]:
+            print(f"  {'e36 - e29slim':22s} {ladder[rg]['delta_e36_minus_e29slim']:+.4f}")
     print(f"\nwrote {args.out}  ({payload['seconds']}s)")
 
 

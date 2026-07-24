@@ -590,6 +590,12 @@ def record_practicum_cmd(
     obs_mode: str = typer.Option(
         "flat", help="observation encoding: 'flat' (default), 'token', or 'token-v1'"
     ),
+    conseq: bool = typer.Option(
+        False,
+        "--conseq",
+        help="also record the E38 per-action afterstate consequence block "
+        "(obs_conseq; engine-simulated, own-side-only)",
+    ),
 ):
     """Record a practicum of teacher battle decisions for distillation."""
     if games < 1:
@@ -608,6 +614,7 @@ def record_practicum_cmd(
         out=out,
         seed=seed,
         obs_mode=obs_mode,
+        conseq=conseq,
     )
     print(
         f"recorded {manifest['n_examples']} examples "

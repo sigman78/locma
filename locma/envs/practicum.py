@@ -52,16 +52,21 @@ class _Collector:
     action the semantic action space cannot represent (sem_index is None).
     """
 
-    def __init__(self, teacher_seat: int, obs_mode: str = "flat", labeler=None) -> None:
+    def __init__(
+        self, teacher_seat: int, obs_mode: str = "flat", labeler=None, conseq: bool = False
+    ) -> None:
         self.teacher_seat = teacher_seat
         self.obs_mode = obs_mode
         # token-fx records the 20-wide "fx" variant; plain token records v0 (17).
         self.token_variant = "fx" if obs_mode == "token-fx" else "v0"
         self.labeler = labeler  # optional: gs -> dict of per-state concept labels
+        self.conseq = conseq  # E38: also record the per-action consequence block
         self.obs: list = []
         self.action: list = []
         self.mask: list = []
         self.labels: list = []
+        self.conseq_rows: list = []
+        self.conseq_stats: dict = {}
         self.dropped = 0
 
     def __call__(self, seat: int, action, gs) -> None:
@@ -85,6 +90,10 @@ class _Collector:
         self.mask.append(action_mask(view, legal))
         if self.labeler is not None:
             self.labels.append(self.labeler(gs))
+        if self.conseq:
+            from locma.envs.conseq import conseq_features  # noqa: PLC0415 — lazy, E38 path only
+
+            self.conseq_rows.append(conseq_features(gs, legal, stats=self.conseq_stats))
 
 
 def record_practicum(
@@ -95,6 +104,7 @@ def record_practicum(
     seed: int = 0,
     obs_mode: str = "flat",
     labeler=None,
+    conseq: bool = False,
 ) -> dict:
     """Generate a practicum and write ``out`` (.npz) + its manifest.
 
@@ -110,6 +120,12 @@ def record_practicum(
     ``labeler``, if given, is called as ``labeler(gs)`` at every captured
     decision and must return a flat dict of floats; each key is written to the
     npz as ``concept_<key>`` (float32, one value per example).
+
+    ``conseq`` (E38, ``docs/e38-afterstate-columns-design.md``) additionally
+    records the per-action afterstate consequence block as ``obs_conseq`` of
+    shape (n, ACTION_SIZE, N_CONSEQ) — engine-simulated, own-side-only. It is
+    independent of ``obs_mode`` (the block is indexed by semantic action, not by
+    observation layout) and adds ~1 engine apply per legal action per decision.
     """
     if obs_mode not in {"flat", "token", "token-fx"}:
         raise ValueError(f"obs_mode must be 'flat', 'token', or 'token-fx', got {obs_mode!r}")
@@ -126,6 +142,8 @@ def record_practicum(
     opp_all: list = []
     gid_all: list = []
     labels_all: list = []
+    conseq_all: list = []
+    conseq_stats: dict = {}
     dropped = 0
     failed_games = 0
     gid = 0
@@ -137,7 +155,7 @@ def record_practicum(
                 teacher_pol = make_policy(teacher)
                 opp_pol = make_policy(opp_spec)
                 p0, p1 = (teacher_pol, opp_pol) if teacher_seat == 0 else (opp_pol, teacher_pol)
-                col = _Collector(teacher_seat, obs_mode, labeler=labeler)
+                col = _Collector(teacher_seat, obs_mode, labeler=labeler, conseq=conseq)
                 try:
                     result = run_game(p0, p1, s, on_pre_step=col)
                 except Exception:
@@ -154,7 +172,10 @@ def record_practicum(
                     opp_all.extend([opp_id] * k)
                     gid_all.extend([gid] * k)
                     labels_all.extend(col.labels)
+                    conseq_all.extend(col.conseq_rows)
                 dropped += col.dropped
+                for key, val in col.conseq_stats.items():
+                    conseq_stats[key] = conseq_stats.get(key, 0) + val
                 gid += 1
 
     n = len(act_all)
@@ -171,6 +192,12 @@ def record_practicum(
             common_arrays[f"concept_{key}"] = np.asarray(
                 [d[key] for d in labels_all], dtype=np.float32
             )
+    if conseq:
+        from locma.envs.conseq import N_CONSEQ  # noqa: PLC0415 — lazy, E38 path only
+
+        common_arrays["obs_conseq"] = np.asarray(conseq_all, dtype=np.float32).reshape(
+            n, ACTION_SIZE, N_CONSEQ
+        )
     if is_token:
         # .reshape(...) gives correct shape even when n==0 (mirrors flat branch).
         obs_arrays = dict(
@@ -219,6 +246,11 @@ def record_practicum(
         manifest["obs_size"] = OBS_SIZE
     if labeler is not None and labels_all:
         manifest["concepts"] = sorted(labels_all[0])
+    if conseq:
+        from locma.envs.conseq import CONSEQ_COLUMNS  # noqa: PLC0415 — lazy, E38 path only
+
+        manifest["conseq_columns"] = list(CONSEQ_COLUMNS)
+        manifest["conseq_stats"] = conseq_stats
 
     with open(_manifest_path(out), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
