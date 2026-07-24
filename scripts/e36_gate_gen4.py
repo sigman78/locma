@@ -76,6 +76,15 @@ LADDER = {
         for arm in ("p", "c", "l", "l30", "l50")
         for g in (8, 9)
     },
+    # Deck-pool seed arms (`e36_pfsp.py --tag s26/s28 --deck-pool`): s22 chain
+    # restarted from s22_gen3 (exact gen4-entry pool reconstructed from the s22
+    # history), 2 gens each on a cached 2000-deck pool (80/20 ldraft/random,
+    # #105), seeds 26M/28M, otherwise the s22 regime. Local runs/ refs.
+    **{
+        f"{arm}_gen{g}": f"ppo:runs/e36_{arm}_gen{g}.zip,{LDRAFT}"
+        for arm in ("s26", "s28")
+        for g in (4, 5)
+    },
 }
 
 _WORKER_POLICIES: dict[str, tuple[str, object]] = {}
