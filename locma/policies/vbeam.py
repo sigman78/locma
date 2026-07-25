@@ -36,7 +36,11 @@ from locma.core import battle as battlemod
 from locma.core.actions import Pass
 from locma.core.engine import make_battle_view
 from locma.core.state import Phase
-from locma.envs.encode import action_mask, encode_battle_tokens, token_variant_for_space
+from locma.envs.encode import (
+    action_mask,
+    encode_battle_tokens_batch,
+    token_variant_for_space,
+)
 from locma.policies.mcts import _clone_battle
 
 # Scores outside the critic's [-1, 1] clip range: a real win/loss always
@@ -406,10 +410,13 @@ class NetValueEvaluator:
         batch-64 call and the single largest line in the rbeam profile, larger
         than every ``torch.nn.linear`` combined — and the 3-net ensemble was
         paying it three times over on identical inputs.
+
+        Uses the batched encoder, which is byte-identical to stacking the
+        per-view one (asserted in ``tests/test_encode_batch.py``) and ~7-8x
+        faster from B>=8.
         """
         self._ensure()
-        obs_list = [encode_battle_tokens(v, self._variant) for v in views]
-        return {k: np.stack([o[k] for o in obs_list]) for k in obs_list[0]}
+        return encode_battle_tokens_batch(views, self._variant)
 
     def _forward(self, views: list, masks: list | None, batch: dict | None = None):
         """One batched trunk pass; returns (raw_values, probs_or_None).

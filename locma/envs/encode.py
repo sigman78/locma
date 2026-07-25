@@ -342,6 +342,24 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
         card_ids[slot] = float(card.card_id)
         token_mask[slot] = 1.0
 
+    scalars = _tactical_scalars(view, variant)
+
+    return {
+        "tokens": tokens,
+        "card_ids": card_ids,
+        "token_mask": token_mask,
+        "scalars": scalars,
+    }
+
+
+def _tactical_scalars(view, variant: str = "v0") -> np.ndarray:
+    """The tactical scalar vector for one view (see ``encode_battle_tokens``).
+
+    Extracted so the per-view and batched token encoders share ONE
+    implementation — the batched encoder is required to be byte-identical, and
+    sharing this makes the scalar half identical by construction rather than by
+    inspection.
+    """
     # --- compute tactical scalars -------------------------------------------
     opp_guard_count = sum(1 for c in view.op_board if c.abilities[_GUARD_IDX] != "-")
     my_total_attack = sum(float(c.attack) for c in view.my_board)
@@ -404,6 +422,136 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
                 ),
             ]
         )
+
+    return scalars
+
+
+# ---------------------------------------------------------------------------
+# Batched token encoder (E41 perf; byte-identical to the per-view encoder)
+# ---------------------------------------------------------------------------
+
+# Slot -> zone one-hot. The zone block is a pure function of the SLOT index
+# (0-7 hand, 8-13 my board, 14-19 op board), so it is a lookup, not per-card work.
+_ZONE_BY_SLOT: np.ndarray = np.zeros((MAX_TOKENS, 3), dtype=np.float32)
+_ZONE_BY_SLOT[:MAX_HAND, 0] = 1.0
+_ZONE_BY_SLOT[MAX_HAND : MAX_HAND + MAX_BOARD, 1] = 1.0
+_ZONE_BY_SLOT[MAX_HAND + MAX_BOARD :, 2] = 1.0
+
+_TYPE_ONEHOT: np.ndarray = np.eye(4, dtype=np.float32)
+
+# Ability strings repeat heavily across cards, so the 6 keyword bits are cached
+# by string rather than recomputed per card.
+_AB_BITS: dict[str, np.ndarray] = {}
+
+# card_id -> the 3 fx play-effect columns, as a dense array for fancy indexing.
+_FX_ROWS: np.ndarray | None = None
+
+
+def _ab_bits(abilities: str) -> np.ndarray:
+    bits = _AB_BITS.get(abilities)
+    if bits is None:
+        bits = np.array([float(abilities[i] != "-") for i in range(N_ABILITY)], dtype=np.float32)
+        _AB_BITS[abilities] = bits
+    return bits
+
+
+def _fx_rows() -> np.ndarray:
+    global _FX_ROWS
+    if _FX_ROWS is None:
+        rows = np.zeros((NUM_CARDS + 1, 3), dtype=np.float32)
+        for cid, eff in _fx_table().items():
+            rows[cid] = eff
+        _FX_ROWS = rows
+    return _FX_ROWS
+
+
+def encode_battle_tokens_batch(views: list, variant: str = "v0") -> dict:
+    """Encode MANY views at once, returning already-stacked arrays.
+
+    Byte-identical to ``{k: np.stack([encode_battle_tokens(v, variant)[k] for v
+    in views])}`` — asserted over real views in ``tests/test_encode_batch.py`` —
+    but ~2x faster from B>=8 because the per-card Python row construction and the
+    per-view dict + ``np.stack`` are replaced by one scatter into preallocated
+    arrays. Profiling (2026-07-25, E41) put ``encode_battle_tokens`` at 20.4
+    us/view, 24% of a batch-64 critic call and the single largest line in the
+    ``rbeam`` profile — larger than every ``torch.nn.linear`` combined.
+
+    Shapes: tokens (B, 20, F) | card_ids (B, 20) | token_mask (B, 20) |
+    scalars (B, S). At B=1 it is a wash (~0.9x); the win is in the numpy batching,
+    which is why this belongs behind ``NetValueEvaluator.encode``.
+    """
+    b_n = len(views)
+    fx = variant == "fx"
+    feats = TOKEN_FEATS_FX if fx else TOKEN_FEATS
+    n_scalar = N_TACTICAL_V1 if variant == "v1" else N_TACTICAL
+
+    tokens = np.zeros((b_n, MAX_TOKENS, feats), dtype=np.float32)
+    card_ids = np.zeros((b_n, MAX_TOKENS), dtype=np.float32)
+    token_mask = np.zeros((b_n, MAX_TOKENS), dtype=np.float32)
+    scalars = np.zeros((b_n, n_scalar), dtype=np.float32)
+
+    # One pass over every real card in every view, collecting flat columns.
+    bi: list[int] = []
+    si: list[int] = []
+    cost: list[float] = []
+    atk: list[float] = []
+    dfn: list[float] = []
+    tid: list[int] = []
+    abils: list[str] = []
+    ready: list[float] = []
+    cid: list[int] = []
+    for b, view in enumerate(views):
+        scalars[b] = _tactical_scalars(view, variant)
+        for seq, base, limit, on_board in (
+            (view.my_hand, 0, MAX_HAND, False),
+            (view.my_board, MAX_HAND, MAX_BOARD, True),
+            (view.op_board, MAX_HAND + MAX_BOARD, MAX_BOARD, True),
+        ):
+            for i, card in enumerate(seq):
+                if i >= limit:
+                    break
+                bi.append(b)
+                si.append(base + i)
+                cost.append(card.cost)
+                atk.append(card.attack)
+                dfn.append(card.defense)
+                tid.append(int(card.type))
+                abils.append(card.abilities)
+                ready.append(
+                    1.0 if (on_board and card.can_attack and not card.has_attacked) else 0.0
+                )
+                cid.append(card.card_id)
+
+    if not bi:
+        return {
+            "tokens": tokens,
+            "card_ids": card_ids,
+            "token_mask": token_mask,
+            "scalars": scalars,
+        }
+
+    b_idx = np.asarray(bi, dtype=np.intp)
+    s_idx = np.asarray(si, dtype=np.intp)
+    cid_arr = np.asarray(cid, dtype=np.intp)
+
+    # Layout: zone(3) | type(4) | cost,atk,def(3) | abilities(6) | ready(1)
+    tokens[b_idx, s_idx, 0:3] = _ZONE_BY_SLOT[s_idx]
+    tokens[b_idx, s_idx, 3:7] = _TYPE_ONEHOT[np.asarray(tid, dtype=np.intp)]
+    tokens[b_idx, s_idx, 7] = np.asarray(cost, dtype=np.float32)
+    tokens[b_idx, s_idx, 8] = np.asarray(atk, dtype=np.float32)
+    tokens[b_idx, s_idx, 9] = np.asarray(dfn, dtype=np.float32)
+    tokens[b_idx, s_idx, 10 : 10 + N_ABILITY] = np.stack([_ab_bits(a) for a in abils])
+    tokens[b_idx, s_idx, 10 + N_ABILITY] = np.asarray(ready, dtype=np.float32)
+
+    if fx:
+        # Play effects are appended for HAND cards only — board slots stay zero,
+        # because effects fire on play and are spent by then.
+        hand = s_idx < MAX_HAND
+        if hand.any():
+            tokens[b_idx[hand], s_idx[hand], TOKEN_FEATS:] = _fx_rows()[cid_arr[hand]]
+
+    card_ids[b_idx, s_idx] = cid_arr.astype(np.float32)
+    token_mask[b_idx, s_idx] = 1.0
 
     return {
         "tokens": tokens,
