@@ -247,3 +247,102 @@ def test_registry_defaults_and_hidden():
     assert dflt.battle.n_plans == 4
     assert dflt.battle.n_worlds == 4
     assert "rbeam" not in policy_names()  # hidden: needs a model artifact
+
+
+# ---------------------------------------------------------------------------
+# opp_width — the reply-beam width knob (E41 part B)
+# ---------------------------------------------------------------------------
+
+
+def test_opp_width_none_is_identical_to_passing_width():
+    """`None` must mean "same as `width`", or every existing spec changes play.
+
+    The E41-B sweep measured narrower reply beams as a real strength loss
+    (paired -0.02 to -0.0375 on dmcts:15,150), so the default MUST stay pinned to
+    the historical behaviour.
+    """
+    import random  # noqa: PLC0415
+
+    from locma.data.cards_db import load_cards  # noqa: PLC0415
+    from locma.policies.rbeam import plan_turn_reply_aware  # noqa: PLC0415
+
+    cards = load_cards()
+    gs = _lethal_or_trade_state()
+    ev = _ZeroLikeEvaluator()
+    kw = dict(cards=cards, width=4, max_actions=20, n_plans=3, n_worlds=2)
+    a = plan_turn_reply_aware(gs, ev, rng=random.Random(3), opp_width=None, **kw)
+    b = plan_turn_reply_aware(gs, ev, rng=random.Random(3), opp_width=4, **kw)
+    assert a == b
+
+
+def test_opp_width_is_threaded_to_the_reply_beam_only():
+    """The knob must change the REPLY beam's width and nothing else."""
+    import random  # noqa: PLC0415
+
+    from locma.data.cards_db import load_cards  # noqa: PLC0415
+    from locma.policies.rbeam import plan_turn_reply_aware  # noqa: PLC0415
+
+    seen: list[int] = []
+    ev = _ZeroLikeEvaluator()
+
+    import locma.policies.rbeam as R  # noqa: PLC0415
+
+    real = R.plan_turn_many
+
+    def spy(states, evaluator, *, width, max_actions):
+        seen.append(width)
+        return real(states, evaluator, width=width, max_actions=max_actions)
+
+    R.plan_turn_many = spy
+    try:
+        plan_turn_reply_aware(
+            _lethal_or_trade_state(),
+            ev,
+            cards=load_cards(),
+            rng=random.Random(3),
+            width=8,
+            max_actions=20,
+            n_plans=3,
+            n_worlds=2,
+            opp_width=2,
+        )
+    finally:
+        R.plan_turn_many = real
+    assert seen, "the batched reply beam was never called"
+    assert set(seen) == {2}, f"reply beam got width {seen}, expected 2"
+
+
+class _ZeroLikeEvaluator:
+    """Deterministic, board-power based, CLIPPED to the critic's [-1, 1] range.
+
+    The clip is load-bearing, not cosmetic: scores outside [-1, 1] are reserved
+    sentinels (``_WIN_SCORE`` = +2 / ``_LOSS_SCORE`` = -2), and every real
+    evaluator clips (``NetValueEvaluator.evaluate``). An unclipped stub returning
+    e.g. +5 makes ``plan_turn_reply_aware`` classify every candidate as a winning
+    line, short-circuit the reply search entirely, and silently test nothing.
+    """
+
+    def evaluate(self, views, masks):
+        vals = [
+            max(
+                -1.0,
+                min(
+                    1.0,
+                    0.1
+                    * float(sum(c.attack for c in v.my_board) - sum(c.attack for c in v.op_board)),
+                ),
+            )
+            for v in views
+        ]
+        return vals, [True] * len(views)
+
+    def values(self, views):
+        return [0.0] * len(views)
+
+
+def _lethal_or_trade_state():
+    gs = _gs()
+    gs.players[1].health = 12
+    gs.players[1].board.append(_creature(9, 2, 2))
+    gs.players[0].board.extend([_creature(1, 3, 3), _creature(2, 2, 2)])
+    return gs

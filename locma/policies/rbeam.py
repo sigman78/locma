@@ -154,12 +154,22 @@ def plan_turn_reply_aware(
     n_plans: int = 4,
     n_worlds: int = 4,
     opp_evaluator=None,
+    opp_width: int | None = None,
 ) -> list:
     """Pick the own-turn plan with the best mean value after one opponent reply.
 
     Returns the chosen root plan (an action sequence ending in ``Pass()``, or a
     lethal that ends the game) — same shape as ``plan_turn``, so the policy plays
     it out identically.
+
+    ``opp_width`` is the beam width for the OPPONENT's reply search; ``None``
+    (default) means "same as ``width``", which is the historical behaviour and
+    keeps every existing spec byte-identical. It is separable because the reply is
+    one ply of an expectiminimax AVERAGE over sampled worlds, not the move we
+    commit to — so it may not need our own turn's care. Post-E41 the binding cost
+    is view count (~956 views/turn, of which ~93% come from the reply beams), and
+    this knob is the only lever that reduces it. Unlike the E41 batching work it
+    CHANGES PLAY, so any value other than the default needs a ruler gate.
     """
     seat = state.current
     opp_evaluator = opp_evaluator if opp_evaluator is not None else evaluator
@@ -203,7 +213,12 @@ def plan_turn_reply_aware(
     # n_worlds worlds instead of one call per world per depth. This is the speedup
     # baseline.md's E24 section flagged as "currently looped".
     if opp_states:
-        opp_plans = plan_turn_many(opp_states, opp_evaluator, width=width, max_actions=max_actions)
+        opp_plans = plan_turn_many(
+            opp_states,
+            opp_evaluator,
+            width=width if opp_width is None else opp_width,
+            max_actions=max_actions,
+        )
         # Phase 3 (engine only): apply each reply and collect the leaf to score.
         for det, pi, opp_plan in zip(opp_states, opp_ref, opp_plans, strict=True):
             score, view, sign = _finish_after_opp_reply(det, opp_plan, seat)
@@ -247,6 +262,7 @@ class RBeamBattlePolicy:
         seed: int = 0,
         evaluator=None,
         opp_evaluator=None,
+        opp_width: int | None = None,
     ) -> None:
         self.name = name
         self.model_path = model_path
@@ -254,6 +270,7 @@ class RBeamBattlePolicy:
         self.max_actions = max_actions
         self.n_plans = n_plans
         self.n_worlds = n_worlds
+        self.opp_width = opp_width
         self._seed = seed
         self._rng = random.Random(seed)
         self._evaluator = evaluator if evaluator is not None else NetValueEvaluator(model_path)
@@ -286,6 +303,7 @@ class RBeamBattlePolicy:
             n_plans=self.n_plans,
             n_worlds=self.n_worlds,
             opp_evaluator=self._opp_evaluator,
+            opp_width=self.opp_width,
         )
         self._plan = plan[1:]
         return plan[0]
