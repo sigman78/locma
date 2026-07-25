@@ -46,11 +46,26 @@ LDRAFT = "depot:ldraft/ldraft_s0.zip"
 # ladder's default pair (prior RoR anchor + the promoted x86 gen7); the two
 # extra PFSP endpoints are the M1 and s22 seed replicates that make up the
 # 3-seed parity pool, registered here for the ruler re-pin.
+_E36_TRIO = "depot:e36/e36_gen7.zip|depot:e36m1/e36_m1_gen7.zip|depot:e36s22/e36_s22_gen7.zip"
+_E29_TRIO = "depot:e29slim/e29slim_s0.zip|depot:e29slim/e29slim_s1.zip|depot:e29slim/e29slim_s2.zip"
+
 NETS = {
     "e29slim": f"ppo:depot:e29slim/e29slim_s0.zip,{LDRAFT}",
     "e36_gen7": f"ppo:depot:e36/e36_gen7.zip,{LDRAFT}",
     "e36_m1_gen7": f"ppo:depot:e36m1/e36_m1_gen7.zip,{LDRAFT}",
     "e36_s22_gen7": f"ppo:depot:e36s22/e36_s22_gen7.zip,{LDRAFT}",
+    # E40 part B — the e36 3-seed ENSEMBLE, constructible with no training from
+    # the three independent PFSP endpoints (x86 14M / m1 20M / s22 22M). This
+    # closes baseline.md's standing caveat that "gen7 is one net, so there is no
+    # `lppo:e36` guarded-ensemble variant" — written when only two chains existed.
+    # NB these three differ in platform and n_envs as well as seed, so the trio
+    # carries MORE diversity than the e29slim trio (E7/E8 say that helps an
+    # ensemble; flagged, not assumed). `lppo:` adds the E26 lethal-guard lens.
+    "e36_trio": f"ppo:{_E36_TRIO},{LDRAFT}",
+    "e36_trio_guarded": f"lppo:{_E36_TRIO},{LDRAFT}",
+    # Incumbent guarded-reactive recipe of record (E29-slim, 4 generations stale)
+    # — the comparison the guarded promotion has to beat.
+    "e29slim_trio_guarded": f"lppo:{_E29_TRIO},{LDRAFT}",
 }
 DEFAULT_NETS = ("e29slim", "e36_gen7")
 

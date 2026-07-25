@@ -313,12 +313,35 @@ so the arm needs state subsampling or reanalyze-style offline labeling.
   34.4% disagreement costs ~0 against a mirror and only +0.067 against the ruler.
   Use `e33 --oracle rbeam` (0.406) for any mechanism claim.
 
-**Lead, not yet run:** E32 Phase 1's "a reactive champion is a worse search
-evaluator" negative was measured on e29slim and does NOT obviously generalize —
-E25 had `rbeam:shared` at parity with the EASIER `dmcts:15,100` (0.501) while
-`rbeam:gen7` beats the HARDER `dmcts:15,150` (0.551). A direct `rbeam:gen7` vs
-`rbeam:shared` head-to-head is cheap and could re-pin the play-time SEARCH recipe
-of record.
+**Lead RESOLVED (2026-07-25, E40-A — the search evaluator DID re-pin).** E32
+Phase 1's evaluator negative was e29slim-specific. Head-to-head at matched wrapper
+and draft, n=800 pooled over a primary and a disjoint confirm: `rbeam:gen7` (ONE
+critic) beats `rbeam:shared` (three) **0.5938**, and the e36 trio **0.6562** —
+every CI excluding 0.50. So a single gen7 critic beats three critics bred by the
+planner pipeline to be search evaluators, at ~1/3 the evaluator compute. **This is
+the first evidence PFSP improved the VALUE head** (E36's autopsies found only
+policy-side gains and spectral simplification), and it raises E39-align's ceiling:
+that arm's teacher is `rbeam` over gen7's own critic. Search RoR re-pinned in
+`baseline.md` (2026-07-25 E40-A).
+
+**Bookkeeping rule this creates:** a stronger search RoR WIDENS the measured gap by
+construction. Never quote a "gap to search" without naming the searcher — E36's
+pooled 0.509 parity is against `rbeam:shared` and is NOT comparable to a number
+against `rbeam:e36`. The reactive primary ruler stays `dmcts:15,150`.
+
+### E40-B — the guarded-reactive rung reaches search PARITY with no training
+
+`baseline.md`'s standing caveat ("gen7 is single-seed and does not yet have an
+ensemble variant") was written when E36 had two chains; s22 makes **three**, so the
+trio is constructible from published blobs. On the re-pinned primary
+`dmcts:15,150`: `ppo:e36 gen7` 0.3900 -> `ppo:e36 trio` 0.4525 -> **`lppo:e36 trio`
+0.4675 [.419,.516]**, versus the incumbent `lppo:e29slim trio` at **0.2100** —
+**+0.2575, with the candidate's CI straddling 0.50.** Ensembling plus the E26 lens
+takes the reactive rung from behind fair 2250-sim search to parity with it, for
+free. All three gates pass, two as improvements: avg-hard3 0.9567 vs the
+incumbent's 0.9340, and the E10 exploit guard-rail worst-archetype **0.1200** —
+the most exploit-robust config measured in this program. Promoted in `baseline.md`
+(2026-07-25 E40-B).
 
 ## Rulers (re-pinned 2026-07-24)
 
