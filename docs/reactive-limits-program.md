@@ -284,6 +284,42 @@ the open bar) purely because that architecture is a −0.071 handicap; a per-act
 comparison needs BOTH a shuffle control and an un-handicapped baseline or its
 delta is uninterpretable.
 
+### E39 — amortize the net's own REPLY-AWARE lookahead (Gate 0 PASSED)
+
+**Gate 0 VERDICT (2026-07-24, worklog "E39 Gate 0"): PASSED — the net's own
+lookahead is worth following, and the value is in the OPPONENT-REPLY ply.** Own
+search vs the same net's bare policy head, n=1000/cell: `vbeam` 8,20 is exact
+parity (0.4980 [.467,.529], replicated on the m1 endpoint 0.5030) while `rbeam`
+8,20,4,4 wins **0.6350 [.605,.664]** — +0.137 for one reply ply, clearing the
+pre-registered 0.60 bar. Stage 2 confirms it converts: on the re-pinned primary
+`dmcts:15,150`, `rbeam:gen7` scores **0.5510 [.520,.582]** vs the bare net's
+0.390 — **+0.161, and it BEATS the ruler** with no new training.
+
+**Open arm (E39-align):** an auxiliary reply-aware plan target inside the PFSP
+loop — on-policy, full-net, ADDED to PPO rather than replacing it. Those three
+properties are what separate it from the closed imitation arms (E4v2/EXIT and E15
+Stage 2 were off-policy, frozen-extractor, fixed-teacher, objective-replacing).
+The teacher MUST be reply-aware: an own-turn teacher is precisely what E36 already
+absorbed, which retroactively explains those nulls (both distilled `vbeam`) —
+though fairly, on the b0k/shared-era nets `vbeam` was still a strong teacher.
+Open engineering question: `rbeam` at 3.4-6.6 s/game cannot run inline per step,
+so the arm needs state subsampling or reanalyze-style offline labeling.
+
+**Two instrument corrections from this gate, both load-bearing:**
+- **Score "is search X worth it" against a STRONG opponent, never a self-mirror.**
+  The mirror read `vbeam` at exactly 0 (0.498); the ruler read it at +0.067. The
+  mirror systematically under-reads own-turn search.
+- **Root-disagreement against a `vbeam` oracle is a near-worthless instrument** —
+  34.4% disagreement costs ~0 against a mirror and only +0.067 against the ruler.
+  Use `e33 --oracle rbeam` (0.406) for any mechanism claim.
+
+**Lead, not yet run:** E32 Phase 1's "a reactive champion is a worse search
+evaluator" negative was measured on e29slim and does NOT obviously generalize —
+E25 had `rbeam:shared` at parity with the EASIER `dmcts:15,100` (0.501) while
+`rbeam:gen7` beats the HARDER `dmcts:15,150` (0.551). A direct `rbeam:gen7` vs
+`rbeam:shared` head-to-head is cheap and could re-pin the play-time SEARCH recipe
+of record.
+
 ## Rulers (re-pinned 2026-07-24)
 
 The E36 primary gate (`rbeam:shared` WR) is SATURATED at parity — 3-seed pooled
