@@ -42,6 +42,7 @@ from locma.policies.vbeam import (
     NetValueEvaluator,
     plan_turn,
     plan_turn_candidates,
+    plan_turn_many,
 )
 
 
@@ -63,6 +64,40 @@ def _apply_plan(state, plan, seat) -> None:
         battlemod.apply_battle(state, a)
 
 
+def _advance_to_opp_turn(det, plan, seat):
+    """Phase 1 of a leaf: play our ``plan`` in ``det`` and hand the turn over.
+
+    Engine only — touches NO net, so many worlds can be advanced to the
+    opponent's decision point before a single batched beam runs over all of them
+    (``plan_turn_many``). Mutates ``det``.
+
+    Returns a terminal score if OUR line already ended the game, else ``None``
+    with ``det`` parked at the opponent's turn.
+    """
+    _apply_plan(det, plan, seat)
+    if det.phase == Phase.ENDED:
+        return _WIN_SCORE if det.winner == seat else _LOSS_SCORE
+    # If the plan broke before its terminal Pass, end our turn explicitly so the
+    # opponent gets to reply (Pass triggers their hidden draw — now world-fair).
+    if det.current == seat:
+        battlemod.apply_battle(det, Pass())
+        if det.phase == Phase.ENDED:
+            return _WIN_SCORE if det.winner == seat else _LOSS_SCORE
+    return None
+
+
+def _finish_after_opp_reply(det, opp_plan, seat):
+    """Phase 3 of a leaf: apply the opponent's chosen reply and return the leaf.
+
+    Engine only. Same ``(terminal_score, view, sign)`` contract as
+    ``_simulate_to_leaf``; see it for the sign convention.
+    """
+    _apply_plan(det, opp_plan, 1 - seat)
+    if det.phase == Phase.ENDED:
+        return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
+    return None, make_battle_view(det), (1 if det.current == seat else -1)
+
+
 def _simulate_to_leaf(det, plan, seat, opp_evaluator, *, width, max_actions):
     """Play our ``plan`` then the opponent's best reply in ``det`` (mutated).
 
@@ -77,24 +112,18 @@ def _simulate_to_leaf(det, plan, seat, opp_evaluator, *, width, max_actions):
 
     Separating "reach the leaf" from "score the leaf" lets the caller batch every
     non-terminal leaf across all plans/worlds into ONE critic forward.
-    """
-    _apply_plan(det, plan, seat)
-    if det.phase == Phase.ENDED:
-        return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
-    # If the plan broke before its terminal Pass, end our turn explicitly so the
-    # opponent gets to reply (Pass triggers their hidden draw — now world-fair).
-    if det.current == seat:
-        battlemod.apply_battle(det, Pass())
-        if det.phase == Phase.ENDED:
-            return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
 
+    Single-world path, kept for ``score_plan_in_world`` and tests. The hot path in
+    ``plan_turn_reply_aware`` instead uses the three phases this composes
+    (``_advance_to_opp_turn`` -> one batched ``plan_turn_many`` over every world ->
+    ``_finish_after_opp_reply``) so the opponent beams share their critic calls.
+    """
+    score = _advance_to_opp_turn(det, plan, seat)
+    if score is not None:
+        return score, None, 0
     # Opponent's strongest complete reply in this world (its own own-turn beam).
     opp_plan = plan_turn(det, opp_evaluator, width=width, max_actions=max_actions)
-    _apply_plan(det, opp_plan, 1 - seat)
-    if det.phase == Phase.ENDED:
-        return (_WIN_SCORE if det.winner == seat else _LOSS_SCORE), None, 0
-
-    return None, make_battle_view(det), (1 if det.current == seat else -1)
+    return _finish_after_opp_reply(det, opp_plan, seat)
 
 
 def score_plan_in_world(det, plan, seat, evaluator, opp_evaluator, *, width, max_actions) -> float:
@@ -125,12 +154,22 @@ def plan_turn_reply_aware(
     n_plans: int = 4,
     n_worlds: int = 4,
     opp_evaluator=None,
+    opp_width: int | None = None,
 ) -> list:
     """Pick the own-turn plan with the best mean value after one opponent reply.
 
     Returns the chosen root plan (an action sequence ending in ``Pass()``, or a
     lethal that ends the game) — same shape as ``plan_turn``, so the policy plays
     it out identically.
+
+    ``opp_width`` is the beam width for the OPPONENT's reply search; ``None``
+    (default) means "same as ``width``", which is the historical behaviour and
+    keeps every existing spec byte-identical. It is separable because the reply is
+    one ply of an expectiminimax AVERAGE over sampled worlds, not the move we
+    commit to — so it may not need our own turn's care. Post-E41 the binding cost
+    is view count (~956 views/turn, of which ~93% come from the reply beams), and
+    this knob is the only lever that reduces it. Unlike the E41 batching work it
+    CHANGES PLAY, so any value other than the default needs a ruler gate.
     """
     seat = state.current
     opp_evaluator = opp_evaluator if opp_evaluator is not None else evaluator
@@ -149,14 +188,40 @@ def plan_turn_reply_aware(
     plan_scores: list[list[float]] = [[] for _ in candidates]
     pending_views: list = []
     pending_ref: list[tuple[int, int]] = []  # (plan_index, sign)
+
+    # Phase 1 (engine only, no net): play our plan in each world and hand the turn
+    # over, so every world is parked at the OPPONENT's decision point. The
+    # determinization order is the SAME nested loop the looped implementation used
+    # (plans outer, worlds inner, lethal plans skipped), so `rng` is consumed in an
+    # identical sequence and the policy stays deterministic given its seed.
+    opp_states: list = []
+    opp_ref: list[int] = []  # plan index per parked world
     for pi, (_own_score, plan) in enumerate(candidates):
         if pi in lethal:
             continue
         for _ in range(n_worlds):
             det = determinize(state, rng, cards)
-            score, view, sign = _simulate_to_leaf(
-                det, plan, seat, opp_evaluator, width=width, max_actions=max_actions
-            )
+            score = _advance_to_opp_turn(det, plan, seat)
+            if score is not None:  # our own line already ended the game
+                plan_scores[pi].append(score)
+            else:
+                opp_states.append(det)
+                opp_ref.append(pi)
+
+    # Phase 2 (the batched win): every parked world's opponent-reply beam advances
+    # in LOCKSTEP, so each beam depth costs ONE critic call across all ~n_plans*
+    # n_worlds worlds instead of one call per world per depth. This is the speedup
+    # baseline.md's E24 section flagged as "currently looped".
+    if opp_states:
+        opp_plans = plan_turn_many(
+            opp_states,
+            opp_evaluator,
+            width=width if opp_width is None else opp_width,
+            max_actions=max_actions,
+        )
+        # Phase 3 (engine only): apply each reply and collect the leaf to score.
+        for det, pi, opp_plan in zip(opp_states, opp_ref, opp_plans, strict=True):
+            score, view, sign = _finish_after_opp_reply(det, opp_plan, seat)
             if view is None:
                 plan_scores[pi].append(score)
             else:
@@ -197,6 +262,7 @@ class RBeamBattlePolicy:
         seed: int = 0,
         evaluator=None,
         opp_evaluator=None,
+        opp_width: int | None = None,
     ) -> None:
         self.name = name
         self.model_path = model_path
@@ -204,6 +270,7 @@ class RBeamBattlePolicy:
         self.max_actions = max_actions
         self.n_plans = n_plans
         self.n_worlds = n_worlds
+        self.opp_width = opp_width
         self._seed = seed
         self._rng = random.Random(seed)
         self._evaluator = evaluator if evaluator is not None else NetValueEvaluator(model_path)
@@ -236,6 +303,7 @@ class RBeamBattlePolicy:
             n_plans=self.n_plans,
             n_worlds=self.n_worlds,
             opp_evaluator=self._opp_evaluator,
+            opp_width=self.opp_width,
         )
         self._plan = plan[1:]
         return plan[0]
