@@ -8,13 +8,14 @@ snapshots. The current **recipes of record**: the **pure reactive** recipe is in
 the 2026-07-22 E36 section below (`depot:e36` gen7, the PFSP self-play net that
 took fair play-time search to a coin flip — first training-side closure of the
 search wall, superseding E29-slim on the pure rung); the **guarded-reactive**
-`lppo` recipe remains the 2026-07-20 E29-slim section (a 3-seed ensemble; gen7
-is single-seed and does not yet have an ensemble variant); the planner
-recipe is in the 2026-07-07 section; the strongest
-**play-time search** config — `rbeam` (reply-aware turn beam), confirmed to
-beat both the planner and the deep-`netdmcts` search recipe head-to-head — is
-in the 2026-07-10 E24 section below (it supersedes the 2026-07-09 E23
-`netdmcts` search recipe). Refreshed 2026-06-26 after the new shuffled `DraftSource` default
+`lppo` recipe is in the 2026-07-25 E40-B section below (`lppo:e36 trio` — the
+three independent PFSP endpoints, buildable with no training, superseding the
+E29-slim stack); the planner recipe is in the 2026-07-07 section; the strongest
+**play-time search** config is `rbeam` (reply-aware turn beam) with a **gen7
+evaluator** — see the 2026-07-25 E40 section immediately below, which keeps
+E24's 8,20,4,4 wrapper but re-pins the evaluator net from the `shared` trio to
+`depot:e36` (E24's own section, 2026-07-10, is the frozen predecessor and still
+documents the wrapper's strength/cost frontier). Refreshed 2026-06-26 after the new shuffled `DraftSource` default
 (PR #31): the draft pool is now a shuffle of the whole 160-card space duplicated
 `copies=2` (each card offered at most twice), replacing the old
 uniform-with-replacement sampling. Cells shifted by 1–3 points — the same order
@@ -44,6 +45,179 @@ loses to both `scripted` (0.39) and `max-guard` (0.45) — the two that rate
 above it. Read the matrix, not just the ordinal. (E36 gen7 sits far above this
 pool at Elo 2008 — see the 2026-07-22 section; it beats every baseline
 0.89–0.98.)
+
+---
+
+# Recipes of record — 2026-07-25: E40-A — the SEARCH evaluator re-pins to gen7 (`rbeam:e36` beats `rbeam:shared`, confirmed)
+
+E40 part A (branch `feat/e40-harvest`, worklog "E40-A", pre-registered in
+`scripts/e40_evaluator.py`): the play-time search recipe of record keeps E24's
+`rbeam` wrapper at 8,20,4,4 but swaps its **evaluator net** from the `shared`
+3-critic ensemble to the E36 PFSP endpoint(s). Same wrapper config and matched
+`depot:ldraft` on BOTH sides, so the evaluator net is the only variable — the
+identical ruler E24 used to promote `rbeam` itself.
+
+**Why this was even asked.** E32 Phase 1 (2026-07-20) closed exactly this swap as
+null-to-negative and it has been the standing answer ever since: `rbeam` with an
+e29slim evaluator lost 0.335 to `rbeam:shared`, localized to e29slim's weaker
+value tower ("a net bred for reactive play is not automatically a better critic
+for search"). E39 Gate 0 produced a reason to re-ask it for gen7 specifically:
+E25 had `rbeam:shared` at parity with the EASIER `dmcts:15,100` (0.501) while
+`rbeam:gen7` BEAT the HARDER `dmcts:15,150` (0.551).
+
+**Result — E32's negative was e29slim-specific and does NOT generalize to gen7.**
+Candidate win rate over the incumbent `rbeam:shared`, n=400/cell, primary seed
+base 82M and a fully disjoint confirm at 83M (the E7 promotion precedent):
+
+| candidate evaluator | primary | confirm | **pooled (n=800)** | s/game |
+|---|---|---|---:|---:|
+| `depot:e36` gen7, **1 critic** | 0.6075 [.559,.654] | 0.5800 [.531,.627] | **0.5938** [.559,.627] | ~10.9 |
+| **e36 trio** (x86+m1+s22), 3 critics | 0.6425 [.594,.688] | 0.6700 [.623,.714] | **0.6562** [.623,.688] | ~15.7 |
+
+Every CI excludes 0.50, on both stages, on both cells. **A single gen7 critic
+beats the three-critic `shared` ensemble at ~1/3 the evaluator compute** — so the
+re-pin is a win on strength AND cost simultaneously.
+
+| role | recipe of record since 2026-07-25 | headline |
+|---|---|---|
+| **play-time search (recipe of record)** | `rbeam:depot:e36/e36_gen7.zip\|depot:e36m1/e36_m1_gen7.zip\|depot:e36s22/e36_s22_gen7.zip,8,20,4,4,depot:ldraft/ldraft_sX.zip` | **0.6562** vs the prior RoR, pooled n=800 |
+| **cheap alternate (recommended default)** | `rbeam:depot:e36/e36_gen7.zip,8,20,4,4,depot:ldraft/ldraft_sX.zip` | **0.5938** vs the prior RoR at ~1.44x lower cost |
+| prior search record (superseded) | `rbeam:depot:shared trio,8,20,4,4,depot:ldraft/ldraft_sX.zip` | — |
+
+The trio is +0.062 stronger for ~+44% wall-clock. Both are listed deliberately,
+following the E24 precedent of naming a cheaper value alternate (`3x3` there):
+for most uses the **single-net gen7 evaluator is the better trade**, and it is
+also the only one that is strictly cheaper than the config it supersedes.
+
+**Pool non-regression (the check E24 ran on itself), `scripts/e40_pool_check.py`,
+200 mirrored games/opponent, seed base 84M:** `rbeam:gen7` **0.9800**
+(.985/.970/.985) and `rbeam:e36 trio` **0.9917** (.990/.990/.995) vs E24's
+`rbeam:shared` reference of **0.983**. The single net is statistically identical
+(the pool saturates near 1.0, so this is a non-regression gate, not a strength
+claim); the trio's 0.9917 is nominally the **highest avg-hard3 ever measured
+here** (prior: rbeam:shared 0.983, planner 0.978) — on a saturated ruler, so read
+it as "no regression", not as the margin.
+
+**What this says mechanistically.** No instrument before this had shown that PFSP
+self-play improved the **value** head. E36's autopsies found trading/calibration
+gains and a policy-side story; the weight-space work found spectral simplification.
+This is the first evidence the critic got better too — and enough better to beat
+three critics bred specifically for the search role (`depot:shared` was trained by
+the planner pipeline precisely to be a search evaluator).
+
+**Bookkeeping consequence — read before quoting any "gap to search" number.** A
+stronger search RoR **widens** the measured reactive-vs-search gap by construction.
+Numbers quoted against `rbeam:shared` (e.g. E36's 3-seed pooled 0.509 parity) are
+NOT comparable to numbers quoted against `rbeam:e36`. Always name the searcher.
+The re-pinned primary ruler for reactive work stays the fair `dmcts:15,150` rung
+(`docs/reactive-limits-program.md`, "Rulers"), which is unaffected by this change.
+
+**Caveats.** No new artifact — the recipe is a spec over existing depot blobs
+(`depot:e36` + `depot:e36m1` + `depot:e36s22` + `depot:ldraft`), like the
+`vbeam`/`netdmcts`/`rbeam` recipes before it. The three trio members differ in
+platform and `n_envs` as well as seed (x86 14M n6 / m1 20M n12 / s22 22M n12), so
+the trio carries MORE construction diversity than the `shared` or e29slim trios;
+E7/E8's diversity thesis predicts that helps an ensemble, but it is a difference in
+kind from an identical-recipe 3-seed set and is flagged, not assumed. Cost figures
+are this M1 box, both sides searching; they are not comparable to the RTX-4080
+throughput table further down.
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e40_evaluator.py --stage primary --pairs 200 --workers 8
+uv run --extra ml python scripts/e40_evaluator.py --stage confirm --pairs 200 --workers 8
+uv run --extra ml python scripts/e40_pool_check.py --workers 8   # pool non-regression
+```
+
+---
+
+# Recipes of record — 2026-07-25: E40-B — `lppo:e36 trio` promoted on the GUARDED-REACTIVE rung (no training)
+
+E40 part B (branch `feat/e40-harvest`, worklog "E40-B"): the guarded-reactive
+recipe of record had been the E29-slim 3-seed stack since 2026-07-20 — four
+generations stale — because of a standing caveat in this doc: *"gen7 is
+single-seed and does not yet have an ensemble variant."* That caveat was written
+when the E36 program had two chains (x86 14M, m1 20M). **The s22 chain
+(2026-07-23) makes three, so the trio is constructible from existing depot blobs
+with NO TRAINING** — exactly as the e29slim trio was.
+
+Candidate: `lppo:<e36 trio>` — mean-of-policy-heads over the three PFSP endpoints
+plus E26's exhaustive own-turn lethal-guard lens.
+
+**Primary ruler = the fair `dmcts:15,150` rung** (2250 sims, matched `ldraft`),
+the re-pinned reactive primary (`docs/reactive-limits-program.md`, "Rulers") —
+NOT avg-hard3, which saturates at the top of this ladder. n=400/cell, CRN:
+
+| recipe | WR over the fair oracle | Wilson CI |
+|---|---:|---|
+| `ppo:e36 gen7` (single net, pure RoR) | 0.3900 | [.344,.439] |
+| `ppo:e36 trio` (pure ensemble) | 0.4525 | [.404,.501] |
+| **`lppo:e36 trio` (promoted)** | **0.4675** | **[.419,.516]** |
+| `lppo:e29slim trio` (prior guarded RoR) | **0.2100** | [.173,.253] |
+
+**+0.2575 over the incumbent, and the candidate's CI straddles 0.50** — so
+ensembling plus the lethal lens takes the reactive rung from *behind* fair
+2250-sim search to *parity with it*, with zero training. The `ppo:e36 gen7` cell
+reproduces its ruler-re-pin value of 0.3900 exactly (7th reproduction on this
+ruler), which is what makes the delta trustworthy.
+
+| role | recipe of record since 2026-07-25 | primary ruler | avg-hard3 | worst exploit |
+|---|---|---:|---:|---:|
+| **guarded-reactive (RoR)** | `lppo:depot:e36/e36_gen7.zip\|depot:e36m1/e36_m1_gen7.zip\|depot:e36s22/e36_s22_gen7.zip,depot:ldraft/ldraft_sX.zip` | **0.4675** | **0.9567** | **0.1200** |
+| pure-ensemble alternate (1x-guard-free) | same three nets under `ppo:` | 0.4525 | — | 0.1275 |
+| prior guarded RoR (E29-slim) | `lppo:depot:e29slim trio,depot:ldraft/ldraft_sX.zip` | 0.2100 | 0.9340 | 0.1890 |
+
+**All three promotion gates pass, and two are improvements rather than
+non-regressions:**
+
+1. **Primary ruler:** +0.2575 vs the incumbent (above).
+2. **avg-hard3 non-regression** (`scripts/e40_pool_check.py`, 200 mirrored
+   games/opp): **0.9567** (.945/.960/.965) vs the incumbent's **0.9340** — better,
+   not merely non-regressive. (Saturated ruler; read as a gate.)
+3. **E10 exploit guard-rail** (`scripts/e36_exploit.py`, 5 archetypes, 2000
+   mirrored games each @ 5M CRN): worst archetype **0.1200** (boardkeep), PASS on
+   all five — **the most exploit-robust config ever measured here**, beating the
+   prior record (m1 gen7, 0.1385) and the incumbent (0.1890).
+
+Full guard-rail table, with four exact reproductions of published rows as the
+methodology check (e29slim 0.236, x86 gen7 0.168, m1 gen7 0.139, incumbent 0.189
+— the x86 row is a genuine **cross-box** reproduction, originally measured on the
+Windows/4080 machine):
+
+| defender | rnddeck | guardwall | bufface | boardkeep | shell | worst |
+|---|---:|---:|---:|---:|---:|---:|
+| e29slim (warm-start origin) | 0.0495 | 0.1580 | 0.1400 | 0.2355 | 0.2095 | 0.2355 |
+| `lppo:e29slim trio` (prior RoR) | 0.0300 | 0.1115 | 0.0855 | 0.1890 | 0.1565 | 0.1890 |
+| x86 gen7 | 0.0135 | 0.0880 | 0.0750 | 0.1675 | 0.1280 | 0.1675 |
+| m1 gen7 | 0.0160 | 0.0710 | 0.0620 | 0.1385 | 0.1170 | 0.1385 |
+| `ppo:e36 trio` | 0.0105 | 0.0455 | 0.0430 | 0.1275 | 0.0980 | 0.1275 |
+| **`lppo:e36 trio`** | **0.0085** | **0.0435** | **0.0410** | **0.1200** | **0.0945** | **0.1200** |
+
+Ensembling and the lens each help monotonically, and no archetype approaches the
+0.5 bar.
+
+**Caveats.** No new artifact — a spec over existing depot blobs. E26's labeling
+caveat carries over: `lppo` performs an exact own-turn lethal solve, so this rung
+is *guarded* reactive, not purely reactive; for strictly-1x-inference deployments
+the pure `ppo:e36 gen7` single net remains the record at 0.3900 on this ruler.
+E8's "three seeds become one deployment artifact" caveat applies. **The three trio
+members differ in platform and `n_envs` as well as seed** (x86 14M n6 / m1 20M n12
+/ s22 22M n12), so this trio carries more construction diversity than the
+identical-recipe e29slim trio; E7/E8's diversity thesis predicts that helps, but it
+is a difference in kind and is flagged, not assumed. Missed-lethal for the pure
+single net is **0.0986 [0.0849, 0.1142]** at E37c's 1500-game protocol (E39 round)
+— inside E37c's band, i.e. gen7 is *not* better on the lethal tail; the lens is
+what closes it at play time.
+
+## Reproduce
+
+```bash
+uv run --extra ml python scripts/e36_dmcts_ladder.py --rungs hard_2250sim \
+    --nets e36_gen7,e36_trio,e36_trio_guarded,e29slim_trio_guarded --pairs 200 --workers 8
+uv run --extra ml python scripts/e40_pool_check.py --workers 8
+E36_EXPLOIT_WORKERS=8 uv run --extra ml python scripts/e36_exploit.py
+```
 
 ---
 
