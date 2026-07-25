@@ -174,6 +174,7 @@ class JobRunner:
         job.state = "running"
         job.started = time.time()
         results: list = [None] * len(cells)
+        _reached_done = False
         stop_tail = threading.Event()
         tailer: threading.Thread | None = None
         if tail is not None:
@@ -211,16 +212,22 @@ class JobRunner:
                         break
             if job.state != "cancelled":
                 job.result = reduce_fn(job.params, results)
-                job.state = "done"
+                _reached_done = True
         except Exception as e:  # noqa: BLE001 — job errors are reported, not raised
             job.state = "error"
             job.error = f"{type(e).__name__}: {e}"
             self._write_log(job, traceback.format_exc())
         finally:
             job.finished = time.time()
+            # Finalize the tail BEFORE publishing a terminal state: consumers
+            # (the web UI, tests) poll `state` and then read `series`/
+            # `progress_done`, so publishing "done" while the tailer still has an
+            # undrained chunk hands them incomplete data. Race was ~1-in-20.
             if tailer is not None:
                 stop_tail.set()
                 tailer.join(timeout=5)
+            if _reached_done:
+                job.state = "done"
             self._persist(job)
 
     def _tail(self, job: Job, tail: TailConfig, stop: threading.Event) -> None:
