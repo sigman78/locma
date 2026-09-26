@@ -49,6 +49,8 @@ def _clone_player(p):
     q.deck = [_clone_inst(c) for c in p.deck]
     q.hand = [_clone_inst(c) for c in p.hand]
     q.board = [_clone_inst(c) for c in p.board]
+    q.played = list(p.played)
+    q.turn_log = list(p.turn_log)
     return q
 
 

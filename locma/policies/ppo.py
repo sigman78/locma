@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 from locma.envs.encode import (
     action_mask,
     draft_action_mask,
@@ -13,17 +15,25 @@ from locma.envs.encode import (
 )
 
 
-def _encode_for(model, view):
+def _encode_for(model, view, *, ablate_hist: bool = False):
     """Select the observation encoder based on the loaded model's observation space.
 
     ``from gymnasium import spaces`` is kept inside the function body so that this
     module remains import-safe without the [ml] stack — gymnasium is only available
     once a model has been loaded.
+
+    ``ablate_hist`` (E42 mechanism instrument, ``nohist``): zero the "hist"
+    vector (public-history features, ``fxh`` obs variant only) before
+    inference. No-op for any other variant — encoded obs without a "hist"
+    key are returned unchanged.
     """
     from gymnasium import spaces  # noqa: PLC0415 — lazy, only reached after model load
 
     if isinstance(model.observation_space, spaces.Dict):
-        return encode_battle_tokens(view, token_variant_for_space(model.observation_space))
+        obs = encode_battle_tokens(view, token_variant_for_space(model.observation_space))
+        if ablate_hist and "hist" in obs:
+            obs["hist"] = np.zeros_like(obs["hist"])
+        return obs
     return encode_battle(view)
 
 
@@ -97,6 +107,7 @@ class MaskablePPOBattlePolicy:
         deterministic: bool = True,
         model=None,
         device: str | None = None,
+        ablate_hist: bool = False,
     ):
         self.model_path = model_path
         self.name = name
@@ -106,6 +117,11 @@ class MaskablePPOBattlePolicy:
         # "cpu" to keep small per-step opponent forwards off a contended GPU
         # (E36 PFSP loads many pool nets across SubprocVecEnv workers).
         self.device = device
+        # E42 mechanism instrument (registry ``nohist`` param): zero the
+        # "hist" obs vector before every inference. No-op for non-"fxh"
+        # models (their encoded obs has no "hist" key). Default False ->
+        # zero behavior change.
+        self.ablate_hist = ablate_hist
 
     def _ensure(self) -> None:
         if self._model is None:
@@ -118,7 +134,7 @@ class MaskablePPOBattlePolicy:
 
     def battle_action(self, view, legal, state=None):
         self._ensure()
-        obs = _encode_for(self._model, view)
+        obs = _encode_for(self._model, view, ablate_hist=self.ablate_hist)
         mask = action_mask(view, legal)
         if self.deterministic:
             idx = _lean_masked_argmax(self._model, obs, mask)
@@ -145,13 +161,22 @@ class MaskablePPOEnsembleBattlePolicy:
     construction never touches the filesystem or imports the ``[ml]`` stack.
     """
 
-    def __init__(self, model_paths: list[str], name: str = "ppo-ens", device: str | None = None):
+    def __init__(
+        self,
+        model_paths: list[str],
+        name: str = "ppo-ens",
+        device: str | None = None,
+        ablate_hist: bool = False,
+    ):
         if len(model_paths) < 2:
             raise ValueError("MaskablePPOEnsembleBattlePolicy needs at least 2 model paths")
         self.model_paths = list(model_paths)
         self.name = name
         self._models: list | None = None
         self.device = device  # None -> SB3 "auto"; "cpu" keeps opponents off the GPU
+        # E42 mechanism instrument (registry ``nohist`` param) — see
+        # MaskablePPOBattlePolicy.ablate_hist.
+        self.ablate_hist = ablate_hist
 
     def _ensure(self) -> None:
         if self._models is None:
@@ -168,7 +193,7 @@ class MaskablePPOEnsembleBattlePolicy:
         mask = action_mask(view, legal)
         probs = []
         for model in self._models:
-            obs = _encode_for(model, view)
+            obs = _encode_for(model, view, ablate_hist=self.ablate_hist)
             policy = model.policy
             if isinstance(obs, dict):
                 batch = {k: np.expand_dims(v, 0) for k, v in obs.items()}

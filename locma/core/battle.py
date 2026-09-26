@@ -90,6 +90,8 @@ def start_battle(gs: GameState, emit=None) -> None:
 
 
 def end_turn(gs: GameState, emit=None) -> None:
+    p = gs.players[gs.current]
+    p.turn_log.append((p.mana, len(p.hand)))
     _emit(emit, {"t": "turn_ended", "seat": gs.current})
     gs.current = gs.opponent(gs.current)
     gs.turn += 1
@@ -295,11 +297,13 @@ def apply_battle(gs: GameState, action: Action, emit=None) -> None:
             p.hand.remove(c)
             p.mana -= c.card.cost
             p.board.append(c)
+            p.played.append(c.card.id)
             _trigger_summon_effects(gs, gs.current, c, emit)
         case Use(item_instance_id=iid, target_id=tid):
             c = _find_in_hand(p, iid)
             p.hand.remove(c)
             p.mana -= c.card.cost
+            p.played.append(c.card.id)
             _apply_item(gs, c, tid, emit)
         case Attack(attacker_id=aid, target_id=tid):
             _resolve_attack(gs, aid, tid, emit)

@@ -57,6 +57,12 @@ def make_battle_view(gs: GameState) -> BattleView:
         my_hand=tuple(_cv(c) for c in me.hand),
         my_board=tuple(_cv(c) for c in me.board),
         op_board=tuple(_cv(c) for c in op.board),
+        my_deck_count=len(me.deck),
+        op_deck_count=len(op.deck),
+        # order-destroyed multiset: sorted, never the live deck order (fairness).
+        my_deck_cards=tuple(sorted(c.card.id for c in me.deck)),
+        op_played=tuple(op.played),
+        op_turn_log=tuple(op.turn_log),
     )
 
 

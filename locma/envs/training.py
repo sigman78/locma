@@ -239,13 +239,41 @@ def _make_model(
         if pointer_head:
             from locma.envs.pointer_head import PointerMaskablePolicy  # noqa: PLC0415
 
-            return MaskablePPO(PointerMaskablePolicy, env, policy_kwargs=pk, **common)
-        return MaskablePPO("MultiInputPolicy", env, policy_kwargs=pk, **common)
+            model = MaskablePPO(PointerMaskablePolicy, env, policy_kwargs=pk, **common)
+        else:
+            model = MaskablePPO("MultiInputPolicy", env, policy_kwargs=pk, **common)
+        _rezero_hist_branch(model)
+        return model
 
     if pointer_head:
         raise ValueError("pointer_head requires a token obs_mode")
     # Default: flat obs → MlpPolicy (byte-identical to the pre-PPO2 baseline).
     return MaskablePPO("MlpPolicy", env, **common)
+
+
+def _rezero_hist_branch(model) -> None:
+    """Re-zero the E42 ``hist_mlp`` branch's last ``Linear`` after model build.
+
+    ``ActorCriticPolicy._build`` (SB3, ``ortho_init=True`` default) applies
+    orthogonal init to EVERY ``nn.Linear``/``nn.Conv2d`` inside the features
+    extractor via ``module.apply(...)`` — AFTER
+    ``SlimTokenExtractor.__init__`` already zero-initialized ``hist_mlp``'s
+    last layer, silently overwriting it (weight -> orthogonal, bias -> 0).
+    Without this fix, a freshly-built "fxh" model's hist branch is NOT a
+    no-op at step 0, breaking the warm-start contract ("a warm-started fxh
+    net is EXACTLY gen7" — see ``locma.envs.warmstart.warm_start`` and
+    ``docs/e42-public-history-plan.md``). No-op when there's no hist branch
+    (``hist_mlp`` is ``None`` or absent — every extractor except a
+    ``SlimTokenExtractor`` built over a "hist"-keyed obs space).
+    """
+    import torch.nn as nn  # noqa: PLC0415 — optional [ml] dep
+
+    fe = getattr(model.policy, "features_extractor", None)
+    hist_mlp = getattr(fe, "hist_mlp", None)
+    if hist_mlp is not None:
+        last = hist_mlp[-1]
+        nn.init.zeros_(last.weight)
+        nn.init.zeros_(last.bias)
 
 
 def train_agent(

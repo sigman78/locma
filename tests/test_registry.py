@@ -107,6 +107,40 @@ def test_bare_ppo_spec_unchanged_type():
     assert p.battle.model_path == "a.zip"
 
 
+def test_ppo_nohist_param_sets_ablate_hist():
+    """A trailing literal ``nohist`` param (E42 mechanism instrument) sets
+    ablate_hist=True and is stripped before draft parsing (the draft stays at
+    index 1)."""
+    from locma.policies.drafts import BalancedDraftPolicy  # noqa: PLC0415
+    from locma.policies.ppo import MaskablePPOBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("ppo:a.zip,,nohist")
+    assert isinstance(p.battle, MaskablePPOBattlePolicy)
+    assert p.battle.model_path == "a.zip"
+    assert p.battle.ablate_hist is True
+    assert isinstance(p.draft, BalancedDraftPolicy)  # empty draft slot -> default
+
+    # Position-independent: nohist directly after the model path also works.
+    p2 = make_policy("ppo:a.zip,nohist")
+    assert p2.battle.ablate_hist is True
+    assert isinstance(p2.draft, BalancedDraftPolicy)
+
+
+def test_ppo_without_nohist_unchanged():
+    """A spec without a trailing ``nohist`` is unaffected (ablate_hist=False)."""
+    p = make_policy("ppo:a.zip")
+    assert p.battle.ablate_hist is False
+
+
+def test_ppo_ensemble_nohist_param():
+    from locma.policies.ppo import MaskablePPOEnsembleBattlePolicy  # noqa: PLC0415
+
+    p = make_policy("ppo:a.zip|b.zip,nohist")
+    assert isinstance(p.battle, MaskablePPOEnsembleBattlePolicy)
+    assert p.battle.model_paths == ["a.zip", "b.zip"]
+    assert p.battle.ablate_hist is True
+
+
 def test_lppo_constructs_without_loading_model():
     """``lppo:`` wraps a lazily-loaded inner battle policy in the lethal guard —
     construction never touches the filesystem or imports the [ml] stack."""
@@ -129,3 +163,15 @@ def test_lppo_ensemble_inner_and_node_cap_param():
     assert isinstance(p.battle.inner, MaskablePPOEnsembleBattlePolicy)
     assert p.battle.inner.model_paths == ["a.zip", "b.zip"]
     assert p.battle.node_cap == 500
+
+
+def test_lppo_nohist_param():
+    """A trailing ``nohist`` sets ablate_hist on the inner battle policy and
+    is stripped before draft/node_cap parsing (E42)."""
+    p = make_policy("lppo:a.zip,,500,nohist")
+    assert p.battle.inner.ablate_hist is True
+    assert p.battle.node_cap == 500
+
+    p2 = make_policy("lppo:whatever.zip,nohist")
+    assert p2.battle.inner.ablate_hist is True
+    assert p2.battle.node_cap == 3000  # unaffected default

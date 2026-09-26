@@ -51,6 +51,10 @@ N_TACTICAL: int = 13
 # V1 tactical scalar count: V0's 13 + 5 symmetric-threat scalars (variant="v1").
 N_TACTICAL_V1: int = 18
 
+# "fxh" public-history scalar width (E42): a separate "hist" obs key, always
+# 25-wide regardless of the token/scalar variant it rides alongside.
+N_HIST: int = 25
+
 
 def _card_block(c, *, on_board: bool) -> list[float]:
     t = c.type
@@ -247,6 +251,85 @@ def _fx_table() -> dict[int, tuple[float, float, float]]:
     return _FX_BY_ID
 
 
+# ---------------------------------------------------------------------------
+# "fxh" public-history features (E42): card_id -> (type, cost) lookup, lazy
+# on first use so the default paths (v0/v1/fx) never touch the cards DB.
+# ---------------------------------------------------------------------------
+
+_CARD_TYPE_COST: dict[int, tuple[int, int]] | None = None
+
+
+def _card_type_cost_table() -> dict[int, tuple[int, int]]:
+    global _CARD_TYPE_COST
+    if _CARD_TYPE_COST is None:
+        from locma.data.cards_db import load_cards  # noqa: PLC0415 — lazy, fxh path only
+
+        _CARD_TYPE_COST = {c.id: (int(c.type), int(c.cost)) for c in load_cards()}
+    return _CARD_TYPE_COST
+
+
+def _cost_bucket(cost: int) -> int:
+    """Bucket a card's mana cost into 0-2 / 3-4 / 5-6 / 7+ (indices 0..3)."""
+    if cost <= 2:
+        return 0
+    if cost <= 4:
+        return 1
+    if cost <= 6:
+        return 2
+    return 3
+
+
+def hist_features(view) -> np.ndarray:
+    """The N_HIST=25 public-history feature vector for one BattleView (E42).
+
+    Pure public information (fairness, docs/e42-public-history-plan.md):
+    own remaining deck as an order-destroyed multiset (``my_deck_cards``,
+    already sorted by ``make_battle_view``), and the opponent's played cards
+    (``op_played``) + turn-end mana/hand log (``op_turn_log``). Raw counts, no
+    scaling — see the plan doc's feature table for the exact layout.
+    """
+    table = _card_type_cost_table()
+    feats = np.zeros(N_HIST, dtype=np.float32)
+
+    feats[0] = float(view.my_deck_count)
+    my_type = [0.0, 0.0, 0.0, 0.0]
+    my_bucket = [0.0, 0.0, 0.0, 0.0]
+    my_cost_sum = 0.0
+    for cid in view.my_deck_cards:
+        t, cost = table[cid]
+        my_type[t] += 1.0
+        my_bucket[_cost_bucket(cost)] += 1.0
+        my_cost_sum += cost
+    feats[1:5] = my_type
+    feats[5:9] = my_bucket
+    feats[9] = my_cost_sum / len(view.my_deck_cards) if view.my_deck_cards else 0.0
+
+    feats[10] = float(view.op_deck_count)
+    feats[11] = float(len(view.op_played))
+    op_type = [0.0, 0.0, 0.0, 0.0]
+    op_bucket = [0.0, 0.0, 0.0, 0.0]
+    op_cost_sum = 0.0
+    for cid in view.op_played:
+        t, cost = table[cid]
+        op_type[t] += 1.0
+        op_bucket[_cost_bucket(cost)] += 1.0
+        op_cost_sum += cost
+    feats[12:16] = op_type
+    feats[16:20] = op_bucket
+    feats[20] = op_cost_sum / len(view.op_played) if view.op_played else 0.0
+
+    turn_log = view.op_turn_log
+    if turn_log:
+        feats[21] = float(turn_log[-1][0])
+        feats[22] = sum(mana for mana, _hand in turn_log) / len(turn_log)
+        sandbags = [1.0 if (mana >= 2 and hand > 0) else 0.0 for mana, hand in turn_log]
+        feats[23] = sum(sandbags) / len(sandbags)
+        feats[24] = sandbags[-1]
+    # else: feats[21:25] stay 0.0 (no opponent turn-end recorded yet)
+
+    return feats
+
+
 def _token_row(card, zone_idx: int, *, on_board: bool) -> list:
     """Build a single 17-element feature row for one card token.
 
@@ -270,15 +353,19 @@ def _token_row(card, zone_idx: int, *, on_board: bool) -> list:
 def encode_battle_tokens(view, variant: str = "v0") -> dict:
     """Encode a BattleView into the tokenized PPO2 observation dict.
 
-    Returns a dict with four float32 numpy arrays:
-      - ``tokens``     shape (20, 17) — or (20, 20) for variant="fx": per-card
-                       numeric features; zeros for pads. The fx variant appends
-                       [player_hp, enemy_hp, card_draw] play-effect columns for
-                       HAND cards (board slots zero: effects are spent on play).
+    Returns a dict with four float32 numpy arrays (five for variant="fxh"):
+      - ``tokens``     shape (20, 17) — or (20, 20) for variant="fx"/"fxh":
+                       per-card numeric features; zeros for pads. The fx/fxh
+                       variants append [player_hp, enemy_hp, card_draw]
+                       play-effect columns for HAND cards (board slots zero:
+                       effects are spent on play).
       - ``card_ids``   shape (20,):    card_id (1..160); 0 for pads
       - ``token_mask`` shape (20,):    1 for real cards, 0 for pads
-      - ``scalars``    shape (13,) for variant="v0"/"fx", (18,) for variant="v1":
-                       tactical scalars (see below)
+      - ``scalars``    shape (13,) for variant="v0"/"fx"/"fxh", (18,) for
+                       variant="v1": tactical scalars (see below)
+      - ``hist``       shape (25,), variant="fxh" only: public-history features
+                       (see ``hist_features``) — own remaining deck + the
+                       opponent's played cards / turn-end mana+hand log.
 
     Slot order: 0..7 my_hand / 8..13 my_board / 14..19 op_board.
 
@@ -309,7 +396,7 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
       16 exposed_to_lethal (1.0 if op_reachable >= me_health else 0.0)
       17 card_advantage    ((my_hand+my_board) - (op_hand+op_board) card counts)
     """
-    fx = variant == "fx"
+    fx = variant in ("fx", "fxh")
     tokens = np.zeros((MAX_TOKENS, TOKEN_FEATS_FX if fx else TOKEN_FEATS), dtype=np.float32)
     card_ids = np.zeros(MAX_TOKENS, dtype=np.float32)
     token_mask = np.zeros(MAX_TOKENS, dtype=np.float32)
@@ -344,12 +431,15 @@ def encode_battle_tokens(view, variant: str = "v0") -> dict:
 
     scalars = _tactical_scalars(view, variant)
 
-    return {
+    result = {
         "tokens": tokens,
         "card_ids": card_ids,
         "token_mask": token_mask,
         "scalars": scalars,
     }
+    if variant == "fxh":
+        result["hist"] = hist_features(view)
+    return result
 
 
 def _tactical_scalars(view, variant: str = "v0") -> np.ndarray:
@@ -481,7 +571,7 @@ def encode_battle_tokens_batch(views: list, variant: str = "v0") -> dict:
     which is why this belongs behind ``NetValueEvaluator.encode``.
     """
     b_n = len(views)
-    fx = variant == "fx"
+    fx = variant in ("fx", "fxh")
     feats = TOKEN_FEATS_FX if fx else TOKEN_FEATS
     n_scalar = N_TACTICAL_V1 if variant == "v1" else N_TACTICAL
 
@@ -522,13 +612,24 @@ def encode_battle_tokens_batch(views: list, variant: str = "v0") -> dict:
                 )
                 cid.append(card.card_id)
 
+    hist = None
+    if variant == "fxh":
+        hist = (
+            np.stack([hist_features(v) for v in views])
+            if b_n
+            else np.zeros((0, N_HIST), dtype=np.float32)
+        )
+
     if not bi:
-        return {
+        result = {
             "tokens": tokens,
             "card_ids": card_ids,
             "token_mask": token_mask,
             "scalars": scalars,
         }
+        if hist is not None:
+            result["hist"] = hist
+        return result
 
     b_idx = np.asarray(bi, dtype=np.intp)
     s_idx = np.asarray(si, dtype=np.intp)
@@ -553,22 +654,31 @@ def encode_battle_tokens_batch(views: list, variant: str = "v0") -> dict:
     card_ids[b_idx, s_idx] = cid_arr.astype(np.float32)
     token_mask[b_idx, s_idx] = 1.0
 
-    return {
+    result = {
         "tokens": tokens,
         "card_ids": card_ids,
         "token_mask": token_mask,
         "scalars": scalars,
     }
+    if hist is not None:
+        result["hist"] = hist
+    return result
 
 
 def token_variant_for_space(space) -> str:
-    """Detect the token-encoder variant ("v0"/"v1"/"fx") from a Dict obs space.
+    """Detect the token-encoder variant ("v0"/"v1"/"fx"/"fxh") from a Dict obs space.
 
     Works on any object with ["scalars"]/["tokens"] entries exposing .shape —
-    no gymnasium import needed. v1 is distinguished by scalar width, fx by
-    token width; plain v0 otherwise. Play-time consumers must use THIS (not
-    scalar width alone) or fx checkpoints would be fed 17-wide tokens.
+    no gymnasium import needed (a gymnasium ``spaces.Dict`` or a plain dict both
+    work — the ``"hist" in ...`` membership test below uses ``.spaces`` for the
+    former, the dict itself for the latter). fxh is distinguished by the
+    presence of the "hist" key, v1 by scalar width, fx by token width; plain v0
+    otherwise. Play-time consumers must use THIS (not scalar width alone) or
+    fx/fxh checkpoints would be fed mismatched tokens.
     """
+    entries = space.spaces if hasattr(space, "spaces") else space
+    if "hist" in entries:
+        return "fxh"
     if int(space["scalars"].shape[0]) == N_TACTICAL_V1:
         return "v1"
     return "fx" if int(space["tokens"].shape[1]) == TOKEN_FEATS_FX else "v0"
@@ -582,33 +692,39 @@ def token_obs_space(variant: str = "v0"):
     from gymnasium import spaces  # noqa: PLC0415
 
     n_scalar = N_TACTICAL_V1 if variant == "v1" else N_TACTICAL
-    tok_feats = TOKEN_FEATS_FX if variant == "fx" else TOKEN_FEATS
+    tok_feats = TOKEN_FEATS_FX if variant in ("fx", "fxh") else TOKEN_FEATS
 
-    return spaces.Dict(
-        {
-            "tokens": spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(MAX_TOKENS, tok_feats),
-                dtype=np.float32,
-            ),
-            "card_ids": spaces.Box(
-                low=0,
-                high=NUM_CARDS,
-                shape=(MAX_TOKENS,),
-                dtype=np.float32,
-            ),
-            "token_mask": spaces.Box(
-                low=0,
-                high=1,
-                shape=(MAX_TOKENS,),
-                dtype=np.float32,
-            ),
-            "scalars": spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(n_scalar,),
-                dtype=np.float32,
-            ),
-        }
-    )
+    space_dict = {
+        "tokens": spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(MAX_TOKENS, tok_feats),
+            dtype=np.float32,
+        ),
+        "card_ids": spaces.Box(
+            low=0,
+            high=NUM_CARDS,
+            shape=(MAX_TOKENS,),
+            dtype=np.float32,
+        ),
+        "token_mask": spaces.Box(
+            low=0,
+            high=1,
+            shape=(MAX_TOKENS,),
+            dtype=np.float32,
+        ),
+        "scalars": spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(n_scalar,),
+            dtype=np.float32,
+        ),
+    }
+    if variant == "fxh":
+        space_dict["hist"] = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(N_HIST,),
+            dtype=np.float32,
+        )
+    return spaces.Dict(space_dict)

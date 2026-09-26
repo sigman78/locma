@@ -64,6 +64,63 @@ def test_encode_for_selects_encoder_by_obs_space():
     assert result_box.shape == (308,)
 
 
+def test_encode_for_ablate_hist_zeroes_hist_key():
+    """E42 ``nohist`` mechanism instrument: ablate_hist=True zeroes the "hist"
+    vector of an "fxh" obs, leaves it untouched when False, and is a no-op
+    for obs variants without a "hist" key (e.g. plain "fx")."""
+    pytest.importorskip("gymnasium")
+
+    from locma.core.views import BattleView, CardView  # noqa: PLC0415
+    from locma.envs.encode import token_obs_space  # noqa: PLC0415
+    from locma.policies.ppo import _encode_for  # noqa: PLC0415
+
+    dummy_card = CardView(
+        instance_id=1, card_id=1, type=0, cost=1, attack=2, defense=3, abilities="------"
+    )
+    view = BattleView(
+        turn=3,
+        me_health=30,
+        me_mana=1,
+        op_health=30,
+        op_hand_count=5,
+        my_hand=(dummy_card,),
+        my_board=(dummy_card,),
+        op_board=(dummy_card,),
+        op_played=(1, 2),
+    )
+
+    fxh_stub = types.SimpleNamespace(observation_space=token_obs_space("fxh"))
+    fx_stub = types.SimpleNamespace(observation_space=token_obs_space("fx"))
+
+    off = _encode_for(fxh_stub, view, ablate_hist=False)
+    assert "hist" in off
+    assert np.any(off["hist"] != 0), "test needs a nonzero hist vector to be meaningful"
+
+    on = _encode_for(fxh_stub, view, ablate_hist=True)
+    assert np.all(on["hist"] == 0)
+    # Only "hist" is touched — everything else stays identical.
+    assert np.array_equal(off["tokens"], on["tokens"])
+    assert np.array_equal(off["scalars"], on["scalars"])
+
+    # No-op when the variant has no "hist" key at all.
+    fx_off = _encode_for(fx_stub, view, ablate_hist=False)
+    fx_on = _encode_for(fx_stub, view, ablate_hist=True)
+    assert "hist" not in fx_on
+    assert np.array_equal(fx_off["tokens"], fx_on["tokens"])
+
+
+def test_ablate_hist_default_false_and_settable():
+    p_default = MaskablePPOBattlePolicy(model_path="nonexistent.zip")
+    assert p_default.ablate_hist is False
+    p_on = MaskablePPOBattlePolicy(model_path="nonexistent.zip", ablate_hist=True)
+    assert p_on.ablate_hist is True
+
+    e_default = MaskablePPOEnsembleBattlePolicy(["a.zip", "b.zip"])
+    assert e_default.ablate_hist is False
+    e_on = MaskablePPOEnsembleBattlePolicy(["a.zip", "b.zip"], ablate_hist=True)
+    assert e_on.ablate_hist is True
+
+
 def test_token_model_save_load_produces_legal_action(tmp_path):
     """Close the env→save→load→eval loop for a token obs model without training.
 

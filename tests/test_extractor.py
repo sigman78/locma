@@ -17,6 +17,7 @@ from locma.envs.encode import (  # noqa: E402
     N_TACTICAL,
     NUM_CARDS,
     TOKEN_FEATS,
+    TOKEN_FEATS_FX,
     token_obs_space,
 )
 from locma.envs.extractor import SlimTokenExtractor, TokenSetExtractor  # noqa: E402
@@ -102,6 +103,123 @@ def test_slim_extractor_all_pad_row_finite():
     obs = _make_batch(B=3, n_real=0)  # every slot is pad
     out = ex(obs)
     assert torch.isfinite(out).all()
+
+
+# ---------------------------------------------------------------------------
+# E42 public-history branch: opt-in via a "hist" key on the obs space.
+# ---------------------------------------------------------------------------
+
+
+def _make_fx_batch(B: int = 4, n_real: int = 10):
+    """Like ``_make_batch`` but at the fx/fxh token width (20, not 17)."""
+    tokens = torch.zeros(B, MAX_TOKENS, TOKEN_FEATS_FX)
+    card_ids = torch.zeros(B, MAX_TOKENS)
+    token_mask = torch.zeros(B, MAX_TOKENS)
+
+    if n_real > 0:
+        tokens[:, :n_real, :] = torch.randn(B, n_real, TOKEN_FEATS_FX)
+        card_ids[:, :n_real] = torch.randint(1, NUM_CARDS + 1, (B, n_real)).float()
+        token_mask[:, :n_real] = 1.0
+
+    scalars = torch.randn(B, N_TACTICAL)
+    return {
+        "tokens": tokens,
+        "card_ids": card_ids,
+        "token_mask": token_mask,
+        "scalars": scalars,
+    }
+
+
+# Hard-coded so any accidental new parameter on the no-hist path fails loudly.
+_SLIM_STATE_DICT_KEYS_NO_HIST = {
+    "id_embed.weight",
+    "slot_encoder.proj.weight",
+    "slot_encoder.proj.bias",
+    "slot_encoder.token_ln.weight",
+    "slot_encoder.token_ln.bias",
+    "slot_encoder.pos_embed",
+    "scalar_mlp.0.weight",
+    "scalar_mlp.0.bias",
+    "scalar_mlp.1.weight",
+    "scalar_mlp.1.bias",
+    "head.0.weight",
+    "head.0.bias",
+}
+
+
+def test_slim_extractor_no_hist_key_state_dict_unchanged():
+    """Without a "hist" obs key, SlimTokenExtractor gets no new parameters —
+    old fx/v0 checkpoints must keep loading unchanged (E42)."""
+    space = token_obs_space("fx")
+    assert "hist" not in space.spaces
+    ex = SlimTokenExtractor(space)
+    assert ex.hist_mlp is None
+    assert set(ex.state_dict().keys()) == _SLIM_STATE_DICT_KEYS_NO_HIST
+
+
+def test_slim_extractor_hist_branch_present_and_zero_init():
+    """With a "hist" obs key (variant "fxh"), a LayerNorm->Linear->ReLU->Linear
+    branch appears, added to the scalar-branch output before `head`. The last
+    Linear's weight AND bias are zero-initialized, so at construction time the
+    branch is a no-op regardless of the "hist" input (E42's warm-start
+    contract: a freshly widened fxh net computes EXACTLY the same features as
+    the hist-less net)."""
+    space = token_obs_space("fxh")
+    assert "hist" in space.spaces
+    ex = SlimTokenExtractor(space)
+    assert isinstance(ex.hist_mlp, torch.nn.Sequential)
+    last = ex.hist_mlp[-1]
+    assert isinstance(last, torch.nn.Linear)
+    assert torch.all(last.weight == 0)
+    assert torch.all(last.bias == 0)
+
+    n_hist = int(space["hist"].shape[0])
+    obs = _make_fx_batch(B=4, n_real=10)
+    obs["hist"] = torch.zeros(4, n_hist)
+    out_zero_hist = ex(obs)
+
+    obs_rand_hist = dict(obs)
+    obs_rand_hist["hist"] = torch.randn(4, n_hist)
+    out_rand_hist = ex(obs_rand_hist)
+
+    # Zero-init last layer -> hist_mlp(anything) == 0 at init, so the output is
+    # identical regardless of the hist input.
+    assert torch.equal(out_zero_hist, out_rand_hist)
+
+
+def test_slim_extractor_hist_branch_matches_no_hist_extractor_at_init():
+    """A freshly-built fxh extractor and a freshly-built fx (no-hist) extractor
+    with the SAME non-hist weights produce byte-identical output at init —
+    the warm-start contract this branch exists to satisfy."""
+    torch.manual_seed(0)
+    space_fx = token_obs_space("fx")
+    space_fxh = token_obs_space("fxh")
+    ex_fx = SlimTokenExtractor(space_fx)
+    ex_fxh = SlimTokenExtractor(space_fxh)
+    # Copy the shared (non-hist) parameters from ex_fx onto ex_fxh, as a
+    # warm-start would via load_state_dict(strict=False).
+    missing, unexpected = ex_fxh.load_state_dict(ex_fx.state_dict(), strict=False)
+    assert unexpected == []
+    assert set(missing) == {
+        "hist_mlp.0.weight",
+        "hist_mlp.0.bias",
+        "hist_mlp.1.weight",
+        "hist_mlp.1.bias",
+        "hist_mlp.3.weight",
+        "hist_mlp.3.bias",
+    }
+
+    obs = _make_fx_batch(B=4, n_real=10)
+    n_hist = int(space_fxh["hist"].shape[0])
+    obs_fxh = dict(obs)
+    obs_fxh["hist"] = torch.randn(4, n_hist)
+
+    ex_fx.eval()
+    ex_fxh.eval()
+    with torch.no_grad():
+        out_fx = ex_fx(obs)
+        out_fxh = ex_fxh(obs_fxh)
+    assert torch.equal(out_fx, out_fxh)
 
 
 def test_feature_ln_optin(monkeypatch):

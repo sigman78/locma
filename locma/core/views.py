@@ -33,3 +33,8 @@ class BattleView:
     my_hand: tuple
     my_board: tuple
     op_board: tuple
+    my_deck_count: int = 0
+    op_deck_count: int = 0
+    my_deck_cards: tuple = ()  # SORTED remaining own card ids (order-destroyed multiset)
+    op_played: tuple = ()  # opponent's played card ids, in play order
+    op_turn_log: tuple = ()  # opponent's (mana_left, hand_size) at each of their turn ends
