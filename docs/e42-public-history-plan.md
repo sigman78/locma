@@ -122,6 +122,30 @@ opponent.
 | **PASS** | delta-R2 >= 0.05 on at least one hand target (T1-T4) for mirror or dmcts. Sanity: hard3 delta ~ 0 (greedy opponents dump hands). |
 | ambiguous (0.02-0.05) | proceed to Gate 1 flagged (asymmetric read, E28c precedent: BC/probe instruments cannot price consequence value). |
 
+### Gate 0 VERDICT (2026-09-25): PASS on the letter, modest in magnitude
+
+`runs/e42/gate0.json`, 300 games/opponent, 3.4-3.6k first-decision rows for the
+card-holding opponents (117 s at 8 workers). Delta-R2 of `[X0,H]` over `X0`,
+game-level bootstrap CI:
+
+| target | mirror | dmcts:15,60 | hard3 (max of 3) |
+|---|---|---|---|
+| T1 items in op hand | **+0.051** [.014,.085] | +0.034 [-.002,.062] | +0.042 (CI straddles 0) |
+| T2 total op hand cost | +0.026 [.016,.039] | +0.029 [.020,.038] | ~0 |
+| T3 max creature attack in op hand | **+0.058** [.042,.077] | **+0.058** [.036,.081] | negative |
+| T4 red items in op hand | +0.045 [.005,.074] | +0.005 | negative |
+| T5 realized next-turn face damage | +0.009 (CI straddles 0) | -0.003 | negative |
+
+PASS rule met (T3 >= 0.05 for both mirror and dmcts, T1 for mirror); the hard3
+sanity holds (every hard3 delta is noise around zero or negative). Read honestly:
+public history carries REAL but SMALL information about the opponent's hidden
+hand — a few points of R2 on hand composition — and none about the realized
+damage of their next turn (T5), which is what the value head would most want.
+Sandbag rates: mirror 0.136, dmcts 0.111, hard3 0.18-0.24 (the greedy pool
+"sandbags" only by mana-curve accident, and the probe confirms that carries
+nothing). Gate 1 opened as pre-registered, flagged: the prior on a ruler-visible
+gain is modest.
+
 ## Gate 1 — matched-harness training (E37 protocol)
 
 Both arms warm from `depot:e36/e36_gen7.zip` (x86 parity endpoint on this box),
@@ -155,6 +179,22 @@ and mean >= 0.53; null = CI straddles; negative = CI below 0.50.
 | P1 null, Gate 0 PASS | information present, not converted in 2M steps — ONE scale check (2 more gens both arms) before closing; if still null, **close: memory over public history is not a reactive-net lever at this regime, and the LSTM retest is dead** (its information set is a subset). |
 | P1 negative | branch/shift tax; close. |
 | P4 moves as much as P1 | the gain is not memory-specific — report as a generic obs-completion effect, not a memory result. |
+
+### Gate 1 VERDICT (2026-09-26, worklog 2026-09): NULL for the hypothesis — row 2
+
+Single seed, both arms 2 x 1M warm steps (~45 min/gen concurrent). P1 **0.5270
+[0.505, 0.549]** (positive, sub-headroom); P3 (H `nohist` vs C) 0.5200 [0.489,
+0.551] keeps most of the point estimate; **P3b (H vs H `nohist`) 0.5020 [0.471,
+0.533]** — zeroing the history input costs nothing. P4 +0.004 (no hard3 effect,
+as predicted). P2 sensitivity: gen7 0.390 / e42h 0.4325 / e42c 0.3975 at n=400
+(CIs overlap). Guard: boardkeep 0.1625 / 0.1565 vs the published 0.1675 — in
+band. Mechanism (`scripts/e42_branch_diag.py`): the trained branch is 0.115 of
+the scalar branch's magnitude, flips 2.5% of argmaxes, shifts V by 0.07.
+
+Per the table: "P1 positive but P3 keeps the gain" → the edge is not the
+information. **Memory over public history is not a reactive-net lever at this
+regime; the LSTM retest is closed** (information-set subset). Plumbing kept; no
+promotion; the open reactive-net arm remains E39-align.
 
 ## Non-goals
 
