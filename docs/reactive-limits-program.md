@@ -343,6 +343,31 @@ incumbent's 0.9340, and the E10 exploit guard-rail worst-archetype **0.1200** �
 the most exploit-robust config measured in this program. Promoted in `baseline.md`
 (2026-07-25 E40-B).
 
+### E42 — public-history features: the MEMORY question (CLOSED null, 2026-09-26)
+
+Prompted by a re-read of E6 (LSTM, -0.105): no code bug, but the agent never
+observes the opponent's turn (`BattleEnv` resolves it inside `step`), the pool
+and ruler were greedy hand-dumpers with nothing to remember, and the budget was
+800k from scratch with 32x fewer updates — E6 was never a test of memory. E42
+made the PUBLIC history explicit instead (opponent's played cards, turn-end
+mana/hand log, own remaining deck as a sorted multiset — a strict superset of
+what any LSTM over own-decision observations could accumulate) as the `fxh`
+obs variant with a zero-init branch, warm-started from gen7 via a widening
+loader that preserves step-0 identity, trained 2 gens in the PFSP regime
+against a byte-identical control (`docs/e42-public-history-plan.md`).
+
+**Gate 0** (information probe, no training): public history carries small but
+real information about the opponent's hidden hand (delta-R2 up to +0.058 on
+max creature attack / items in hand vs mirror and fair search; ~0 vs hard3;
+nothing on realized next-turn damage). **Gate 1**: P1 0.527 [.505,.549]
+positive, but the `nohist` self-ablation is exact parity (0.502) and the branch
+flips 2.5% of decisions — the edge does not depend on the information
+(pre-registered row 2: NULL). Guards clean, hard3 flat, dmcts sensitivity
+overlapping. **Read: there is nothing in the public history that the reactive
+net converts into strength at this regime; the LSTM retest is closed by the
+information-set argument.** Plumbing kept (engine logs, `fxh`, widening warm
+start, `nohist`). Worklog 2026-09-26.
+
 ## Rulers (re-pinned 2026-07-24)
 
 The E36 primary gate (`rbeam:shared` WR) is SATURATED at parity — 3-seed pooled
@@ -373,7 +398,10 @@ opponent-mixture levers at parity — planner and lguard anchors, any share
 up to 50% (E37a/b/c, dose-closed)**; **observation-side levers for
 search-choice recovery — E28c completed static card features (won), E38
 completed simulated per-action consequences (+0.021, closed), so the obs
-direction is exhausted for this question**.
+direction is exhausted for this question**; **memory / history levers on the
+reactive net — explicit public-history features (E42, null with the ablation
+at parity) and, by the information-set argument, recurrence over own-decision
+observations (the E6 retest)**.
 
 ## Milestones
 

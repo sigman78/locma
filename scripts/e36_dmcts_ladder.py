@@ -119,7 +119,25 @@ def main() -> None:
         "(seed replicates of the same recipe; e.g. the 3 PFSP parity endpoints)",
     )
     ap.add_argument("--out", default="runs/e36/dmcts_ladder.json")
+    ap.add_argument(
+        "--extra-net",
+        action="append",
+        default=[],
+        metavar="LABEL=SPEC",
+        help="register an additional net label (repeatable), e.g. "
+        "--extra-net e42h_gen9=ppo:runs/e36_e42h_gen9.zip,depot:ldraft/ldraft_s0.zip "
+        "so it can be named in --nets/--pool-nets without editing this file",
+    )
     args = ap.parse_args()
+
+    for item in args.extra_net:
+        if "=" not in item:
+            ap.error(f"--extra-net must be LABEL=SPEC, got {item!r}")
+        label, spec = item.split("=", 1)
+        label, spec = label.strip(), spec.strip()
+        if not label or not spec:
+            ap.error(f"--extra-net must be LABEL=SPEC, got {item!r}")
+        NETS[label] = spec
 
     pairs = 3 if args.smoke else args.pairs
     workers = 1 if args.smoke else args.workers

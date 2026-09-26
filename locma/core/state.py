@@ -22,6 +22,10 @@ class PlayerState:
     deck: list = field(default_factory=list)
     hand: list = field(default_factory=list)
     board: list = field(default_factory=list)
+    played: list = field(default_factory=list)  # card ids, in play order (Summon/Use)
+    turn_log: list = field(
+        default_factory=list
+    )  # (mana_left, hand_size) at each of this player's own turn ends
 
 
 @dataclass

@@ -59,7 +59,9 @@ class BattleEnv(gym.Env):
         ``encode_battle``; ``"token"`` — spaces.Dict tokenized observation via
         ``encode_battle_tokens`` (tokens, card_ids, token_mask, scalars);
         ``"token-v1"`` — same tokenized dict with 5 extra symmetric-threat
-        scalars (18 scalars instead of 13).
+        scalars (18 scalars instead of 13); ``"token-fx"`` — 20-wide tokens
+        with play-effect columns; ``"token-fxh"`` — fx tokens + v0 scalars
+        plus a new ``"hist"`` key (25 public-history features, E42).
     shared_draft:
         Run the shared draft variant (a pick removes the card from the other
         seat's offer; first pick alternates by round) instead of the default
@@ -96,7 +98,7 @@ class BattleEnv(gym.Env):
         self.board_potential_weight = float(board_potential_weight)
         self.shaping_gamma = float(shaping_gamma)
         self.board_potential_mode = board_potential_mode
-        _VALID_OBS_MODES = {"flat", "token", "token-v1", "token-fx"}
+        _VALID_OBS_MODES = {"flat", "token", "token-v1", "token-fx", "token-fxh"}
         if obs_mode not in _VALID_OBS_MODES:
             raise ValueError(f"obs_mode must be one of {_VALID_OBS_MODES!r}, got {obs_mode!r}")
         self.obs_mode = obs_mode
@@ -141,10 +143,14 @@ class BattleEnv(gym.Env):
     # ------------------------------------------------------------------
 
     def _obs_variant(self) -> str:
-        """Map self.obs_mode to the token encoder variant ("v0"/"v1"/"fx")."""
+        """Map self.obs_mode to the token encoder variant ("v0"/"v1"/"fx"/"fxh")."""
         if self.obs_mode == "token-v1":
             return "v1"
-        return "fx" if self.obs_mode == "token-fx" else "v0"
+        if self.obs_mode == "token-fx":
+            return "fx"
+        if self.obs_mode == "token-fxh":
+            return "fxh"
+        return "v0"
 
     def _board_potential(self) -> float:
         """Φ(s), power = Σ(atk+def). "diff" = my − op; "oppcut" = −op (removal only)."""

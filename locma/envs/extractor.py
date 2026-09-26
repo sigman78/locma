@@ -233,6 +233,27 @@ class SlimTokenExtractor(BaseFeaturesExtractor):
             nn.ReLU(),
         )
 
+        # E42 public-history branch (opt-in via the obs space): a "hist" key
+        # means this obs variant is "fxh". Zero-init the LAST Linear (weight
+        # AND bias) so a warm-started fxh net computes EXACTLY the same `s`
+        # as a hist-less net at step 0, regardless of the hist input — the
+        # branch starts as a no-op and only the optimizer can turn it on.
+        # Nets without a "hist" key get no new parameters (hist_mlp = None),
+        # so their state_dict is byte-identical to before this change.
+        if "hist" in observation_space.spaces:
+            n_hist = int(observation_space["hist"].shape[0])
+            self.hist_mlp = nn.Sequential(
+                nn.LayerNorm(n_hist),
+                nn.Linear(n_hist, d_model),
+                nn.ReLU(),
+                nn.Linear(d_model, d_model),
+            )
+            last = self.hist_mlp[-1]
+            nn.init.zeros_(last.weight)
+            nn.init.zeros_(last.bias)
+        else:
+            self.hist_mlp = None
+
     def forward(self, obs: dict[str, torch.Tensor]) -> torch.Tensor:
         ids = obs["card_ids"].long()  # (B, 20)
         id_embed = self.id_embed(ids)  # (B, 20, id_dim)
@@ -250,4 +271,6 @@ class SlimTokenExtractor(BaseFeaturesExtractor):
         max_pool = torch.where(all_pad, torch.zeros_like(max_pool), max_pool)
 
         s = self.scalar_mlp(obs["scalars"])  # (B, d_model)
+        if self.hist_mlp is not None:
+            s = s + self.hist_mlp(obs["hist"])  # (B, d_model) — zero at init (E42)
         return self.head(torch.cat([mean_pool, max_pool, s], dim=-1))  # (B, features_dim)

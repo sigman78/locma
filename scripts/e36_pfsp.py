@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 
 E29 = "depot:e29slim/e29slim_s0.zip"
@@ -54,6 +55,10 @@ def write_pool(entries: list[dict], pool_path: str) -> None:
     Path(pool_path).write_text(json.dumps(entries, indent=2))
 
 
+# obs_mode ("token-fx"/"token-fxh") -> the batched driver's obs_variant string.
+_OBS_VARIANT = {"token-fx": "fx", "token-fxh": "fxh"}
+
+
 def train_gen(
     warm_ckpt: str,
     steps: int,
@@ -65,6 +70,8 @@ def train_gen(
     driver: str = "subproc",
     device: str = "auto",
     deck_pool_path: str | None = None,
+    obs_mode: str = "token-fx",
+    warm_widen: bool = False,
 ) -> None:
     """Warm-start from ``warm_ckpt`` and best-respond to pfsp:POOL for ``steps``.
 
@@ -72,7 +79,21 @@ def train_gen(
     opponent inline in each worker) or "batched" (single-process BatchedOpponentVecEnv
     that resolves all opponents in batched forwards — ~2-3x collection throughput,
     decision-preserving; see docs/worklog E36). The trained best-response is the
-    same either way — only opponent-inference batching differs."""
+    same either way — only opponent-inference batching differs.
+
+    ``obs_mode`` (E42) selects the token-obs variant: "token-fx" (default, the
+    pre-E42 byte-identical path) or "token-fxh" (fx tokens + the public-history
+    ``hist`` branch). The batched driver maps this to ``obs_variant`` "fx"/"fxh"
+    only if ``make_batched_opponent_vecenv`` actually accepts it; combining
+    "token-fxh" with ``--driver batched`` raises a clear error otherwise.
+
+    ``warm_widen`` (E42) builds the model via ``locma.envs.warmstart.warm_start``
+    instead of ``MaskablePPO.load(..., env=env)``: a FRESH model at ``warm_ckpt``'s
+    hyperparameters, its weights copied (the new ``hist`` branch, if any,
+    zero-init'd) and a fresh optimizer — needed the first time a chain crosses
+    obs spaces (e.g. fx -> fxh). Use it for the first generation of a run only;
+    later generations warm from the arm's own previous-gen checkpoint (already in
+    the target obs space) via the normal ``MaskablePPO.load``."""
     from sb3_contrib import MaskablePPO  # noqa: PLC0415
 
     from locma.depot import resolve_path  # noqa: PLC0415
@@ -82,9 +103,19 @@ def train_gen(
             raise ValueError("--deck-pool requires the default 'subproc' driver (not 'batched')")
         from locma.envs.batched_selfplay import make_batched_opponent_vecenv  # noqa: PLC0415
 
-        env = make_batched_opponent_vecenv(
-            pool_path, n_envs, seed=seed, ldraft=LDRAFT, obs_variant="fx"
-        )
+        obs_variant = _OBS_VARIANT[obs_mode]
+        try:
+            env = make_batched_opponent_vecenv(
+                pool_path, n_envs, seed=seed, ldraft=LDRAFT, obs_variant=obs_variant
+            )
+        except Exception as exc:  # noqa: BLE001
+            if obs_variant == "fxh":
+                raise ValueError(
+                    "--driver batched does not support --obs-mode token-fxh yet "
+                    f"(make_batched_opponent_vecenv rejected obs_variant='fxh': {exc}); "
+                    "use --driver subproc for token-fxh"
+                ) from exc
+            raise
     else:
         from locma.envs.training import _build_env  # noqa: PLC0415
 
@@ -95,12 +126,22 @@ def train_gen(
             seed,
             n_envs,
             both_seat=True,
-            obs_mode="token-fx",
+            obs_mode=obs_mode,
             draft_override=LDRAFT,
             deck_pool_path=deck_pool_path,
         )
-    # load WITH the env (n_envs may differ from the saved model)
-    model = MaskablePPO.load(resolve_path(warm_ckpt), env=env, device=device)
+    warm_path = resolve_path(warm_ckpt)
+    if warm_widen:
+        from locma.envs.warmstart import warm_start  # noqa: PLC0415
+
+        log(
+            f"  warm-widen: building a fresh model from {warm_ckpt} "
+            f"(obs_mode={obs_mode}, weights copied, fresh optimizer)"
+        )
+        model = warm_start(warm_path, env, obs_mode=obs_mode, device=device)
+    else:
+        log(f"  loading {warm_ckpt} with env (obs_mode={obs_mode})")
+        model = MaskablePPO.load(warm_path, env=env, device=device)
     log(f"  training best-response ({steps} steps, warm from {warm_ckpt})")
     model.learn(total_timesteps=steps, reset_num_timesteps=True)
     model.save(out)
@@ -163,6 +204,30 @@ def main() -> None:
     ap.add_argument(
         "--deck-pool-size", type=int, default=2000, help="decks to pre-draft if generating"
     )
+    ap.add_argument(
+        "--obs-mode",
+        choices=["token-fx", "token-fxh"],
+        default="token-fx",
+        help="training obs encoding (E42): 'token-fx' (default, byte-identical to "
+        "pre-E42 behavior) or 'token-fxh' (fx tokens + the public-history hist branch)",
+    )
+    ap.add_argument(
+        "--warm-widen",
+        action="store_true",
+        help="(E42) build the FIRST generation's model via "
+        "locma.envs.warmstart.warm_start (fresh model at the warm ckpt's "
+        "hyperparameters, weights copied, hist branch zero-init, fresh optimizer) "
+        "instead of MaskablePPO.load(..., env=env); later generations of this run "
+        "warm from the arm's own previous gen via the normal load",
+    )
+    ap.add_argument(
+        "--pool-from",
+        default=None,
+        help="(E42) if set and this --tag's pool.json does not exist yet, copy this "
+        "pool file into the run dir before starting, e.g. "
+        "'--tag e42h --pool-from runs/e36/pool.json --resume' continues the x86 "
+        "terminal pool under a new tag. Does not change --resume semantics otherwise.",
+    )
     args = ap.parse_args()
 
     suffix = f"_{args.tag}" if args.tag else ""
@@ -174,6 +239,11 @@ def main() -> None:
     def log(m: str) -> None:
         print(m, flush=True)
         lines.append(m)
+
+    if args.pool_from and not Path(pool_path).exists():
+        Path(pool_path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(args.pool_from, pool_path)
+        log(f"pool-from: copied {args.pool_from} -> {pool_path}")
 
     if args.resume and Path(pool_path).exists():
         pool = json.loads(Path(pool_path).read_text())
@@ -203,6 +273,7 @@ def main() -> None:
     for g in range(args.start_gen, args.start_gen + args.generations):
         log(f"\n=== generation {g} ===")
         out = f"runs/e36{suffix}_gen{g}.zip"
+        gen_warm_widen = args.warm_widen and g == args.start_gen  # first gen of THIS run only
         train_gen(
             warm,
             args.steps,
@@ -214,6 +285,8 @@ def main() -> None:
             driver=args.driver,
             device=args.device,
             deck_pool_path=deck_pool_path,
+            obs_mode=args.obs_mode,
+            warm_widen=gen_warm_widen,
         )
         new_spec = f"ppo:{out},{LDRAFT}"
 

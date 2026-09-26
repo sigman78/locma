@@ -24,6 +24,21 @@ from locma.policies.drafts import (
 from locma.policies.exploits import ShellBattlePolicy, ShellDraftPolicy
 
 
+def _pop_nohist(params):
+    """Strip a trailing literal ``"nohist"`` param, if present (E42).
+
+    Position-independent — only checks the LAST element — so it works
+    regardless of how many params precede it: ``ppo:path,nohist``,
+    ``ppo:path,draft.zip,nohist``, ``lppo:path,draft.zip,3000,nohist`` all
+    strip cleanly, leaving the remaining params (and their by-index meaning,
+    e.g. ``_draft_param``'s index-1 draft slot) unaffected. A spec without a
+    trailing ``nohist`` is returned unchanged with ``ablate_hist=False``.
+    """
+    if params and params[-1] == "nohist":
+        return params[:-1], True
+    return params, False
+
+
 def _draft_param(params, i):
     """Resolve the optional draft-override parameter of ``ppo:``/``vbeam:`` specs.
 
@@ -264,12 +279,18 @@ def _ppo(params, spec):
     # `model` may also be `|`-separated paths (``ppo:a.zip|b.zip|c.zip``), same
     # idiom as ``vbeam:`` — the battle half is then the mean-of-policy-heads
     # ensemble (E26, ``MaskablePPOEnsembleBattlePolicy``) instead of one net.
+    # A trailing literal ``nohist`` param (``ppo:path,draft.zip,nohist``) sets
+    # ablate_hist=True — the E42 mechanism instrument that zeroes the "hist"
+    # public-history vector before inference (no-op for non-"fxh" nets). See
+    # ``_pop_nohist``; position-independent, so ``ppo:path,nohist`` (no draft
+    # override) also works.
+    params, ablate_hist = _pop_nohist(params)
     raw = params[0] if params else "model.zip"
     if "|" in raw:
         paths = [resolve_path(p) for p in raw.split("|")]
-        battle = MaskablePPOEnsembleBattlePolicy(paths)
+        battle = MaskablePPOEnsembleBattlePolicy(paths, ablate_hist=ablate_hist)
     else:
-        battle = MaskablePPOBattlePolicy(model_path=resolve_path(raw))
+        battle = MaskablePPOBattlePolicy(model_path=resolve_path(raw), ablate_hist=ablate_hist)
     return Composer(battle, _draft_param(params, 1), name=spec)
 
 
@@ -283,6 +304,10 @@ def _lppo(params, spec):
     ``locma.policies.lguard`` for the fairness/soundness argument). ``model``
     may be a single path or ``|``-separated paths (ensemble inner). The
     optional 3rd param overrides the solver's DFS node cap (default 3000).
+    A trailing literal ``nohist`` param (``lppo:model,draft,3000,nohist``)
+    sets ablate_hist=True on the inner battle policy — the E42 mechanism
+    instrument (see ``_pop_nohist``/``_ppo``); position-independent, so
+    ``lppo:model,nohist`` also works.
     """
     from locma.policies.lguard import LethalGuardBattlePolicy  # noqa: PLC0415
     from locma.policies.ppo import (  # noqa: PLC0415
@@ -290,13 +315,16 @@ def _lppo(params, spec):
         MaskablePPOEnsembleBattlePolicy,
     )
 
+    params, ablate_hist = _pop_nohist(params)
     raw = params[0] if params and params[0] else "model.zip"
     node_cap = int(params[2]) if len(params) > 2 and params[2] else 3000
     if "|" in raw:
         paths = [resolve_path(p) for p in raw.split("|")]
-        inner_battle = MaskablePPOEnsembleBattlePolicy(paths)
+        inner_battle = MaskablePPOEnsembleBattlePolicy(paths, ablate_hist=ablate_hist)
     else:
-        inner_battle = MaskablePPOBattlePolicy(model_path=resolve_path(raw))
+        inner_battle = MaskablePPOBattlePolicy(
+            model_path=resolve_path(raw), ablate_hist=ablate_hist
+        )
     battle = LethalGuardBattlePolicy(inner_battle, node_cap=node_cap)
     return Composer(battle, _draft_param(params, 1), name=spec)
 
